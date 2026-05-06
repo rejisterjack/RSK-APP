@@ -47,7 +47,10 @@ export default function GettingStartedPage() {
               { name: 'TypeScript', desc: 'Full type safety across the stack' },
               { name: 'PostgreSQL + pgvector', desc: 'Vector storage and similarity search' },
               { name: 'Prisma', desc: 'Type-safe database client and migrations' },
-              { name: 'NextAuth.js v5', desc: 'Authentication with OAuth, credentials, and SAML SSO' },
+              {
+                name: 'NextAuth.js v5',
+                desc: 'Authentication with OAuth, credentials, and SAML SSO',
+              },
               { name: 'Vercel AI SDK', desc: 'Streaming chat responses and tool calls' },
               { name: 'LangChain', desc: 'Document parsing, chunking, and retrieval' },
               { name: 'Tailwind CSS', desc: 'Utility-first styling with dark mode' },

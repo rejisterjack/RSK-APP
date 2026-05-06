@@ -308,15 +308,9 @@ export function getModelDimensions(
 const SCHEMA_VECTOR_DIMENSION = 768; // Must match `vector(768)` in prisma/schema.prisma
 
 const PROVIDER_MODEL_DIMENSIONS: Record<string, Record<string, number>> = {
-  google: Object.fromEntries(
-    Object.entries(GOOGLE_MODELS).map(([k, v]) => [k, v.dimensions])
-  ),
-  openai: Object.fromEntries(
-    Object.entries(OPENAI_MODELS).map(([k, v]) => [k, v.dimensions])
-  ),
-  ollama: Object.fromEntries(
-    Object.entries(OLLAMA_MODELS).map(([k, v]) => [k, v.dimensions])
-  ),
+  google: Object.fromEntries(Object.entries(GOOGLE_MODELS).map(([k, v]) => [k, v.dimensions])),
+  openai: Object.fromEntries(Object.entries(OPENAI_MODELS).map(([k, v]) => [k, v.dimensions])),
+  ollama: Object.fromEntries(Object.entries(OLLAMA_MODELS).map(([k, v]) => [k, v.dimensions])),
 };
 
 /**
@@ -353,7 +347,8 @@ export function validateEmbeddingDimensions(
     // Unknown model — warn but don't block (could be a custom Ollama model)
     return {
       valid: true,
-      message: `Unknown model "${resolvedModel}" for provider "${effectiveProvider}". ` +
+      message:
+        `Unknown model "${resolvedModel}" for provider "${effectiveProvider}". ` +
         `Cannot validate dimensions. Ensure its output matches the pgvector column (${SCHEMA_VECTOR_DIMENSION}D).`,
     };
   }

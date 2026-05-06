@@ -19,7 +19,8 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions) {
 
       // Ignore events from input/textarea unless it's Escape
       const target = e.target as HTMLElement;
-      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      const isInput =
+        target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
       switch (e.key) {
         case 'Escape':

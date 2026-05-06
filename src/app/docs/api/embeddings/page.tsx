@@ -3,16 +3,21 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Embeddings API',
-  description: 'Generate text embeddings and perform vector similarity search against your document knowledge base.',
+  description:
+    'Generate text embeddings and perform vector similarity search against your document knowledge base.',
 };
 
 function Code({ children, title }: { children: string; title?: string }) {
   return (
     <div className="rounded-lg border border-border overflow-hidden mb-4">
       {title && (
-        <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground border-b border-border">{title}</div>
+        <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+          {title}
+        </div>
       )}
-      <pre className="bg-card p-4 overflow-x-auto text-sm"><code>{children}</code></pre>
+      <pre className="bg-card p-4 overflow-x-auto text-sm">
+        <code>{children}</code>
+      </pre>
     </div>
   );
 }
@@ -22,7 +27,8 @@ export default function EmbeddingsApiPage() {
     <div>
       <h1 className="text-3xl font-bold tracking-tight mb-4">Embeddings API</h1>
       <p className="text-lg text-muted-foreground mb-8">
-        Generate vector embeddings for text and search your document knowledge base using semantic similarity.
+        Generate vector embeddings for text and search your document knowledge base using semantic
+        similarity.
       </p>
 
       <div className="space-y-10">
@@ -89,22 +95,26 @@ export default function EmbeddingsApiPage() {
         <section>
           <h2 className="text-2xl font-semibold mb-3">How It Works</h2>
           <p className="text-muted-foreground mb-3">
-            The embedding pipeline uses the configured provider (default: Google Gemini) to convert text into
-            high-dimensional vectors. These vectors are stored in PostgreSQL with the pgvector extension,
-            enabling fast cosine similarity search using HNSW indexes.
+            The embedding pipeline uses the configured provider (default: Google Gemini) to convert
+            text into high-dimensional vectors. These vectors are stored in PostgreSQL with the
+            pgvector extension, enabling fast cosine similarity search using HNSW indexes.
           </p>
           <div className="bg-muted/50 rounded-lg p-4 border border-border text-sm">
             <strong className="block mb-2">Dimension compatibility:</strong>
             <p className="text-muted-foreground">
-              The database schema uses <code className="bg-card px-1 rounded">vector(768)</code>. If you change the
-              embedding provider (e.g. to OpenAI which produces 1536D vectors), you must also update the schema
-              dimension. The app validates this at startup and warns about mismatches.
+              The database schema uses <code className="bg-card px-1 rounded">vector(768)</code>. If
+              you change the embedding provider (e.g. to OpenAI which produces 1536D vectors), you
+              must also update the schema dimension. The app validates this at startup and warns
+              about mismatches.
             </p>
           </div>
         </section>
 
         <div className="flex justify-between pt-4 border-t border-border">
-          <Link href="/docs/api/documents" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            href="/docs/api/documents"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             &larr; Documents API
           </Link>
           <Link href="/docs/guides" className="text-sm text-primary hover:underline">

@@ -77,12 +77,10 @@ pnpm install`}
           <p className="text-muted-foreground mb-3">
             Copy the example environment file and fill in your API keys:
           </p>
-          <CodeBlock title="Terminal">
-            {`cp .env.example .env`}
-          </CodeBlock>
+          <CodeBlock title="Terminal">{`cp .env.example .env`}</CodeBlock>
           <p className="text-muted-foreground mb-3">
-            Open <code className="text-sm bg-muted px-1.5 py-0.5 rounded">.env</code> in your
-            editor and update these required values:
+            Open <code className="text-sm bg-muted px-1.5 py-0.5 rounded">.env</code> in your editor
+            and update these required values:
           </p>
           <div className="rounded-lg border border-border overflow-hidden mb-4">
             <table className="w-full text-sm">
@@ -157,7 +155,10 @@ pnpm install`}
           </div>
           <p className="text-muted-foreground">
             See the{' '}
-            <Link href="/docs/reference/environment-variables" className="text-primary hover:underline">
+            <Link
+              href="/docs/reference/environment-variables"
+              className="text-primary hover:underline"
+            >
               full environment variables reference
             </Link>{' '}
             for every available option.
@@ -185,12 +186,8 @@ pnpm db:migrate
 # Generate the Prisma client
 pnpm db:generate`}
           </CodeBlock>
-          <p className="text-muted-foreground">
-            If you want some seed data to explore the UI:
-          </p>
-          <CodeBlock title="Terminal">
-            {`pnpm db:seed`}
-          </CodeBlock>
+          <p className="text-muted-foreground">If you want some seed data to explore the UI:</p>
+          <CodeBlock title="Terminal">{`pnpm db:seed`}</CodeBlock>
         </section>
 
         {/* Step 5 */}
@@ -201,9 +198,7 @@ pnpm db:generate`}
             </span>
             Start the Development Server
           </h2>
-          <CodeBlock title="Terminal">
-            {`pnpm dev`}
-          </CodeBlock>
+          <CodeBlock title="Terminal">{`pnpm dev`}</CodeBlock>
           <p className="text-muted-foreground">
             Open{' '}
             <a
@@ -228,7 +223,12 @@ pnpm db:generate`}
             <li>
               <strong>Cloudinary</strong> -- File uploads. Without it, files are stored on the local
               filesystem. Get a free account at{' '}
-              <a href="https://cloudinary.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href="https://cloudinary.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 cloudinary.com
               </a>
               .
@@ -236,7 +236,12 @@ pnpm db:generate`}
             <li>
               <strong>Upstash Redis</strong> -- Rate limit persistence. Without it, an in-memory
               fallback is used in development. Get a free database at{' '}
-              <a href="https://console.upstash.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href="https://console.upstash.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 console.upstash.com
               </a>
               .
@@ -244,7 +249,12 @@ pnpm db:generate`}
             <li>
               <strong>Resend</strong> -- Email notifications (welcome emails, password resets).
               Without it, emails are logged to the console. Sign up at{' '}
-              <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a
+                href="https://resend.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
                 resend.com
               </a>
               .

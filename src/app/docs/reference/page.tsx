@@ -3,13 +3,15 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Reference',
-  description: 'Technical reference for environment variables, database schema, and RBAC permissions.',
+  description:
+    'Technical reference for environment variables, database schema, and RBAC permissions.',
 };
 
 const references = [
   {
     title: 'Environment Variables',
-    description: 'Complete list of all environment variables with types, defaults, and descriptions.',
+    description:
+      'Complete list of all environment variables with types, defaults, and descriptions.',
     href: '/docs/reference/environment-variables',
     icon: '{}',
   },
@@ -21,7 +23,8 @@ const references = [
   },
   {
     title: 'RBAC Permissions',
-    description: 'The 18-permission role-based access control system and workspace authorization model.',
+    description:
+      'The 18-permission role-based access control system and workspace authorization model.',
     href: '/docs/reference/rbac-permissions',
     icon: 'AC',
   },
@@ -50,7 +53,10 @@ export default function ReferencePage() {
       </div>
 
       <div className="flex justify-between pt-8 border-t border-border">
-        <Link href="/docs/guides" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <Link
+          href="/docs/guides"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
           &larr; Guides
         </Link>
         <span />

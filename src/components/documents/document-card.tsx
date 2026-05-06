@@ -25,18 +25,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   ERROR_CATEGORY_LABELS,
   ERROR_REMEDIATION,
   type ErrorCategory,
 } from '@/lib/rag/ingestion/errors';
+import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
 import { IngestionProgress } from './ingestion-progress';
 
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'error';

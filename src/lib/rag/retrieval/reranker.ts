@@ -177,18 +177,13 @@ export class CrossEncoderReranker implements Reranker {
   /**
    * Score all documents, running up to 5 concurrent LLM calls.
    */
-  private async scoreAll(
-    query: string,
-    documents: RerankDocument[]
-  ): Promise<RerankResult[]> {
+  private async scoreAll(query: string, documents: RerankDocument[]): Promise<RerankResult[]> {
     const concurrency = 5;
     const results: RerankResult[] = [];
 
     for (let i = 0; i < documents.length; i += concurrency) {
       const batch = documents.slice(i, i + concurrency);
-      const batchResults = await Promise.all(
-        batch.map((doc) => this.scoreOne(query, doc))
-      );
+      const batchResults = await Promise.all(batch.map((doc) => this.scoreOne(query, doc)));
       results.push(...batchResults);
     }
 
@@ -353,9 +348,7 @@ export class CohereReranker implements Reranker {
 
       if (!response.ok) {
         const errorBody = await response.text().catch(() => 'unknown');
-        throw new Error(
-          `Cohere rerank API returned ${response.status}: ${errorBody}`
-        );
+        throw new Error(`Cohere rerank API returned ${response.status}: ${errorBody}`);
       }
 
       const data = (await response.json()) as CohereV2RerankResponse;
@@ -401,9 +394,7 @@ export function createReranker(type?: RerankerType): Reranker {
     case 'identity':
       return new IdentityReranker();
     default:
-      logger.warn(
-        `Unknown RERANKER_PROVIDER "${resolved}", falling back to identity reranker`
-      );
+      logger.warn(`Unknown RERANKER_PROVIDER "${resolved}", falling back to identity reranker`);
       return new IdentityReranker();
   }
 }

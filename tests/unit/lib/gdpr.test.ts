@@ -61,11 +61,7 @@ describe('GDPR Compliance', () => {
       expect(token.length).toBeGreaterThan(0);
 
       // Should have stored it in Redis
-      expect(mockRedis.set).toHaveBeenCalledWith(
-        'gdpr:erasure:user-123',
-        token,
-        { ex: 86400 }
-      );
+      expect(mockRedis.set).toHaveBeenCalledWith('gdpr:erasure:user-123', token, { ex: 86400 });
     });
 
     it('generates different tokens for each call', async () => {

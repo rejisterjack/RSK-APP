@@ -24,7 +24,12 @@ export async function GET() {
     const latencyMs = Date.now() - start;
 
     if (embedding.length === 0) {
-      results.push({ name: 'embedding', status: 'error', message: 'Embedding returned empty vector', latencyMs });
+      results.push({
+        name: 'embedding',
+        status: 'error',
+        message: 'Embedding returned empty vector',
+        latencyMs,
+      });
     } else {
       results.push({ name: 'embedding', status: 'ok', latencyMs });
     }
@@ -42,7 +47,11 @@ export async function GET() {
     } else if (dimResult.valid) {
       results.push({ name: 'dimensions', status: 'ok', message: dimResult.message ?? undefined });
     } else {
-      results.push({ name: 'dimensions', status: 'error', message: dimResult.message ?? undefined });
+      results.push({
+        name: 'dimensions',
+        status: 'error',
+        message: dimResult.message ?? undefined,
+      });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -60,7 +69,12 @@ export async function GET() {
     const text = response.content?.trim();
 
     if (!text) {
-      results.push({ name: 'chat', status: 'error', message: 'LLM returned empty response', latencyMs });
+      results.push({
+        name: 'chat',
+        status: 'error',
+        message: 'LLM returned empty response',
+        latencyMs,
+      });
     } else {
       results.push({ name: 'chat', status: 'ok', latencyMs });
     }

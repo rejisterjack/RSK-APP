@@ -6,7 +6,11 @@
 
 import { detectCostAnomalies } from '@/lib/billing/cost-monitor';
 import { prisma } from '@/lib/db';
-import { checkPartitionHealth, detachOldPartitions, ensurePartitions } from '@/lib/db/partition-manager';
+import {
+  checkPartitionHealth,
+  detachOldPartitions,
+  ensurePartitions,
+} from '@/lib/db/partition-manager';
 import { logger } from '@/lib/logger';
 import { dispatchAlert } from '@/lib/monitoring/alerting';
 import { detectAnomalies } from '@/lib/monitoring/anomaly-detector';
@@ -717,7 +721,14 @@ async function updateJobStatus(
     status?: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
     progress?: number;
     error?: string;
-    errorCategory?: 'PARSE_ERROR' | 'EMBEDDING_ERROR' | 'SIZE_LIMIT' | 'OCR_FAILURE' | 'PROVIDER_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN';
+    errorCategory?:
+      | 'PARSE_ERROR'
+      | 'EMBEDDING_ERROR'
+      | 'SIZE_LIMIT'
+      | 'OCR_FAILURE'
+      | 'PROVIDER_ERROR'
+      | 'NETWORK_ERROR'
+      | 'UNKNOWN';
     startedAt?: Date;
     completedAt?: Date;
   }

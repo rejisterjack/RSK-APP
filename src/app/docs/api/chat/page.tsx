@@ -3,16 +3,21 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Chat API',
-  description: 'Send messages and receive AI-powered responses with RAG context. Supports streaming and conversation history.',
+  description:
+    'Send messages and receive AI-powered responses with RAG context. Supports streaming and conversation history.',
 };
 
 function Code({ children, title }: { children: string; title?: string }) {
   return (
     <div className="rounded-lg border border-border overflow-hidden mb-4">
       {title && (
-        <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground border-b border-border">{title}</div>
+        <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+          {title}
+        </div>
       )}
-      <pre className="bg-card p-4 overflow-x-auto text-sm"><code>{children}</code></pre>
+      <pre className="bg-card p-4 overflow-x-auto text-sm">
+        <code>{children}</code>
+      </pre>
     </div>
   );
 }
@@ -22,8 +27,8 @@ export default function ChatApiPage() {
     <div>
       <h1 className="text-3xl font-bold tracking-tight mb-4">Chat API</h1>
       <p className="text-lg text-muted-foreground mb-8">
-        The chat API powers the core conversational experience. It retrieves relevant document chunks, injects them as
-        context, and streams the LLM response back to the client.
+        The chat API powers the core conversational experience. It retrieves relevant document
+        chunks, injects them as context, and streams the LLM response back to the client.
       </p>
 
       <div className="space-y-10">
@@ -43,8 +48,9 @@ export default function ChatApiPage() {
 
           <h3 className="font-semibold mt-4 mb-2">Streaming Response</h3>
           <p className="text-muted-foreground mb-3">
-            When <code className="bg-muted px-1 rounded text-sm">stream: true</code> (default), the response is sent as
-            Server-Sent Events (SSE). Each event is a JSON chunk of the generated text.
+            When <code className="bg-muted px-1 rounded text-sm">stream: true</code> (default), the
+            response is sent as Server-Sent Events (SSE). Each event is a JSON chunk of the
+            generated text.
           </p>
           <Code title="text/event-stream">{`data: {"content": "Based on "}
 data: {"content": "the document, "}
@@ -106,7 +112,9 @@ data: [DONE]`}</Code>
             </div>
             <div className="flex gap-3 p-3 rounded-lg bg-muted/50 border border-border">
               <span className="font-mono font-bold text-red-500">429</span>
-              <span className="text-muted-foreground">Rate limit exceeded (see Retry-After header)</span>
+              <span className="text-muted-foreground">
+                Rate limit exceeded (see Retry-After header)
+              </span>
             </div>
             <div className="flex gap-3 p-3 rounded-lg bg-muted/50 border border-border">
               <span className="font-mono font-bold text-red-500">500</span>
@@ -116,7 +124,10 @@ data: [DONE]`}</Code>
         </section>
 
         <div className="flex justify-between pt-4 border-t border-border">
-          <Link href="/docs/api" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            href="/docs/api"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             &larr; API Overview
           </Link>
           <Link href="/docs/api/documents" className="text-sm text-primary hover:underline">

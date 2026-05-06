@@ -10,9 +10,13 @@ function Code({ children, title }: { children: string; title?: string }) {
   return (
     <div className="rounded-lg border border-border overflow-hidden mb-4">
       {title && (
-        <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground border-b border-border">{title}</div>
+        <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+          {title}
+        </div>
       )}
-      <pre className="bg-card p-4 overflow-x-auto text-sm"><code>{children}</code></pre>
+      <pre className="bg-card p-4 overflow-x-auto text-sm">
+        <code>{children}</code>
+      </pre>
     </div>
   );
 }
@@ -22,8 +26,8 @@ export default function DocumentsApiPage() {
     <div>
       <h1 className="text-3xl font-bold tracking-tight mb-4">Documents API</h1>
       <p className="text-lg text-muted-foreground mb-8">
-        Manage documents in your workspace. Upload files for automatic parsing, chunking, and embedding.
-        Supported formats: PDF, DOCX, TXT, HTML, Markdown, and more.
+        Manage documents in your workspace. Upload files for automatic parsing, chunking, and
+        embedding. Supported formats: PDF, DOCX, TXT, HTML, Markdown, and more.
       </p>
 
       <div className="space-y-10">
@@ -35,7 +39,11 @@ export default function DocumentsApiPage() {
           <code className="text-sm ml-2">/api/documents</code>
 
           <h3 className="font-semibold mt-4 mb-2">Request</h3>
-          <p className="text-muted-foreground mb-2">Send the file as <code className="bg-muted px-1 rounded text-sm">multipart/form-data</code> with field name <code className="bg-muted px-1 rounded text-sm">file</code>.</p>
+          <p className="text-muted-foreground mb-2">
+            Send the file as{' '}
+            <code className="bg-muted px-1 rounded text-sm">multipart/form-data</code> with field
+            name <code className="bg-muted px-1 rounded text-sm">file</code>.
+          </p>
           <Code title="curl">{`curl -X POST https://your-domain.com/api/documents \\
   -H "Authorization: Bearer sk-your-api-key" \\
   -F "file=@report.pdf"`}</Code>
@@ -48,7 +56,8 @@ export default function DocumentsApiPage() {
   "createdAt": "2025-01-15T10:30:00Z"
 }`}</Code>
           <p className="text-muted-foreground text-sm">
-            The document is processed asynchronously by Inngest. Check status via GET /api/documents/:id.
+            The document is processed asynchronously by Inngest. Check status via GET
+            /api/documents/:id.
           </p>
         </section>
 
@@ -102,14 +111,31 @@ export default function DocumentsApiPage() {
 
           <h3 className="font-semibold mt-4 mb-2">Error Categories</h3>
           <p className="text-muted-foreground mb-2">
-            When ingestion fails, the <code className="bg-muted px-1 rounded text-sm">errorCategory</code> field indicates why:
+            When ingestion fails, the{' '}
+            <code className="bg-muted px-1 rounded text-sm">errorCategory</code> field indicates
+            why:
           </p>
           <div className="space-y-1 text-sm text-muted-foreground">
-            <div><code className="bg-muted px-1 rounded text-xs">PARSE_ERROR</code> — Document could not be parsed (corrupt file, unsupported format)</div>
-            <div><code className="bg-muted px-1 rounded text-xs">EMBEDDING_ERROR</code> — Embedding provider failed (API key, rate limit, dimension mismatch)</div>
-            <div><code className="bg-muted px-1 rounded text-xs">SIZE_LIMIT</code> — Document exceeds workspace size limits</div>
-            <div><code className="bg-muted px-1 rounded text-xs">OCR_FAILURE</code> — OCR failed on scanned content</div>
-            <div><code className="bg-muted px-1 rounded text-xs">NETWORK_ERROR</code> — Network connectivity issue during processing</div>
+            <div>
+              <code className="bg-muted px-1 rounded text-xs">PARSE_ERROR</code> — Document could
+              not be parsed (corrupt file, unsupported format)
+            </div>
+            <div>
+              <code className="bg-muted px-1 rounded text-xs">EMBEDDING_ERROR</code> — Embedding
+              provider failed (API key, rate limit, dimension mismatch)
+            </div>
+            <div>
+              <code className="bg-muted px-1 rounded text-xs">SIZE_LIMIT</code> — Document exceeds
+              workspace size limits
+            </div>
+            <div>
+              <code className="bg-muted px-1 rounded text-xs">OCR_FAILURE</code> — OCR failed on
+              scanned content
+            </div>
+            <div>
+              <code className="bg-muted px-1 rounded text-xs">NETWORK_ERROR</code> — Network
+              connectivity issue during processing
+            </div>
           </div>
         </section>
 
@@ -135,13 +161,16 @@ export default function DocumentsApiPage() {
           <code className="text-sm ml-2">/api/documents/:id/re-ingest</code>
 
           <p className="text-muted-foreground text-sm">
-            Retries ingestion for a failed document, or re-processes a successfully ingested document.
-            Existing chunks are replaced with new ones.
+            Retries ingestion for a failed document, or re-processes a successfully ingested
+            document. Existing chunks are replaced with new ones.
           </p>
         </section>
 
         <div className="flex justify-between pt-4 border-t border-border">
-          <Link href="/docs/api/chat" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            href="/docs/api/chat"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             &larr; Chat API
           </Link>
           <Link href="/docs/api/embeddings" className="text-sm text-primary hover:underline">

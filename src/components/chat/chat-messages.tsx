@@ -106,7 +106,12 @@ export const ChatMessages = memo(function ChatMessages({
   const showLoading = isLoading && !isStreaming && messages.length === 0;
 
   return (
-    <div className="overflow-hidden relative flex h-full min-h-0" role="status" aria-live="polite" aria-label="Chat messages">
+    <div
+      className="overflow-hidden relative flex h-full min-h-0"
+      role="status"
+      aria-live="polite"
+      aria-label="Chat messages"
+    >
       {/* Scrollable messages area with overscroll containment */}
       <div
         className="flex-1 overflow-y-auto scrollbar-thin overscroll-y-contain"

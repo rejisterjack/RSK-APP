@@ -70,29 +70,29 @@ async function executeInSandbox(
 ): Promise<ExecutionResult> {
   const ivm = await loadIvm();
   if (!ivm) {
-    throw new Error('Code execution is unavailable: isolated-vm native module could not be loaded. This usually means the Node.js version is not yet supported.');
+    throw new Error(
+      'Code execution is unavailable: isolated-vm native module could not be loaded. This usually means the Node.js version is not yet supported.'
+    );
   }
 
   const startTime = Date.now();
   const logs: string[] = [];
 
   const isolate = new ivm.Isolate({ memoryLimit: memoryLimitMB });
-  const logCallback = new ivm.Reference(function (...args: unknown[]) {
-    logs.push(
-      args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')
-    );
+  const logCallback = new ivm.Reference((...args: unknown[]) => {
+    logs.push(args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' '));
   });
-  const errorCallback = new ivm.Reference(function (...args: unknown[]) {
+  const errorCallback = new ivm.Reference((...args: unknown[]) => {
     logs.push(
       `[ERROR] ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}`
     );
   });
-  const warnCallback = new ivm.Reference(function (...args: unknown[]) {
+  const warnCallback = new ivm.Reference((...args: unknown[]) => {
     logs.push(
       `[WARN] ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}`
     );
   });
-  const infoCallback = new ivm.Reference(function (...args: unknown[]) {
+  const infoCallback = new ivm.Reference((...args: unknown[]) => {
     logs.push(
       `[INFO] ${args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')}`
     );
@@ -205,9 +205,7 @@ Examples:
 
       // Validate code length
       if (code.length > MAX_CODE_LENGTH) {
-        return createErrorResult(
-          `Code exceeds maximum length of ${MAX_CODE_LENGTH} characters`
-        );
+        return createErrorResult(`Code exceeds maximum length of ${MAX_CODE_LENGTH} characters`);
       }
 
       // Execute code in isolated-vm sandbox

@@ -41,7 +41,20 @@ export {
   isDatabaseInitialized,
   resetDatabaseInitialization,
 } from './init';
-
+// ---------------------------------------------------------------------------
+// Partition Manager
+// ---------------------------------------------------------------------------
+export {
+  archiveWorkspaceDocuments,
+  checkPartitionHealth,
+  detachOldPartitions,
+  ensurePartitions,
+  getPartitionStats,
+  type PartitionDetail,
+  type PartitionHealthReport,
+  type PartitionHealthWarning,
+  type PartitionStats,
+} from './partition-manager';
 // ---------------------------------------------------------------------------
 // Vector Cache
 // ---------------------------------------------------------------------------
@@ -56,7 +69,6 @@ export {
   SemanticCache,
   type SemanticCacheEntry,
 } from './vector-cache';
-
 // ---------------------------------------------------------------------------
 // Vector Operations
 // ---------------------------------------------------------------------------
@@ -82,7 +94,6 @@ export {
   type VectorStats,
   vacuumVectorTable,
 } from './vector-operations';
-
 // ---------------------------------------------------------------------------
 // Vector Store
 // ---------------------------------------------------------------------------
@@ -96,21 +107,6 @@ export {
   type SearchResult,
   VectorStore,
 } from './vector-store';
-
-// ---------------------------------------------------------------------------
-// Partition Manager
-// ---------------------------------------------------------------------------
-export {
-  type PartitionDetail,
-  type PartitionHealthReport,
-  type PartitionHealthWarning,
-  type PartitionStats,
-  archiveWorkspaceDocuments,
-  checkPartitionHealth,
-  detachOldPartitions,
-  ensurePartitions,
-  getPartitionStats,
-} from './partition-manager';
 
 // ============================================================================
 // User Queries

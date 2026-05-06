@@ -110,9 +110,7 @@ export default function PricingPage() {
 
       {/* Deployment Options */}
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-16">
-        <h2 className="text-2xl font-bold text-foreground text-center mb-10">
-          Deploy Anywhere
-        </h2>
+        <h2 className="text-2xl font-bold text-foreground text-center mb-10">Deploy Anywhere</h2>
         <div className="grid gap-6 sm:grid-cols-3">
           {[
             {

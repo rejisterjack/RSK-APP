@@ -28,16 +28,11 @@ export const ERROR_REMEDIATION: Record<ErrorCategory, string> = {
     'The file format may be corrupted or unsupported. Try re-uploading or converting to a different format.',
   EMBEDDING_ERROR:
     'The embedding provider is unavailable or your API key may be invalid. Check your EMBEDDING_PROVIDER and API key settings.',
-  SIZE_LIMIT:
-    'The file exceeds the maximum allowed size. Try splitting it into smaller documents.',
-  OCR_FAILURE:
-    'OCR processing failed. Ensure the document contains readable text.',
-  PROVIDER_ERROR:
-    'The AI provider returned an error. Check your API keys and provider status.',
-  NETWORK_ERROR:
-    'A network error occurred. Check your internet connection and try again.',
-  UNKNOWN:
-    'An unexpected error occurred. Try again or check the server logs.',
+  SIZE_LIMIT: 'The file exceeds the maximum allowed size. Try splitting it into smaller documents.',
+  OCR_FAILURE: 'OCR processing failed. Ensure the document contains readable text.',
+  PROVIDER_ERROR: 'The AI provider returned an error. Check your API keys and provider status.',
+  NETWORK_ERROR: 'A network error occurred. Check your internet connection and try again.',
+  UNKNOWN: 'An unexpected error occurred. Try again or check the server logs.',
 };
 
 // ---------------------------------------------------------------------------
@@ -101,10 +96,7 @@ const ERROR_PATTERNS: ErrorPattern[] = [
 
   // OCR failures (Tesseract)
   {
-    test: (m) =>
-      /tesseract/i.test(m) ||
-      /ocr.*(fail|error)/i.test(m) ||
-      /failed.*ocr/i.test(m),
+    test: (m) => /tesseract/i.test(m) || /ocr.*(fail|error)/i.test(m) || /failed.*ocr/i.test(m),
     category: ErrorCategory.OCR_FAILURE,
   },
 
@@ -143,12 +135,7 @@ const ERROR_PATTERNS: ErrorPattern[] = [
  * ErrorCategory based on the error message content.
  */
 export function categorizeIngestionError(error: unknown): ErrorCategory {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
 
   if (!message) {
     return ErrorCategory.UNKNOWN;

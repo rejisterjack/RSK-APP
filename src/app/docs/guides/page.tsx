@@ -3,7 +3,8 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Guides',
-  description: 'Step-by-step guides for configuring providers, deploying, and extending the RAG Starter Kit.',
+  description:
+    'Step-by-step guides for configuring providers, deploying, and extending the RAG Starter Kit.',
 };
 
 const guides = [
@@ -33,7 +34,8 @@ const guides = [
   },
   {
     title: 'Chrome Extension',
-    description: 'Install and use the Chrome extension to save web pages and ask about selected text.',
+    description:
+      'Install and use the Chrome extension to save web pages and ask about selected text.',
     href: '/docs/guides/chrome-extension',
     tags: ['Chrome', 'Web Store', 'Manifest V3'],
   },
@@ -58,7 +60,10 @@ export default function GuidesPage() {
             <p className="text-sm text-muted-foreground mb-3">{guide.description}</p>
             <div className="flex flex-wrap gap-1.5">
               {guide.tags.map((tag) => (
-                <span key={tag} className="px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground">
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground"
+                >
                   {tag}
                 </span>
               ))}
@@ -68,7 +73,10 @@ export default function GuidesPage() {
       </div>
 
       <div className="flex justify-between pt-8 border-t border-border">
-        <Link href="/docs/api" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <Link
+          href="/docs/api"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
           &larr; API Reference
         </Link>
         <Link href="/docs/reference" className="text-sm text-primary hover:underline">

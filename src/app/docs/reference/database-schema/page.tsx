@@ -3,10 +3,19 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Database Schema',
-  description: 'Key database models, relationships, and the pgvector storage architecture used by the RAG Starter Kit.',
+  description:
+    'Key database models, relationships, and the pgvector storage architecture used by the RAG Starter Kit.',
 };
 
-function ModelCard({ name, description, fields }: { name: string; description: string; fields: { name: string; type: string; note?: string }[] }) {
+function ModelCard({
+  name,
+  description,
+  fields,
+}: {
+  name: string;
+  description: string;
+  fields: { name: string; type: string; note?: string }[];
+}) {
   return (
     <div className="rounded-lg border border-border overflow-hidden mb-6">
       <div className="bg-muted/50 px-4 py-3 border-b border-border">
@@ -18,8 +27,12 @@ function ModelCard({ name, description, fields }: { name: string; description: s
           <tbody className="divide-y divide-border">
             {fields.map((f) => (
               <tr key={f.name}>
-                <td className="px-4 py-1.5 font-mono text-xs text-primary whitespace-nowrap">{f.name}</td>
-                <td className="px-4 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{f.type}</td>
+                <td className="px-4 py-1.5 font-mono text-xs text-primary whitespace-nowrap">
+                  {f.name}
+                </td>
+                <td className="px-4 py-1.5 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                  {f.type}
+                </td>
                 {f.note && <td className="px-4 py-1.5 text-xs text-muted-foreground">{f.note}</td>}
               </tr>
             ))}
@@ -35,8 +48,8 @@ export default function DatabaseSchemaPage() {
     <div>
       <h1 className="text-3xl font-bold tracking-tight mb-4">Database Schema</h1>
       <p className="text-lg text-muted-foreground mb-8">
-        The RAG Starter Kit uses PostgreSQL with the pgvector extension. The schema is managed by Prisma and includes
-        models for users, workspaces, documents, chat, and RBAC.
+        The RAG Starter Kit uses PostgreSQL with the pgvector extension. The schema is managed by
+        Prisma and includes models for users, workspaces, documents, chat, and RBAC.
       </p>
 
       <div className="space-y-6">
@@ -106,8 +119,16 @@ export default function DatabaseSchemaPage() {
             description="Background job tracking for document processing"
             fields={[
               { name: 'id', type: 'String (cuid)', note: 'Primary key' },
-              { name: 'status', type: 'IngestionStatus', note: 'PENDING, PROCESSING, COMPLETED, FAILED' },
-              { name: 'errorCategory', type: 'ErrorCategory?', note: 'PARSE_ERROR, EMBEDDING_ERROR, etc.' },
+              {
+                name: 'status',
+                type: 'IngestionStatus',
+                note: 'PENDING, PROCESSING, COMPLETED, FAILED',
+              },
+              {
+                name: 'errorCategory',
+                type: 'ErrorCategory?',
+                note: 'PARSE_ERROR, EMBEDDING_ERROR, etc.',
+              },
               { name: 'documentId', type: 'String', note: 'FK → Document' },
             ]}
           />
@@ -142,22 +163,30 @@ export default function DatabaseSchemaPage() {
           <h2 className="text-2xl font-semibold mb-4">Vector Search Architecture</h2>
           <div className="bg-muted/50 rounded-lg p-4 border border-border text-sm space-y-3">
             <p className="text-muted-foreground">
-              Document chunks are stored with <code className="bg-card px-1 rounded">vector(768)</code> embeddings
-              in PostgreSQL using the pgvector extension. Similarity search uses cosine distance with HNSW indexes
+              Document chunks are stored with{' '}
+              <code className="bg-card px-1 rounded">vector(768)</code> embeddings in PostgreSQL
+              using the pgvector extension. Similarity search uses cosine distance with HNSW indexes
               for fast approximate nearest neighbor queries.
             </p>
             <p className="text-muted-foreground">
-              The hybrid retrieval pipeline combines vector similarity search with full-text search (PostgreSQL tsvector)
-              using Reciprocal Rank Fusion (RRF) to merge results from both sources for optimal relevance.
+              The hybrid retrieval pipeline combines vector similarity search with full-text search
+              (PostgreSQL tsvector) using Reciprocal Rank Fusion (RRF) to merge results from both
+              sources for optimal relevance.
             </p>
           </div>
         </section>
 
         <div className="flex justify-between pt-4 border-t border-border">
-          <Link href="/docs/reference/environment-variables" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <Link
+            href="/docs/reference/environment-variables"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             &larr; Environment Variables
           </Link>
-          <Link href="/docs/reference/rbac-permissions" className="text-sm text-primary hover:underline">
+          <Link
+            href="/docs/reference/rbac-permissions"
+            className="text-sm text-primary hover:underline"
+          >
             RBAC Permissions &rarr;
           </Link>
         </div>

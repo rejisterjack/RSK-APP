@@ -57,7 +57,10 @@ export const StreamingMessage = React.memo(function StreamingMessage({
           >
             <MemoizedMarkdown content={content || '▌'} />
             {content && (
-              <span className="inline-block h-4 w-2 animate-pulse bg-primary align-middle" aria-hidden="true" />
+              <span
+                className="inline-block h-4 w-2 animate-pulse bg-primary align-middle"
+                aria-hidden="true"
+              />
             )}
           </div>
         </div>

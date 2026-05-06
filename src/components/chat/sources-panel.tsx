@@ -46,10 +46,7 @@ export function SourcesPanel({
         /* ── Mobile: bottom sheet ──────────────────────────────── */
         <SheetContent
           side="bottom"
-          className={cn(
-            'h-[60vh] rounded-t-2xl p-0 flex flex-col',
-            className
-          )}
+          className={cn('h-[60vh] rounded-t-2xl p-0 flex flex-col', className)}
         >
           {/* Drag handle */}
           <div className="flex justify-center pt-3 pb-1">
@@ -109,9 +106,7 @@ function SourcesContent({
       <div className="flex h-full flex-col items-center justify-center p-8 text-center text-muted-foreground">
         <FileText className="mb-2 h-12 w-12 opacity-20" />
         <p>No sources available</p>
-        <p className="text-sm">
-          Sources will appear here when the assistant references documents.
-        </p>
+        <p className="text-sm">Sources will appear here when the assistant references documents.</p>
       </div>
     );
   }
