@@ -13,6 +13,8 @@ interface ChatState {
   selectedSource: Source | null;
   isAgentMode: boolean;
   isHistoryPanelOpen: boolean;
+  isMobileSidebarOpen: boolean;
+  isMobileMoreOpen: boolean;
 }
 
 const initialState: ChatState = {
@@ -21,6 +23,8 @@ const initialState: ChatState = {
   selectedSource: null,
   isAgentMode: false,
   isHistoryPanelOpen: false,
+  isMobileSidebarOpen: false,
+  isMobileMoreOpen: false,
 };
 
 // =============================================================================
@@ -32,7 +36,9 @@ type ChatAction =
   | { type: 'TOGGLE_SOURCES_INLINE' }
   | { type: 'SET_SELECTED_SOURCE'; source: Source }
   | { type: 'SET_AGENT_MODE'; enabled: boolean }
-  | { type: 'SET_HISTORY_PANEL_OPEN'; open: boolean };
+  | { type: 'SET_HISTORY_PANEL_OPEN'; open: boolean }
+  | { type: 'SET_MOBILE_SIDEBAR_OPEN'; open: boolean }
+  | { type: 'TOGGLE_MOBILE_MORE' };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -46,6 +52,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, isAgentMode: action.enabled };
     case 'SET_HISTORY_PANEL_OPEN':
       return { ...state, isHistoryPanelOpen: action.open };
+    case 'SET_MOBILE_SIDEBAR_OPEN':
+      return { ...state, isMobileSidebarOpen: action.open };
+    case 'TOGGLE_MOBILE_MORE':
+      return { ...state, isMobileMoreOpen: !state.isMobileMoreOpen };
     default:
       return state;
   }

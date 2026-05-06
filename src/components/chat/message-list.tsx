@@ -97,7 +97,7 @@ export function MessageList({
 
   return (
     <div className={cn('relative', className)}>
-      <div className="flex flex-col py-4 px-2">
+      <ul className="flex flex-col py-4 px-2" aria-label="Chat messages">
         {/* Load more button */}
         {hasMore && !shouldVirtualize && (
           <div className="flex justify-center py-2 mb-2">
@@ -164,7 +164,7 @@ export function MessageList({
           />
         ) : (
           messages.map((message, index) => (
-            <div key={message.id}>
+            <li key={message.id}>
               <MessageItem
                 message={message}
                 onEdit={onEditMessage}
@@ -185,7 +185,7 @@ export function MessageList({
                   />
                 </div>
               )}
-            </div>
+            </li>
           ))
         )}
 
@@ -210,7 +210,7 @@ export function MessageList({
 
         {/* Scroll sentinel */}
         <div ref={endRef} className="h-1" />
-      </div>
+      </ul>
 
       {/* Scroll to bottom button */}
       <AnimatePresence>
@@ -227,8 +227,9 @@ export function MessageList({
               size="icon"
               className="h-10 w-10 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground border border-primary-foreground/20"
               onClick={scrollToBottom}
+              aria-label="Scroll to bottom"
             >
-              <ChevronDown className="h-5 w-5" />
+              <ChevronDown className="h-5 w-5" aria-hidden="true" />
             </Button>
           </motion.div>
         )}

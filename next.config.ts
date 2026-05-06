@@ -2,12 +2,24 @@ import type { NextConfig } from "next";
 import type { webpack } from "next/dist/compiled/webpack/webpack";
 import type { Header } from "next/dist/lib/load-custom-routes";
 import bundleAnalyzer from "@next/bundle-analyzer";
+import createMDX from "@next/mdx";
 
 const withBundleAnalyzer = bundleAnalyzer({
 	enabled: process.env.ANALYZE === "true",
 });
 
+const withMDX = createMDX({
+	// Add markdown plugins here if needed (e.g., remark-gfm, rehype-highlight)
+	options: {
+		// Enable JSX in MDX files
+		jsx: true,
+	},
+});
+
 const nextConfig: NextConfig = {
+	// Enable MDX page support
+	pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
+
 	// "standalone" enables output file tracing — produces minimal function bundles
 	// by including only necessary dependencies. Reduces cold start times on both
 	// Vercel serverless functions and Docker deployments.
@@ -176,4 +188,4 @@ const nextConfig: NextConfig = {
 	},
 };
 
-export default withBundleAnalyzer(nextConfig);
+export default withBundleAnalyzer(withMDX(nextConfig));

@@ -38,8 +38,9 @@ export function ApiKeySettings(): React.ReactElement {
           variant="ghost"
           size="sm"
           className="h-8 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+          aria-label="API key settings"
         >
-          <Key className="h-3.5 w-3.5" />
+          <Key className="h-3.5 w-3.5" aria-hidden="true" />
           <span className="hidden sm:inline">API Keys</span>
         </Button>
       </PopoverTrigger>
@@ -69,18 +70,19 @@ export function ApiKeySettings(): React.ReactElement {
               {has(provider.id) ? (
                 <div className="flex items-center gap-1.5">
                   <div className="flex-1 h-8 px-2 flex items-center rounded-md border bg-muted/50 text-xs text-muted-foreground font-mono truncate">
-                    {visible[provider.id] ? keys[provider.id] : maskKey(keys[provider.id]!)}
+                    {visible[provider.id] ? keys[provider.id] : maskKey(keys[provider.id] ?? '')}
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 p-0"
                     onClick={() => toggleVisible(provider.id)}
+                    aria-label={visible[provider.id] ? 'Hide API key' : 'Show API key'}
                   >
                     {visible[provider.id] ? (
-                      <EyeOff className="h-3.5 w-3.5" />
+                      <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
                     ) : (
-                      <Eye className="h-3.5 w-3.5" />
+                      <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                     )}
                   </Button>
                   <Button
@@ -88,8 +90,9 @@ export function ApiKeySettings(): React.ReactElement {
                     size="sm"
                     className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                     onClick={() => handleRemove(provider.id)}
+                    aria-label={`Remove ${provider.name} API key`}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </Button>
                 </div>
               ) : (

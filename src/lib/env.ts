@@ -23,6 +23,8 @@ const envSchema = z.object({
 
   // Optional AI provider keys
   FIREWORKS_API_KEY: z.string().optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
 
   // Optional variables with defaults
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -71,6 +73,13 @@ const envSchema = z.object({
 
   // Ollama configuration
   OLLAMA_BASE_URL: z.string().optional(),
+
+  // Embedding configuration — dimensions must match the pgvector column in prisma/schema.prisma.
+  // Default: 768 (Google Gemini text-embedding-004).
+  // Change only if you also run a migration to alter the vector column dimension.
+  EMBEDDING_PROVIDER: z.enum(['google', 'openai', 'ollama']).default('google'),
+  EMBEDDING_MODEL: z.string().optional(),
+  EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(768),
 
   // Plausible analytics
   NEXT_PUBLIC_ANALYTICS_HOST: z.string().optional(),

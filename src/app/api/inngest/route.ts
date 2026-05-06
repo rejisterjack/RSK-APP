@@ -6,6 +6,7 @@ import {
   cleanupStaleJobs,
   nightlyDbCleanupJob,
   processDocumentJob,
+  reEmbedWorkspaceJob,
   retryIngestionJob,
 } from '@/lib/inngest/functions';
 
@@ -18,5 +19,6 @@ export const { GET, POST, PUT } = serve({
     bulkIngestJob,
     cleanupStaleJobs,
     nightlyDbCleanupJob,
+    reEmbedWorkspaceJob,
   ],
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { Bot, Code2, Globe, Mic, Radio, Shield, Upload, Users, Zap } from 'lucide-react';
+import { Bot, Chrome, Code2, Globe, Mic, Radio, Shield, Upload, Users, Zap } from 'lucide-react';
 import { useRef } from 'react';
 
 interface Feature {
@@ -84,6 +84,22 @@ const features: Feature[] = [
       'Plausible analytics, Pino structured logging, OpenTelemetry traces. Know exactly what your AI is doing.',
     highlight: 'Full Visibility',
     tags: ['Plausible', 'OpenTelemetry', 'Pino'],
+  },
+  {
+    icon: Chrome,
+    title: 'Chrome Extension',
+    description:
+      'Save any web page to your knowledge base with one click. Ask questions about selected text, summarize pages, and search your docs — all from the browser.',
+    highlight: 'Browser Native',
+    tags: ['Chrome', 'Web Store', 'Manifest V3'],
+  },
+  {
+    icon: Globe,
+    title: 'Multi-Source Ingestion',
+    description:
+      'Connect GitHub repos, Google Drive, Notion pages, Slack channels, and YouTube videos. Import knowledge from the tools your team already uses.',
+    highlight: 'Any Source',
+    tags: ['GitHub', 'Google Drive', 'Notion', 'Slack'],
   },
 ];
 

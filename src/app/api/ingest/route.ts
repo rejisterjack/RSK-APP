@@ -789,6 +789,7 @@ export const GET = withApiAuth(async (req: NextRequest, session) => {
       progress,
       chunkCount: document.chunks.length,
       error,
+      errorCategory: job?.errorCategory ?? undefined,
       metadata: {
         size: document.size,
         createdAt: document.createdAt.toISOString(),

@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         chunks: { select: { id: true } },
-        ingestionJob: { select: { progress: true, error: true } },
+        ingestionJob: { select: { progress: true, error: true, errorCategory: true } },
       },
       orderBy: { createdAt: sortOrder },
       take,
@@ -158,6 +158,7 @@ export async function GET(req: NextRequest) {
         chunkCount: doc.chunks.length,
         createdAt: doc.createdAt.toISOString(),
         errorMessage: doc.ingestionJob?.error || (metadata.error as string) || undefined,
+        errorCategory: doc.ingestionJob?.errorCategory ?? undefined,
       };
     });
 

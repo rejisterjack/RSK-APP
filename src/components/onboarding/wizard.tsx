@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Building2,
   Check,
+  CheckCircle2,
   ChevronRight,
   FileText,
   Loader2,
@@ -11,6 +12,7 @@ import {
   Settings,
   Sparkles,
   Upload,
+  XCircle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -49,8 +51,14 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [uploadedDocument, setUploadedDocument] = useState(false);
   const [chunkingStrategy, setChunkingStrategy] = useState<'fixed' | 'semantic'>('fixed');
+  const [setupResults, setSetupResults] = useState<{
+    tested: boolean;
+    embedding?: { ok: boolean; message?: string; latencyMs?: number };
+    dimensions?: { ok: boolean; message?: string };
+    chat?: { ok: boolean; message?: string; latencyMs?: number };
+  }>({ tested: false });
 
-  const totalSteps = 4;
+  const totalSteps = 5;
   const progress = (step / totalSteps) * 100;
 
   const {
@@ -109,6 +117,9 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
 
       toast.success('Workspace created!');
       setStep(2);
+
+      // Automatically run setup test after workspace creation
+      testSetup();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create workspace');
     } finally {
@@ -157,6 +168,49 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
     }
   };
 
+  const testSetup = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/setup/test');
+      const data = await response.json();
+
+      const embeddingResult = data.results?.find((r: { name: string }) => r.name === 'embedding');
+      const dimensionsResult = data.results?.find((r: { name: string }) => r.name === 'dimensions');
+      const chatResult = data.results?.find((r: { name: string }) => r.name === 'chat');
+
+      setSetupResults({
+        tested: true,
+        embedding: {
+          ok: embeddingResult?.status === 'ok',
+          message: embeddingResult?.message,
+          latencyMs: embeddingResult?.latencyMs,
+        },
+        dimensions: {
+          ok: dimensionsResult?.status === 'ok',
+          message: dimensionsResult?.message,
+        },
+        chat: {
+          ok: chatResult?.status === 'ok',
+          message: chatResult?.message,
+          latencyMs: chatResult?.latencyMs,
+        },
+      });
+    } catch (error) {
+      setSetupResults({
+        tested: true,
+        embedding: {
+          ok: false,
+          message: error instanceof Error ? error.message : 'Connection failed',
+        },
+        chat: { ok: false, message: error instanceof Error ? error.message : 'Connection failed' },
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const allSetupOk = setupResults.embedding?.ok && setupResults.chat?.ok;
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl">
@@ -170,7 +224,7 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
               Step {step} of {totalSteps}
             </span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} className="h-2" aria-label={`Step ${step} of ${totalSteps}`} />
         </CardHeader>
 
         <CardContent>
@@ -196,7 +250,11 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
                     {...register('name')}
                     onChange={handleNameChange}
                   />
-                  {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                  {errors.name && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {errors.name.message}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -205,17 +263,28 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
                   <p className="text-xs text-muted-foreground">
                     Used in URLs: /w/{watch('slug') || 'your-slug'}
                   </p>
-                  {errors.slug && <p className="text-sm text-destructive">{errors.slug.message}</p>}
+                  {errors.slug && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {errors.slug.message}
+                    </p>
+                  )}
                 </div>
 
                 <Separator />
 
                 <div className="space-y-4">
                   <Label>Chunking Strategy</Label>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div
+                    className="grid grid-cols-2 gap-4"
+                    role="radiogroup"
+                    aria-label="Chunking strategy"
+                  >
+                    {/* biome-ignore lint/a11y/useSemanticElements: custom styled radio button with rich content */}
                     <button
                       type="button"
                       onClick={() => setChunkingStrategy('fixed')}
+                      role="radio"
+                      aria-checked={chunkingStrategy === 'fixed'}
                       className={`p-4 rounded-lg border text-left transition-all ${
                         chunkingStrategy === 'fixed'
                           ? 'border-primary bg-primary/5'
@@ -227,9 +296,12 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
                         Standard character-based splitting
                       </div>
                     </button>
+                    {/* biome-ignore lint/a11y/useSemanticElements: custom styled radio button with rich content */}
                     <button
                       type="button"
                       onClick={() => setChunkingStrategy('semantic')}
+                      role="radio"
+                      aria-checked={chunkingStrategy === 'semantic'}
                       className={`p-4 rounded-lg border text-left transition-all ${
                         chunkingStrategy === 'semantic'
                           ? 'border-primary bg-primary/5'
@@ -263,7 +335,123 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
             </div>
           )}
 
-          {/* Step 2: Upload Document */}
+          {/* Step 2: Verify AI Setup */}
+          {step === 2 && (
+            <div className="space-y-6">
+              <div>
+                <CardTitle className="text-2xl">Verify Your AI Setup</CardTitle>
+                <CardDescription>
+                  Testing your embedding and chat providers to make sure everything works
+                </CardDescription>
+              </div>
+
+              {!setupResults.tested ? (
+                <div
+                  className="flex flex-col items-center justify-center py-8"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" aria-hidden="true" />
+                  <p className="text-sm text-muted-foreground">Testing AI providers...</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Embedding Test */}
+                  <div className="flex items-start gap-3 p-4 rounded-lg border border-border">
+                    {setupResults.embedding?.ok ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-medium text-sm">Embedding Provider</p>
+                      {setupResults.embedding?.ok ? (
+                        <p className="text-xs text-muted-foreground">
+                          Working ({setupResults.embedding.latencyMs}ms)
+                          {setupResults.embedding.message && ` - ${setupResults.embedding.message}`}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-red-500">
+                          {setupResults.embedding?.message || 'Failed to generate embeddings'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dimensions Test */}
+                  {setupResults.dimensions && (
+                    <div className="flex items-start gap-3 p-4 rounded-lg border border-border">
+                      {setupResults.dimensions.ok ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-medium text-sm">Vector Dimensions</p>
+                        <p
+                          className={`text-xs ${setupResults.dimensions.ok ? 'text-muted-foreground' : 'text-red-500'}`}
+                        >
+                          {setupResults.dimensions.message || 'Compatible with database schema'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chat Test */}
+                  <div className="flex items-start gap-3 p-4 rounded-lg border border-border">
+                    {setupResults.chat?.ok ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-medium text-sm">Chat Provider</p>
+                      {setupResults.chat?.ok ? (
+                        <p className="text-xs text-muted-foreground">
+                          Working ({setupResults.chat.latencyMs}ms)
+                        </p>
+                      ) : (
+                        <p className="text-xs text-red-500">
+                          {setupResults.chat?.message || 'Failed to generate response'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {!allSetupOk && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        Some providers failed. Check your API keys in the .env file.
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        You can continue anyway — some features may not work until the keys are
+                        fixed.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3">
+                <Button variant="ghost" onClick={skipStep}>
+                  Skip
+                </Button>
+                {!setupResults.tested && (
+                  <Button onClick={testSetup} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Run Tests'}
+                  </Button>
+                )}
+                {setupResults.tested && (
+                  <Button onClick={() => setStep(3)}>
+                    Continue
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Upload Document */}
           {step === 2 && (
             <div className="space-y-6">
               <div>
@@ -298,8 +486,8 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
             </div>
           )}
 
-          {/* Step 3: First Chat */}
-          {step === 3 && (
+          {/* Step 4: First Chat */}
+          {step === 4 && (
             <div className="space-y-6">
               <div>
                 <CardTitle className="text-2xl">Start Your First Chat</CardTitle>
@@ -333,7 +521,7 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
               </div>
 
               <div className="flex justify-end gap-3">
-                <Button onClick={() => setStep(4)}>
+                <Button onClick={() => setStep(5)}>
                   Continue
                   <ChevronRight className="h-4 w-4 ml-2" />
                 </Button>
@@ -341,8 +529,8 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
             </div>
           )}
 
-          {/* Step 4: Complete */}
-          {step === 4 && (
+          {/* Step 5: Complete */}
+          {step === 5 && (
             <div className="space-y-6 text-center">
               <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center">
                 <Check className="h-10 w-10 text-green-600" />

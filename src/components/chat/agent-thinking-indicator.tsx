@@ -28,13 +28,13 @@ export interface AgentThinkingIndicatorProps {
 function StepStatusIcon({ status }: { status: AgentThinkingStep['status'] }) {
   switch (status) {
     case 'active':
-      return <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />;
+      return <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />;
     case 'done':
-      return <Check className="h-3.5 w-3.5 text-emerald-400" />;
+      return <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />;
     case 'error':
-      return <X className="h-3.5 w-3.5 text-red-400" />;
+      return <X className="h-3.5 w-3.5 text-red-400" aria-hidden="true" />;
     default:
-      return <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />;
+      return <Circle className="h-3.5 w-3.5 text-muted-foreground/40" aria-hidden="true" />;
   }
 }
 
@@ -44,7 +44,7 @@ function StepStatusIcon({ status }: { status: AgentThinkingStep['status'] }) {
 
 function ThinkingDots() {
   return (
-    <span className="inline-flex items-center gap-0.5">
+    <span className="inline-flex items-center gap-0.5" aria-hidden="true">
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
@@ -110,20 +110,22 @@ export function AgentThinkingIndicator({
       exit={{ opacity: 0, y: -5, scale: 0.98 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       className="py-6 px-4 mb-4 rounded-3xl glass max-w-3xl mr-auto ml-4"
+      role="status"
+      aria-label="Agent is thinking"
     >
       <div className="flex gap-4">
         {/* Avatar */}
         <div className="flex shrink-0 flex-col items-center mt-1">
           <div className="relative">
             <div className="h-9 w-9 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2 ring-offset-2 ring-offset-background ring-emerald-500/30 shadow-md">
-              <Bot className="h-5 w-5" />
+              <Bot className="h-5 w-5" aria-hidden="true" />
             </div>
             <motion.div
               className="absolute -right-1 -top-1"
               animate={{ scale: [1, 1.2, 1] }}
               transition={{ duration: 1.5, repeat: Infinity }}
             >
-              <Sparkles className="h-3 w-3 text-yellow-400" />
+              <Sparkles className="h-3 w-3 text-yellow-400" aria-hidden="true" />
             </motion.div>
           </div>
         </div>
@@ -148,14 +150,21 @@ export function AgentThinkingIndicator({
                 exit={{ opacity: 0, x: 10 }}
                 className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-1 text-xs font-medium text-primary"
               >
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                 Running: {currentTool}
               </motion.div>
             )}
           </AnimatePresence>
 
           {/* Progress bar */}
-          <div className="mb-3 h-1 w-full max-w-xs rounded-full bg-white/5 overflow-hidden">
+          <div
+            className="mb-3 h-1 w-full max-w-xs rounded-full bg-white/5 overflow-hidden"
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Agent progress: ${progress}%`}
+          >
             <motion.div
               className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-primary"
               initial={{ width: '0%' }}
@@ -171,12 +180,15 @@ export function AgentThinkingIndicator({
                 type="button"
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 onClick={() => setShowDetails(!showDetails)}
+                aria-expanded={showDetails}
+                aria-label={`Toggle agent steps details: ${completedCount} of ${steps.length} completed`}
               >
                 <ChevronDown
                   className={cn(
                     'h-3 w-3 transition-transform duration-200',
                     !showDetails && '-rotate-90'
                   )}
+                  aria-hidden="true"
                 />
                 Steps ({completedCount}/{steps.length})
               </button>
@@ -190,7 +202,7 @@ export function AgentThinkingIndicator({
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <ul className="mt-2 space-y-1.5">
+                    <ul className="mt-2 space-y-1.5" aria-label="Agent steps">
                       {steps.map((step, idx) => (
                         <motion.li
                           key={step.id ?? idx}
@@ -198,6 +210,7 @@ export function AgentThinkingIndicator({
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: idx * 0.05 }}
                           className="flex items-center gap-2 text-xs"
+                          aria-label={`${step.label}: ${step.status}`}
                         >
                           <StepStatusIcon status={step.status} />
                           <span

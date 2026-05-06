@@ -6,7 +6,7 @@
 
 import { detectCostAnomalies } from '@/lib/billing/cost-monitor';
 import { prisma } from '@/lib/db';
-import { detachOldPartitions, ensurePartitions } from '@/lib/db/partition-manager';
+import { checkPartitionHealth, detachOldPartitions, ensurePartitions } from '@/lib/db/partition-manager';
 import { logger } from '@/lib/logger';
 import { dispatchAlert } from '@/lib/monitoring/alerting';
 import { detectAnomalies } from '@/lib/monitoring/anomaly-detector';
@@ -118,13 +118,14 @@ export const processDocumentJob = inngest.createFunction(
       });
 
       if (!docLimit.allowed) {
+        const limitReason = docLimit.reason || 'Document limit exceeded';
         await step.run('fail-limit-exceeded', async () => {
           await prisma.document.update({
             where: { id: documentId },
             data: {
               status: 'FAILED',
               metadata: {
-                error: docLimit.reason,
+                error: limitReason,
                 failedAt: new Date().toISOString(),
               },
             },
@@ -134,13 +135,14 @@ export const processDocumentJob = inngest.createFunction(
             where: { id: job.id },
             data: {
               status: 'FAILED',
-              error: docLimit.reason || 'Document limit exceeded',
+              error: limitReason,
+              errorCategory: 'SIZE_LIMIT',
               completedAt: new Date(),
             },
           });
         });
 
-        throw new Error(docLimit.reason || 'Document limit exceeded');
+        throw new Error(limitReason);
       }
     }
 
@@ -584,6 +586,7 @@ export const cleanupStaleJobs = inngest.createFunction(
           data: {
             status: 'FAILED',
             error: 'Job timed out after 6 hours',
+            errorCategory: 'NETWORK_ERROR',
             completedAt: new Date(),
           },
         });
@@ -696,7 +699,11 @@ export const partitionMaintenanceJob = inngest.createFunction(
       return detachOldPartitions(12); // keep 12 months of data
     });
 
-    return { detached };
+    const health = await step.run('check-partition-health', async () => {
+      return checkPartitionHealth();
+    });
+
+    return { detached, healthy: health.healthy, warnings: health.warnings.length };
   }
 );
 
@@ -710,6 +717,7 @@ async function updateJobStatus(
     status?: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
     progress?: number;
     error?: string;
+    errorCategory?: 'PARSE_ERROR' | 'EMBEDDING_ERROR' | 'SIZE_LIMIT' | 'OCR_FAILURE' | 'PROVIDER_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN';
     startedAt?: Date;
     completedAt?: Date;
   }
@@ -739,6 +747,132 @@ async function emitProgress(
     },
   });
 }
+
+// =============================================================================
+// Re-Embedding Job (for embedding model changes)
+// =============================================================================
+
+interface ReEmbedWorkspaceData {
+  workspaceId: string;
+  userId: string;
+  newProvider?: string;
+  newModel?: string;
+}
+
+/**
+ * Background job to re-embed all document chunks in a workspace
+ * when the embedding model is changed.
+ */
+export const reEmbedWorkspaceJob = inngest.createFunction(
+  {
+    id: 're-embed-workspace',
+    name: 'Re-Embed Workspace Documents',
+    concurrency: 1,
+    retries: 2,
+    throttle: { limit: 1, period: '1h' },
+  },
+  { event: 'workspace/re-embed' },
+  async ({
+    event,
+    step,
+  }: {
+    event: { data: ReEmbedWorkspaceData };
+    step: InngestContext['step'];
+  }) => {
+    const { workspaceId } = event.data;
+
+    // Step 1: Get all documents in the workspace
+    const documents = await step.run('get-documents', async () => {
+      const docs = await prisma.document.findMany({
+        where: { workspaceId, status: 'COMPLETED' },
+        select: { id: true, name: true },
+      });
+      return docs;
+    });
+
+    if (documents.length === 0) {
+      logger.info('No documents to re-embed', { workspaceId });
+      return { workspaceId, documentsProcessed: 0 };
+    }
+
+    // Step 2: Process each document
+    const results: Array<{ documentId: string; chunksProcessed: number; error?: string }> = [];
+
+    for (const doc of documents) {
+      const result = await step.run(`re-embed-doc-${doc.id}`, async () => {
+        try {
+          const chunks = await prisma.documentChunk.findMany({
+            where: { documentId: doc.id },
+            select: { id: true, content: true },
+          });
+
+          if (chunks.length === 0) {
+            return { documentId: doc.id, chunksProcessed: 0 };
+          }
+
+          const embeddingEngine = createEmbeddings();
+          const BATCH_SIZE = 50;
+          let processed = 0;
+
+          for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+            const batch = chunks.slice(i, i + BATCH_SIZE);
+            const texts = batch.map((c) => c.content);
+            const vectors = await embeddingEngine.embedDocuments(texts);
+
+            for (let j = 0; j < batch.length; j++) {
+              const vector = vectors[j];
+              if (vector) {
+                await prisma.$executeRaw`
+                  UPDATE document_chunks
+                  SET embedding = ${`[${vector.join(',')}]`}::vector
+                  WHERE id = ${batch[j].id}
+                `;
+              }
+            }
+
+            processed += batch.length;
+          }
+
+          logger.info('Re-embedded document', {
+            documentId: doc.id,
+            chunksProcessed: processed,
+          });
+
+          return { documentId: doc.id, chunksProcessed: processed };
+        } catch (error) {
+          logger.error('Failed to re-embed document', {
+            documentId: doc.id,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          return {
+            documentId: doc.id,
+            chunksProcessed: 0,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          };
+        }
+      });
+
+      results.push(result);
+    }
+
+    const totalChunks = results.reduce((sum, r) => sum + r.chunksProcessed, 0);
+    const failedDocs = results.filter((r) => r.error);
+
+    logger.info('Re-embedding complete', {
+      workspaceId,
+      totalDocuments: documents.length,
+      totalChunks,
+      failedDocs: failedDocs.length,
+    });
+
+    return {
+      workspaceId,
+      documentsProcessed: documents.length,
+      totalChunks,
+      failedDocs: failedDocs.length,
+    };
+  }
+);
 
 // =============================================================================
 // Event Types (for type safety)
@@ -803,6 +937,14 @@ declare module 'inngest' {
         successCount: number;
         failureCount: number;
         results: Array<{ documentId: string; success: boolean; error?: string }>;
+      };
+    };
+    'workspace/re-embed': {
+      data: {
+        workspaceId: string;
+        userId: string;
+        newProvider?: string;
+        newModel?: string;
       };
     };
   }

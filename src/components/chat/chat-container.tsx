@@ -1,10 +1,8 @@
 'use client';
 
-import { Menu } from 'lucide-react';
 import type React from 'react';
 import { memo } from 'react';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { ChatProvider, useChatContext } from './chat-context';
 import { ChatHeader } from './chat-header';
@@ -145,80 +143,87 @@ const ChatInner = memo(function ChatInner({
   return (
     <div
       className={cn(
-        'flex h-full w-full p-2 gap-2 overflow-hidden relative text-foreground selection:bg-primary/30',
+        'flex h-full w-full overflow-hidden relative text-foreground selection:bg-primary/30',
+        // Mobile: full-width with no padding; Desktop: padded with gap
+        'p-0 md:p-2 md:gap-2',
         className
       )}
     >
-      {/* Mobile sidebar trigger */}
+      {/* ── Mobile sidebar (Sheet overlay) ─────────────────────────── */}
       {sidebar && (
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute left-6 top-6 z-50 lg:hidden shadow-xl glass-heavy rounded-full h-12 w-12 border border-white/20"
-            >
-              <Menu className="h-6 w-6" />
-            </Button>
-          </SheetTrigger>
+        <Sheet
+          open={state.isMobileSidebarOpen}
+          onOpenChange={(open) => dispatch({ type: 'SET_MOBILE_SIDEBAR_OPEN', open })}
+        >
           <SheetContent
             side="left"
-            className="w-[85vw] sm:w-[380px] p-0 border-none glass-heavy shadow-2xl rounded-r-3xl overflow-hidden"
+            className="w-[85vw] sm:w-[380px] p-0 border-none glass-heavy shadow-2xl rounded-r-3xl overflow-hidden md:hidden"
           >
+            {/* Accessible title for the sheet */}
+            <SheetTitle className="sr-only">Navigation Sidebar</SheetTitle>
             {sidebar}
           </SheetContent>
         </Sheet>
       )}
 
-      {/* Desktop sidebar */}
+      {/* ── Desktop sidebar (persistent) ───────────────────────────── */}
       {sidebar && (
-        <div className="hidden lg:flex w-[280px] shrink-0 flex-col h-full relative z-20 glass-heavy rounded-2xl overflow-hidden border border-white/10 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.3)]">
+        <div className="hidden md:flex w-[280px] shrink-0 flex-col h-full relative z-20 glass-heavy rounded-2xl overflow-hidden border border-white/10 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.3)]">
           {sidebar}
         </div>
       )}
 
-      {/* Main chat area */}
-      <div
-        className="flex-1 min-w-0 h-full grid relative z-10 glass-heavy rounded-2xl overflow-hidden border border-white/10 shadow-[0_12px_48px_-12px_rgba(0,0,0,0.4)]"
-        style={{ gridTemplateRows: 'auto 1fr auto' }}
+      {/* ── Main chat area ─────────────────────────────────────────── */}
+      <section
+        aria-label="Chat"
+        className={cn(
+          'flex-1 min-w-0 h-full relative z-10 flex flex-col',
+          // Desktop: glass card with border
+          'md:grid md:glass-heavy md:rounded-2xl md:overflow-hidden md:border md:border-white/10 md:shadow-[0_12px_48px_-12px_rgba(0,0,0,0.4)]'
+        )}
+        style={{ gridTemplateRows: undefined }}
       >
-        <ChatHeader
-          selectedModel={selectedModel}
-          chatId={chatId}
-          chatTitle={chatTitle}
-          isStreaming={isStreaming}
-          onNewChat={onNewChat}
-          onModelChange={onModelChange}
-          onAgentModeToggle={onAgentModeToggle}
-        />
+        {/* Inner grid for desktop to enforce header/messages/input rows */}
+        <div className="flex flex-col h-full md:grid" style={{ gridTemplateRows: 'auto 1fr auto' }}>
+          <ChatHeader
+            selectedModel={selectedModel}
+            chatId={chatId}
+            chatTitle={chatTitle}
+            isStreaming={isStreaming}
+            onNewChat={onNewChat}
+            onModelChange={onModelChange}
+            onAgentModeToggle={onAgentModeToggle}
+            onToggleMobileSidebar={() => dispatch({ type: 'SET_MOBILE_SIDEBAR_OPEN', open: true })}
+          />
 
-        <ChatMessages
-          messages={messages}
-          sources={sources}
-          isStreaming={isStreaming}
-          streamingContent={streamingContent}
-          hasMore={hasMore}
-          isLoading={isLoading}
-          onLoadMore={onLoadMore}
-          onEditMessage={onEditMessage}
-          onDeleteMessage={onDeleteMessage}
-          onCancelStreaming={onCancelStreaming}
-          onRegenerate={onRegenerate}
-          onFeedback={onFeedback}
-          onSendMessage={onSendMessage}
-          onUploadClick={onUploadClick}
-          onFilesDrop={onFilesDrop}
-        />
+          <ChatMessages
+            messages={messages}
+            sources={sources}
+            isStreaming={isStreaming}
+            streamingContent={streamingContent}
+            hasMore={hasMore}
+            isLoading={isLoading}
+            onLoadMore={onLoadMore}
+            onEditMessage={onEditMessage}
+            onDeleteMessage={onDeleteMessage}
+            onCancelStreaming={onCancelStreaming}
+            onRegenerate={onRegenerate}
+            onFeedback={onFeedback}
+            onSendMessage={onSendMessage}
+            onUploadClick={onUploadClick}
+            onFilesDrop={onFilesDrop}
+          />
 
-        <ChatInputArea
-          hasMessages={hasMessages}
-          isLoading={isLoading}
-          isStreaming={isStreaming}
-          onSendMessage={onSendMessage}
-        />
-      </div>
+          <ChatInputArea
+            hasMessages={hasMessages}
+            isLoading={isLoading}
+            isStreaming={isStreaming}
+            onSendMessage={onSendMessage}
+          />
+        </div>
+      </section>
 
-      {/* Mobile Sources Modal */}
+      {/* ── Sources Panel (bottom sheet on mobile, right sheet on desktop) ── */}
       <SourcesPanel
         sources={sources}
         isOpen={state.isSourcesPanelOpen}
@@ -226,7 +231,7 @@ const ChatInner = memo(function ChatInner({
         onSourceClick={(source) => dispatch({ type: 'SET_SELECTED_SOURCE', source })}
       />
 
-      {/* Conversation History Panel */}
+      {/* ── Conversation History Panel ─────────────────────────────── */}
       <ConversationHistoryPanel
         currentChatId={chatId}
         onSelectConversation={onSelectConversation || noop}

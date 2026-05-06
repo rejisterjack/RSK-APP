@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "RAG Starter Kit",
+  "name": "RAG Knowledge Assistant",
   "version": "1.0.0",
-  "description": "Quick access to your RAG knowledge base",
+  "description": "Save web pages to your knowledge base, ask questions about any content, and get AI-powered summaries from your RAG assistant.",
   "permissions": [
     "activeTab",
     "storage",
     "contextMenus",
-    "sidePanel"
+    "sidePanel",
+    "scripting",
+    "notifications"
   ],
   "host_permissions": [
     "http://localhost:3000/*",

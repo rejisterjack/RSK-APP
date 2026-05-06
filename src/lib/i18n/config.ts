@@ -1,12 +1,20 @@
 /**
  * Internationalization Configuration
  *
- * Expanded i18n support with:
- * - 10+ languages
+ * Only locales with completed translations are declared here.
+ * To add a new locale:
+ *   1. Add a locale entry to the `locales` array below
+ *   2. Add a full `messages` translation object in the `messages` record
+ *   3. Create a JSON file at `locales/<code>/common.json`
+ *   4. Update the `localeMetadata` map in `src/lib/i18n.ts`
+ *
+ * Supported features:
  * - RTL language support
  * - Locale-aware formatting
  * - Pluralization
  * - Date/number formatting
+ *
+ * needsTranslation: de, he, it, ja, ko, nl, pl, pt, ru, tr, vi, zh, fa, ur
  */
 
 // =============================================================================
@@ -18,23 +26,9 @@ export const locales = [
   { code: 'en', name: 'English', dir: 'ltr', flag: '🇺🇸' },
   { code: 'es', name: 'Español', dir: 'ltr', flag: '🇪🇸' },
   { code: 'fr', name: 'Français', dir: 'ltr', flag: '🇫🇷' },
-  { code: 'de', name: 'Deutsch', dir: 'ltr', flag: '🇩🇪' },
-  { code: 'it', name: 'Italiano', dir: 'ltr', flag: '🇮🇹' },
-  { code: 'pt', name: 'Português', dir: 'ltr', flag: '🇧🇷' },
-  { code: 'ja', name: '日本語', dir: 'ltr', flag: '🇯🇵' },
-  { code: 'ko', name: '한국어', dir: 'ltr', flag: '🇰🇷' },
-  { code: 'zh', name: '中文', dir: 'ltr', flag: '🇨🇳' },
-  { code: 'ru', name: 'Русский', dir: 'ltr', flag: '🇷🇺' },
-  { code: 'nl', name: 'Nederlands', dir: 'ltr', flag: '🇳🇱' },
-  { code: 'pl', name: 'Polski', dir: 'ltr', flag: '🇵🇱' },
-  { code: 'tr', name: 'Türkçe', dir: 'ltr', flag: '🇹🇷' },
-  { code: 'vi', name: 'Tiếng Việt', dir: 'ltr', flag: '🇻🇳' },
 
   // RTL Languages
   { code: 'ar', name: 'العربية', dir: 'rtl', flag: '🇸🇦' },
-  { code: 'he', name: 'עברית', dir: 'rtl', flag: '🇮🇱' },
-  { code: 'fa', name: 'فارسی', dir: 'rtl', flag: '🇮🇷' },
-  { code: 'ur', name: 'اردو', dir: 'rtl', flag: '🇵🇰' },
 ] as const;
 
 export type SupportedLocale = (typeof locales)[number]['code'];
@@ -428,113 +422,10 @@ export const messages: Record<SupportedLocale, Messages> = {
     },
   },
 
-  // Hebrew (RTL)
-  he: {
-    nav: {
-      home: 'בית',
-      chat: "צ'אט",
-      documents: 'מסמכים',
-      settings: 'הגדרות',
-      admin: 'ניהול',
-      logout: 'התנתק',
-      login: 'התחבר',
-      register: 'הרשם',
-    },
-    chat: {
-      title: "צ'אט",
-      placeholder: 'הקלד את ההודעה שלך...',
-      send: 'שלח',
-      newConversation: 'שיחה חדשה',
-      sources: 'מקורות',
-      thinking: 'חושב...',
-      regenerate: 'צור מחדש',
-      copy: 'העתק',
-      share: 'שתף',
-      edit: 'ערוך',
-      delete: 'מחק',
-      noMessages: 'התחל שיחה על ידי הקלדת הודעה למטה.',
-      uploadDocuments: 'העלה מסמכים כדי לשפר תשובות עם מסד הידע שלך.',
-    },
-    documents: {
-      title: 'מסמכים',
-      upload: 'העלה',
-      uploadDescription: 'גרור ושחרר קבצים כאן, או לחץ לבחירה',
-      supportedFormats: 'פורמטים נתמכים: PDF, DOCX, TXT, MD, HTML',
-      maxSize: 'גודל מקסימלי: 50MB',
-      processing: 'מעבד...',
-      completed: 'הושלם',
-      error: 'שגיאה',
-      deleteConfirm: 'האם אתה בטוח שברצונך למחוק מסמך זה?',
-      noDocuments: 'אין מסמכים עדיין. העלה את המסמך הראשון שלך כדי להתחיל.',
-      search: 'חפש מסמכים...',
-    },
-    settings: {
-      title: 'הגדרות',
-      general: 'כללי',
-      appearance: 'מראה',
-      notifications: 'התראות',
-      language: 'שפה',
-      theme: 'ערכת נושא',
-      themeLight: 'בהיר',
-      themeDark: 'כהה',
-      themeSystem: 'מערכת',
-      save: 'שמור שינויים',
-      saved: 'השינויים נשמרו בהצלחה',
-    },
-    errors: {
-      generic: 'משהו השתבש',
-      notFound: 'הדף לא נמצא',
-      unauthorized: 'אנא התחבר כדי להמשיך',
-      forbidden: 'אין לך הרשאה לגשת למשאב זה',
-      rateLimit: 'יותר מדי בקשות. אנא נסה שוב מאוחר יותר.',
-      validation: 'אנא בדוק את הקלט שלך ונסה שוב',
-      network: 'שגיאת רשת. אנא בדוק את החיבור שלך.',
-    },
-    common: {
-      loading: 'טוען...',
-      cancel: 'ביטול',
-      confirm: 'אישור',
-      close: 'סגור',
-      back: 'חזרה',
-      next: 'הבא',
-      save: 'שמור',
-      delete: 'מחק',
-      edit: 'ערוך',
-      create: 'צור',
-      search: 'חפש',
-      filter: 'סנן',
-      sort: 'מיין',
-      actions: 'פעולות',
-      more: 'עוד',
-      show: 'הצג',
-      hide: 'הסתר',
-      expand: 'הרחב',
-      collapse: 'כווץ',
-    },
-  },
-
-  // Placeholder for other languages - extend as needed
-  de: {} as Messages,
-  it: {} as Messages,
-  pt: {} as Messages,
-  ja: {} as Messages,
-  ko: {} as Messages,
-  zh: {} as Messages,
-  ru: {} as Messages,
-  nl: {} as Messages,
-  pl: {} as Messages,
-  tr: {} as Messages,
-  vi: {} as Messages,
-  fa: {} as Messages,
-  ur: {} as Messages,
+  // needsTranslation: he, de, it, ja, ko, nl, pl, pt, ru, tr, vi, zh, fa, ur
 };
 
-// Fill in missing languages with English as fallback
-for (const locale of locales) {
-  if (!messages[locale.code] || Object.keys(messages[locale.code]).length === 0) {
-    (messages as Record<string, Messages>)[locale.code] = messages.en;
-  }
-}
+// All declared locales now have real translations; no fallback needed.
 
 // =============================================================================
 // Formatting Utilities

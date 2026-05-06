@@ -299,3 +299,77 @@ export function getModelDimensions(
   }
   throw new Error(`Unknown model: ${provider}/${model}`);
 }
+
+/**
+ * Dimension mapping for each provider/model combination.
+ * Used at startup to validate that the configured embedding model's output
+ * matches the vector column dimension in the Prisma schema.
+ */
+const SCHEMA_VECTOR_DIMENSION = 768; // Must match `vector(768)` in prisma/schema.prisma
+
+const PROVIDER_MODEL_DIMENSIONS: Record<string, Record<string, number>> = {
+  google: Object.fromEntries(
+    Object.entries(GOOGLE_MODELS).map(([k, v]) => [k, v.dimensions])
+  ),
+  openai: Object.fromEntries(
+    Object.entries(OPENAI_MODELS).map(([k, v]) => [k, v.dimensions])
+  ),
+  ollama: Object.fromEntries(
+    Object.entries(OLLAMA_MODELS).map(([k, v]) => [k, v.dimensions])
+  ),
+};
+
+/**
+ * Validate that the configured embedding model's output dimensions match
+ * the pgvector column in the database schema.
+ *
+ * Call this at application startup (e.g. in instrumentation.ts or a layout effect).
+ * Returns a warning string if there is a mismatch, or null if dimensions are compatible.
+ */
+export function validateEmbeddingDimensions(
+  provider?: 'google' | 'openai' | 'ollama',
+  model?: string
+): { valid: boolean; message: string | null } {
+  const effectiveProvider = provider ?? process.env.EMBEDDING_PROVIDER ?? 'google';
+  const effectiveModel = model ?? process.env.EMBEDDING_MODEL;
+
+  const defaults: Record<string, string> = {
+    google: 'text-embedding-004',
+    openai: 'text-embedding-3-small',
+    ollama: 'nomic-embed-text',
+  };
+  const resolvedModel = effectiveModel ?? defaults[effectiveProvider] ?? 'text-embedding-004';
+
+  const providerDims = PROVIDER_MODEL_DIMENSIONS[effectiveProvider];
+  if (!providerDims) {
+    return {
+      valid: false,
+      message: `Unknown embedding provider: "${effectiveProvider}". Supported: google, openai, ollama.`,
+    };
+  }
+
+  const modelDims = providerDims[resolvedModel];
+  if (modelDims === undefined) {
+    // Unknown model — warn but don't block (could be a custom Ollama model)
+    return {
+      valid: true,
+      message: `Unknown model "${resolvedModel}" for provider "${effectiveProvider}". ` +
+        `Cannot validate dimensions. Ensure its output matches the pgvector column (${SCHEMA_VECTOR_DIMENSION}D).`,
+    };
+  }
+
+  if (modelDims !== SCHEMA_VECTOR_DIMENSION) {
+    return {
+      valid: false,
+      message:
+        `Embedding dimension mismatch: "${effectiveProvider}/${resolvedModel}" produces ` +
+        `${modelDims}D vectors, but the database schema uses vector(${SCHEMA_VECTOR_DIMENSION}). ` +
+        `To fix this:\n` +
+        `  1. Change EMBEDDING_PROVIDER/MODEL to a ${SCHEMA_VECTOR_DIMENSION}D model (e.g. google/text-embedding-004 or ollama/nomic-embed-text), OR\n` +
+        `  2. Run a migration: ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(${modelDims});\n` +
+        `  3. Update SCHEMA_VECTOR_DIMENSION in src/lib/ai/embeddings/index.ts to ${modelDims}.`,
+    };
+  }
+
+  return { valid: true, message: null };
+}

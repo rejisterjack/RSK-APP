@@ -29,11 +29,11 @@ export const StreamingMessage = React.memo(function StreamingMessage({
         <div className="flex shrink-0 flex-col items-center">
           <Avatar className="h-8 w-8 bg-green-600 text-white">
             <AvatarFallback>
-              <Bot className="h-4 w-4" />
+              <Bot className="h-4 w-4" aria-hidden="true" />
             </AvatarFallback>
           </Avatar>
           {/* Animated indicator */}
-          <div className="mt-2 flex gap-0.5">
+          <div className="mt-2 flex gap-0.5" aria-hidden="true">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-600 [animation-delay:-0.3s]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-600 [animation-delay:-0.15s]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-600" />
@@ -57,7 +57,7 @@ export const StreamingMessage = React.memo(function StreamingMessage({
           >
             <MemoizedMarkdown content={content || '▌'} />
             {content && (
-              <span className="inline-block h-4 w-2 animate-pulse bg-primary align-middle" />
+              <span className="inline-block h-4 w-2 animate-pulse bg-primary align-middle" aria-hidden="true" />
             )}
           </div>
         </div>

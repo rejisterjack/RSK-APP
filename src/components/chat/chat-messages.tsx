@@ -106,8 +106,13 @@ export const ChatMessages = memo(function ChatMessages({
   const showLoading = isLoading && !isStreaming && messages.length === 0;
 
   return (
-    <div className="overflow-hidden relative flex h-full min-h-0">
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
+    <div className="overflow-hidden relative flex h-full min-h-0" role="status" aria-live="polite" aria-label="Chat messages">
+      {/* Scrollable messages area with overscroll containment */}
+      <div
+        className="flex-1 overflow-y-auto scrollbar-thin overscroll-y-contain"
+        style={{ overscrollBehaviorY: 'contain' } as React.CSSProperties}
+        aria-busy={showLoading || isStreaming}
+      >
         {showLoading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 p-4">
             <div className="flex items-center gap-3 w-full max-w-3xl px-4">
@@ -154,6 +159,7 @@ export const ChatMessages = memo(function ChatMessages({
         )}
       </div>
 
+      {/* ── Desktop inline sources panel (side panel, hidden on mobile) ── */}
       <AnimatePresence>
         {!state.isSourcesInlineCollapsed && (
           <motion.div

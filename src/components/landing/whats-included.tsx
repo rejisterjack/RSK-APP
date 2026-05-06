@@ -10,10 +10,12 @@ const corePlatform = [
   'Source citations in every answer',
   'Voice input + output (Whisper + Web Speech)',
   'Agent mode (web search, calculator, code execution)',
+  'Chrome extension (save pages, ask about text, summarize)',
+  'Multi-source ingestion (GitHub, Google Drive, Notion, Slack, YouTube)',
 ];
 
 const infrastructure = [
-  'Authentication (GitHub OAuth, Google OAuth, credentials)',
+  'Authentication (GitHub OAuth, Google OAuth, credentials, SAML SSO)',
   'Admin dashboard (upload, manage, delete docs)',
   'Background job processing (Inngest)',
   'Rate limiting (Upstash Redis)',
@@ -22,6 +24,7 @@ const infrastructure = [
   'E2E tests (Playwright) + unit tests (Vitest)',
   'PWA support (installable, offline)',
   'One-click deploy (Vercel / Railway / Render)',
+  'SAML 2.0 SSO for enterprise (Okta, Azure AD)',
 ];
 
 export function WhatsIncluded(): React.ReactElement {

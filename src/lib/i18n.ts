@@ -2,6 +2,9 @@
  * Internationalization Utilities
  *
  * Helper functions for working with translations and locale detection.
+ * Only locales with completed translations are listed here.
+ *
+ * needsTranslation: de, he, it, ja, ko, nl, pl, pt, ru, tr, vi, zh, fa, ur
  */
 
 import { i18nConfig } from '../../i18n.config';
@@ -54,15 +57,14 @@ export function addLocaleToPathname(pathname: string, locale: string): string {
 }
 
 /**
- * Locale metadata for language switcher
+ * Locale metadata for language switcher.
+ * Only includes locales that have actual translations.
  */
 export const localeMetadata: Record<string, { name: string; flag: string; dir: 'ltr' | 'rtl' }> = {
   en: { name: 'English', flag: '🇺🇸', dir: 'ltr' },
   es: { name: 'Español', flag: '🇪🇸', dir: 'ltr' },
   fr: { name: 'Français', flag: '🇫🇷', dir: 'ltr' },
-  de: { name: 'Deutsch', flag: '🇩🇪', dir: 'ltr' },
-  ja: { name: '日本語', flag: '🇯🇵', dir: 'ltr' },
-  zh: { name: '中文', flag: '🇨🇳', dir: 'ltr' },
+  ar: { name: 'العربية', flag: '🇸🇦', dir: 'rtl' },
 };
 
 /**

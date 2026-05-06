@@ -60,6 +60,7 @@ export const GET = withApiAuth(
               status: true,
               progress: true,
               error: true,
+              errorCategory: true,
               startedAt: true,
               completedAt: true,
             },
@@ -104,6 +105,7 @@ export const GET = withApiAuth(
         updatedAt: document.updatedAt.toISOString(),
         content: document.content,
         errorMessage: document.ingestionJob?.error || (metadata.error as string) || undefined,
+        errorCategory: document.ingestionJob?.errorCategory ?? undefined,
         metadata: {
           ...metadata,
           sourceUrl: document.sourceUrl,

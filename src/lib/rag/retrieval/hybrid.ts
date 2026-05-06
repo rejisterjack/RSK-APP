@@ -6,7 +6,15 @@
  */
 
 import { generateEmbedding } from '@/lib/ai';
+import { logger } from '@/lib/logger';
 import { type defaultKeywordSearchConfig, KeywordRetriever } from './keyword';
+import {
+  applyRerankResults,
+  chunksToRerankDocs,
+  createReranker,
+  isRerankerEnabled,
+  type Reranker,
+} from './reranker';
 import type { HybridSearchConfig, RankedChunk, RetrievalOptions, RetrievedChunk } from './types';
 import { type defaultVectorSearchConfig, VectorRetriever } from './vector';
 
@@ -194,6 +202,7 @@ export class HybridRetriever {
   private vectorRetriever: VectorRetriever;
   private keywordRetriever: KeywordRetriever;
   private config: HybridSearchConfig;
+  private reranker: Reranker | null = null;
 
   constructor(
     vectorConfig?: Partial<typeof defaultVectorSearchConfig>,
@@ -203,6 +212,11 @@ export class HybridRetriever {
     this.vectorRetriever = new VectorRetriever(vectorConfig);
     this.keywordRetriever = new KeywordRetriever(keywordConfig);
     this.config = { ...defaultHybridSearchConfig, ...config };
+
+    // Lazily initialise the reranker when enabled
+    if (isRerankerEnabled()) {
+      this.reranker = createReranker();
+    }
   }
 
   /**
@@ -242,6 +256,47 @@ export class HybridRetriever {
 
     // Deduplicate results
     finalChunks = deduplicateChunks(finalChunks);
+
+    // Re-ranking step (when enabled via RERANKER_ENABLED env var)
+    if (this.reranker) {
+      const rerankStart = performance.now();
+
+      try {
+        const rerankDocs = chunksToRerankDocs(finalChunks);
+        const rerankResults = await this.reranker.rerank(query, rerankDocs, {
+          topN: topK,
+        });
+        finalChunks = applyRerankResults(finalChunks, rerankResults);
+
+        const rerankMs = performance.now() - rerankStart;
+        logger.info('Re-ranking completed', {
+          reranker: this.reranker.name,
+          latencyMs: Math.round(rerankMs),
+          documentsIn: rerankDocs.length,
+          documentsOut: rerankResults.length,
+        });
+
+        // Log score changes for observability
+        for (const result of rerankResults) {
+          if (result.originalScore !== undefined) {
+            const delta = (result.relevanceScore - result.originalScore).toFixed(4);
+            logger.debug('Rerank score delta', {
+              docId: result.id,
+              original: result.originalScore.toFixed(4),
+              reranked: result.relevanceScore.toFixed(4),
+              delta,
+            });
+          }
+        }
+      } catch (error: unknown) {
+        const rerankMs = performance.now() - rerankStart;
+        logger.warn('Re-ranking failed, proceeding with original scores', {
+          reranker: this.reranker.name,
+          latencyMs: Math.round(rerankMs),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     // Limit to topK
     finalChunks = finalChunks.slice(0, topK);

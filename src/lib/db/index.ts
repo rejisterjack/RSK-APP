@@ -97,6 +97,21 @@ export {
   VectorStore,
 } from './vector-store';
 
+// ---------------------------------------------------------------------------
+// Partition Manager
+// ---------------------------------------------------------------------------
+export {
+  type PartitionDetail,
+  type PartitionHealthReport,
+  type PartitionHealthWarning,
+  type PartitionStats,
+  archiveWorkspaceDocuments,
+  checkPartitionHealth,
+  detachOldPartitions,
+  ensurePartitions,
+  getPartitionStats,
+} from './partition-manager';
+
 // ============================================================================
 // User Queries
 // ============================================================================

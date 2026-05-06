@@ -9,6 +9,7 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
+  Info,
   MoreHorizontal,
   RefreshCw,
   Trash2,
@@ -24,7 +25,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
+import {
+  ERROR_CATEGORY_LABELS,
+  ERROR_REMEDIATION,
+  type ErrorCategory,
+} from '@/lib/rag/ingestion/errors';
 import { IngestionProgress } from './ingestion-progress';
 
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'error';
@@ -39,6 +51,7 @@ export interface Document {
   chunkCount?: number;
   createdAt: Date;
   errorMessage?: string;
+  errorCategory?: ErrorCategory;
   workspaceId?: string;
 }
 
@@ -165,8 +178,9 @@ export function DocumentCard({
                   size="icon"
                   className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
                   onClick={(e) => e.stopPropagation()}
+                  aria-label={`Actions for ${document.name}`}
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -223,7 +237,36 @@ export function DocumentCard({
             )}
 
             {document.status === 'error' && document.errorMessage && (
-              <p className="text-xs text-destructive line-clamp-2">{document.errorMessage}</p>
+              <div className="space-y-1" role="alert" aria-live="assertive">
+                <div className="flex items-start gap-1.5">
+                  {document.errorCategory && document.errorCategory !== 'UNKNOWN' && (
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 text-[10px] px-1.5 py-0 border-destructive/30 text-destructive bg-destructive/5"
+                    >
+                      {ERROR_CATEGORY_LABELS[document.errorCategory]}
+                    </Badge>
+                  )}
+                  <p className="text-xs text-destructive line-clamp-2">{document.errorMessage}</p>
+                </div>
+                {document.errorCategory && ERROR_REMEDIATION[document.errorCategory] && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-start gap-1 cursor-help">
+                          <Info className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5" />
+                          <p className="text-[11px] text-muted-foreground line-clamp-2">
+                            {ERROR_REMEDIATION[document.errorCategory]}
+                          </p>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-xs text-xs">
+                        {ERROR_REMEDIATION[document.errorCategory]}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
             )}
           </div>
         </div>

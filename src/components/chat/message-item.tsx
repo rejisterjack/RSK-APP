@@ -125,7 +125,8 @@ export const MessageItem = React.memo(function MessageItem({
   );
 
   return (
-    <div
+    <article
+      aria-label={`${isUser ? 'You' : 'Assistant'} message`}
       className={cn(
         'group relative py-3 px-4 mb-2 rounded-2xl transition-colors duration-150',
         isUser
@@ -145,7 +146,11 @@ export const MessageItem = React.memo(function MessageItem({
             )}
           >
             <AvatarFallback>
-              {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+              {isUser ? (
+                <User className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Bot className="h-4 w-4" aria-hidden="true" />
+              )}
             </AvatarFallback>
           </Avatar>
         </div>
@@ -178,6 +183,7 @@ export const MessageItem = React.memo(function MessageItem({
                 onChange={(e) => setEditContent(e.target.value)}
                 className="min-h-[120px] resize-none bg-background/50 border-white/10 focus-visible:ring-primary/50 rounded-xl"
                 autoFocus
+                aria-label="Edit message content"
               />
               <div className="flex gap-2">
                 <Button
@@ -219,7 +225,7 @@ export const MessageItem = React.memo(function MessageItem({
                 </div>
               )}
 
-              {/* Suggested follow-up questions — shown on last assistant message after streaming */}
+              {/* Suggested follow-up questions -- shown on last assistant message after streaming */}
               {isAssistant &&
                 isLastMessage &&
                 !isStreaming &&
@@ -246,8 +252,9 @@ export const MessageItem = React.memo(function MessageItem({
                         size="icon"
                         className="h-8 w-8 rounded-full hover:bg-foreground/5"
                         onClick={onRegenerate}
+                        aria-label="Regenerate response"
                       >
-                        <RefreshCw className="h-4 w-4 text-muted-foreground" />
+                        <RefreshCw className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent className="rounded-lg text-xs border-none shadow-xl bg-popover/90 backdrop-blur-md">
@@ -267,6 +274,7 @@ export const MessageItem = React.memo(function MessageItem({
                           className="h-8 w-8 rounded-full hover:bg-foreground/5"
                           onClick={() => handleFeedback('UP')}
                           disabled={feedback !== null}
+                          aria-label="Helpful"
                         >
                           <ThumbsUp
                             className={`h-4 w-4 ${
@@ -274,6 +282,7 @@ export const MessageItem = React.memo(function MessageItem({
                                 ? 'text-green-500 fill-green-500'
                                 : 'text-muted-foreground'
                             }`}
+                            aria-hidden="true"
                           />
                         </Button>
                       </TooltipTrigger>
@@ -289,6 +298,7 @@ export const MessageItem = React.memo(function MessageItem({
                           className="h-8 w-8 rounded-full hover:bg-foreground/5"
                           onClick={() => handleFeedback('DOWN')}
                           disabled={feedback !== null}
+                          aria-label="Not helpful"
                         >
                           <ThumbsDown
                             className={`h-4 w-4 ${
@@ -296,6 +306,7 @@ export const MessageItem = React.memo(function MessageItem({
                                 ? 'text-red-500 fill-red-500'
                                 : 'text-muted-foreground'
                             }`}
+                            aria-hidden="true"
                           />
                         </Button>
                       </TooltipTrigger>
@@ -313,11 +324,12 @@ export const MessageItem = React.memo(function MessageItem({
                       size="icon"
                       className="h-8 w-8 rounded-full hover:bg-foreground/5"
                       onClick={handleCopy}
+                      aria-label={copied ? 'Copied' : 'Copy message'}
                     >
                       {copied ? (
-                        <Check className="h-4 w-4 text-emerald-500" />
+                        <Check className="h-4 w-4 text-emerald-500" aria-hidden="true" />
                       ) : (
-                        <Copy className="h-4 w-4 text-muted-foreground" />
+                        <Copy className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                       )}
                     </Button>
                   </TooltipTrigger>
@@ -380,6 +392,6 @@ export const MessageItem = React.memo(function MessageItem({
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 });

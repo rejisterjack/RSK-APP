@@ -9,6 +9,7 @@ import { createEmbeddingProviderFromEnv } from '@/lib/ai/embeddings';
 import { batchInsertChunks, prisma, validateChunks } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { createChunks } from '@/lib/rag/chunking';
+import { categorizeIngestionError } from '@/lib/rag/ingestion/errors';
 import type { DocumentType, IngestionOptions } from '@/types';
 import { parseHTML as parseHTMLContent } from './parsers/html';
 import { parsePPTX } from './parsers/pptx';
@@ -405,9 +406,13 @@ export async function processDocument(
 
     logger.info(`Document processed`, { documentId, processingTimeMs: processingTime });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorCategory = categorizeIngestionError(error);
+
     logger.error(`Error processing document`, {
       documentId,
-      error: error instanceof Error ? error.message : 'Unknown',
+      error: errorMessage,
+      errorCategory,
     });
 
     // Update document status to failed
@@ -416,7 +421,7 @@ export async function processDocument(
       data: {
         status: 'FAILED',
         metadata: {
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
           failedAt: new Date().toISOString(),
         },
       },
@@ -432,7 +437,8 @@ export async function processDocument(
         where: { id: ingestionJob.id },
         data: {
           status: 'FAILED',
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
+          errorCategory,
         },
       });
     }

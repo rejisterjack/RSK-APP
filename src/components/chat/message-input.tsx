@@ -175,8 +175,9 @@ export const MessageInput = memo(function MessageInput({
                 size="icon"
                 className="h-4 w-4 rounded-full p-0 hover:bg-muted"
                 onClick={() => removeFile(fileIndex)}
+                aria-label={`Remove ${file.name}`}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3 w-3" aria-hidden="true" />
               </Button>
             </Badge>
           ))}
@@ -184,17 +185,21 @@ export const MessageInput = memo(function MessageInput({
       )}
 
       {/* Input area */}
-      <div className="relative flex items-end gap-2 rounded-xl bg-foreground/5 border border-white/10 p-2 focus-within:bg-background/50 focus-within:ring-1 focus-within:ring-ring/50 transition-colors">
-        {/* File attachment button */}
+      <form
+        className="relative flex items-end gap-2 rounded-xl bg-foreground/5 border border-white/10 p-2 focus-within:bg-background/50 focus-within:ring-1 focus-within:ring-ring/50 transition-colors"
+        aria-label="Chat message input"
+      >
+        {/* File attachment button - 44x44 min touch target */}
         <Button
           variant="ghost"
           size="icon"
-          className="shrink-0 rounded-lg h-8 w-8"
+          className="shrink-0 rounded-lg min-h-[44px] min-w-[44px] h-11 w-11"
           disabled={disabled || isLoading}
+          aria-label="Attach file"
           asChild
         >
           <label className="cursor-pointer">
-            <Paperclip className="h-4 w-4" />
+            <Paperclip className="h-4 w-4" aria-hidden="true" />
             <input
               type="file"
               className="hidden"
@@ -202,6 +207,7 @@ export const MessageInput = memo(function MessageInput({
               accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.html,.xls,.xlsx"
               onChange={handleFileSelect}
               disabled={disabled || isLoading}
+              aria-label="File upload"
             />
           </label>
         </Button>
@@ -214,25 +220,31 @@ export const MessageInput = memo(function MessageInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled || isLoading}
-          className="min-h-[36px] max-h-[160px] resize-none border-0 bg-transparent px-2 py-2 text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="min-h-[44px] max-h-[160px] resize-none border-0 bg-transparent px-2 py-2 text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
           rows={1}
+          aria-label="Message input"
         />
 
-        {/* Send button */}
+        {/* Send button - 44x44 min touch target */}
         <Button
           onClick={handleSubmit}
           disabled={!hasContent || disabled || isLoading || isSubmitting}
           size="icon"
           className={cn(
-            'shrink-0 rounded-lg h-8 w-8 transition-colors',
+            'shrink-0 rounded-lg min-h-[44px] min-w-[44px] h-11 w-11 transition-colors',
             hasContent && !disabled && !isLoading
               ? 'bg-primary text-primary-foreground'
               : 'bg-muted text-muted-foreground'
           )}
+          aria-label={isLoading ? 'Sending message' : 'Send message'}
         >
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Send className="h-4 w-4" aria-hidden="true" />
+          )}
         </Button>
-      </div>
+      </form>
     </div>
   );
 });

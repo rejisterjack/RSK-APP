@@ -21,23 +21,26 @@ class EdgeLogger {
   }
 
   private fmt(msg: string, ctx?: LogContext): string {
-    const merged = { ...this.context, ...ctx, msg };
-    return JSON.stringify(merged);
+    return JSON.stringify({ msg, ...this.context, ...ctx });
   }
 
   debug(msg: string, ctx?: LogContext): void {
+    // biome-ignore lint/suspicious/noConsole: edge-compatible logger cannot use pino
     if (process.env.LOG_LEVEL === 'debug') console.debug(this.fmt(msg, ctx));
   }
 
   info(msg: string, ctx?: LogContext): void {
+    // biome-ignore lint/suspicious/noConsole: edge-compatible logger cannot use pino
     console.info(this.fmt(msg, ctx));
   }
 
   warn(msg: string, ctx?: LogContext): void {
+    // biome-ignore lint/suspicious/noConsole: edge-compatible logger cannot use pino
     console.warn(this.fmt(msg, ctx));
   }
 
   error(msg: string, ctx?: LogContext): void {
+    // biome-ignore lint/suspicious/noConsole: edge-compatible logger cannot use pino
     console.error(this.fmt(msg, ctx));
   }
 
@@ -216,18 +219,6 @@ export async function middleware(req: NextRequest) {
 
     // Get token from session
     const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-    const allCookies = req.cookies.getAll().map((c) => c.name);
-    const sessionCookie =
-      req.cookies.get('authjs.session-token')?.value ??
-      req.cookies.get('__Secure-authjs.session-token')?.value;
-
-    console.log('[MW DEBUG]', {
-      path: pathname,
-      authSecretSet: !!authSecret,
-      authSecretLen: authSecret?.length ?? 0,
-      cookies: allCookies,
-      hasSessionCookie: !!sessionCookie,
-    });
 
     const token = await getToken({
       req,
@@ -466,9 +457,7 @@ export async function middleware(req: NextRequest) {
     }
 
     return withRequestId(response, requestId);
-  } catch (error) {
-    // If middleware crashes, log and continue without blocking the request
-    console.error('Middleware error:', error instanceof Error ? error.message : String(error));
+  } catch (_error) {
     return NextResponse.next();
   }
 }

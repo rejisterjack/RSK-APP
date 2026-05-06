@@ -74,7 +74,7 @@ export const EmptyState = memo(function EmptyState({
       <div className="w-full text-center">
         {/* Welcome header - compact */}
         <div className="mb-4">
-          <h1 className="mb-1 text-xl font-bold tracking-tight">Welcome to RAG Chat</h1>
+          <h2 className="mb-1 text-xl font-bold tracking-tight">Welcome to RAG Chat</h2>
           <p className="text-sm text-muted-foreground">
             Upload documents and ask questions from your knowledge base.
           </p>
@@ -86,7 +86,8 @@ export const EmptyState = memo(function EmptyState({
             <button
               type="button"
               key={action.label}
-              className="flex flex-col items-center p-3 rounded-xl border border-border/50 bg-foreground/5 hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer text-center"
+              className="flex flex-col items-center p-3 rounded-xl border border-border/50 bg-foreground/5 hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer text-center min-h-[80px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              aria-label={`${action.label}: ${action.description}`}
               onClick={() =>
                 action.action === 'upload'
                   ? onUploadClick?.()
@@ -106,11 +107,12 @@ export const EmptyState = memo(function EmptyState({
           ))}
         </div>
 
-        {/* Upload zone - compact */}
+        {/* Upload zone - compact, large tap target for mobile */}
         <button
           type="button"
-          className="mb-4 w-full rounded-xl border border-dashed border-muted-foreground/25 bg-muted/20 p-4 transition-colors hover:border-primary/50 hover:bg-muted/40 cursor-pointer"
+          className="mb-4 w-full rounded-xl border border-dashed border-muted-foreground/25 bg-muted/20 p-4 transition-colors hover:border-primary/50 hover:bg-muted/40 cursor-pointer min-h-[80px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           onClick={onUploadClick}
+          aria-label="Upload files to knowledge base"
         >
           <Upload className="mx-auto mb-1 h-5 w-5 text-muted-foreground" />
           <p className="text-xs font-medium">Drop files here or click to upload</p>
@@ -126,7 +128,7 @@ export const EmptyState = memo(function EmptyState({
                 key={question}
                 variant="outline"
                 size="sm"
-                className="rounded-full text-xs h-7 px-3"
+                className="rounded-full text-xs min-h-[44px] h-auto px-3 py-2"
                 onClick={() => onSuggestionClick?.(question)}
               >
                 {question}

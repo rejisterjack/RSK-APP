@@ -83,6 +83,7 @@ model User {
   feedback          MessageFeedback[]
   subscriptions     Subscription[]
   invoices          Invoice[]
+  consents          Consent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -303,18 +304,19 @@ model DocumentChunk {
 }
 
 model IngestionJob {
-  id          String        @id @default(cuid())
-  documentId  String        @unique
-  status      JobStatus     @default(QUEUED)
-  progress    Int           @default(0)
-  error       String?
-  startedAt   DateTime?
-  completedAt DateTime?
+  id            String        @id @default(cuid())
+  documentId    String        @unique
+  status        JobStatus     @default(QUEUED)
+  progress      Int           @default(0)
+  error         String?
+  errorCategory ErrorCategory?
+  startedAt     DateTime?
+  completedAt   DateTime?
 
-  document    Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document      Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@map("ingestion_jobs")
 }
@@ -331,6 +333,16 @@ enum JobStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum ErrorCategory {
+  PARSE_ERROR
+  EMBEDDING_ERROR
+  SIZE_LIMIT
+  OCR_FAILURE
+  PROVIDER_ERROR
+  NETWORK_ERROR
+  UNKNOWN
 }
 
 // ============================================================================
@@ -1258,6 +1270,29 @@ model Invoice {
   @@index([userId])
   @@index([status])
   @@map("invoices")
+}
+
+// =============================================================================
+// GDPR Consent
+// =============================================================================
+
+model Consent {
+  id          String   @id @default(cuid())
+  userId      String
+  consentType String   // analytics, marketing, data_processing, data_export, data_erasure
+  granted     Boolean
+  grantedAt   DateTime @default(now())
+  revokedAt   DateTime?
+  version     String   @default("1.0")
+  ipAddress   String?
+  userAgent   String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([consentType])
+  @@index([userId, consentType])
+  @@map("consents")
 }
 
 enum InvoiceStatus {

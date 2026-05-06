@@ -20,6 +20,7 @@ interface ApiDocument {
   chunkCount?: number;
   createdAt: string;
   errorMessage?: string;
+  errorCategory?: 'PARSE_ERROR' | 'EMBEDDING_ERROR' | 'SIZE_LIMIT' | 'OCR_FAILURE' | 'PROVIDER_ERROR' | 'NETWORK_ERROR' | 'UNKNOWN';
 }
 
 interface DocumentListResponse {

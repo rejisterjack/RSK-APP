@@ -84,11 +84,13 @@ export const DocumentList = memo(function DocumentList({
   };
 
   return (
-    <div
+    <section
       className={cn(
         'glass flex h-full flex-col border-r border-border/50 bg-background/60 shadow-xl backdrop-blur-xl',
         className
       )}
+      aria-label="Document library"
+      aria-busy={isLoading}
     >
       {/* Header */}
       <div className="border-b border-border/50 p-3">
@@ -106,12 +108,16 @@ export const DocumentList = memo(function DocumentList({
 
         {/* Search */}
         <div className="relative group">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
+          <Search
+            className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary"
+            aria-hidden="true"
+          />
           <Input
             placeholder="Search documents..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8 h-8 text-sm bg-foreground/5 border-foreground/10 focus-visible:ring-primary/50 transition-all rounded-lg"
+            aria-label="Search documents"
           />
         </div>
 
@@ -172,15 +178,16 @@ export const DocumentList = memo(function DocumentList({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                className="min-h-[44px] min-w-[44px] h-9 w-9 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                 onClick={onDeleteAll}
+                aria-label="Delete all documents"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
             <Button
               size="sm"
-              className="gap-2 h-9 rounded-lg shadow-md shadow-primary/20"
+              className="gap-2 min-h-[44px] h-auto rounded-lg shadow-md shadow-primary/20 px-4"
               onClick={onUpload}
             >
               <Upload className="h-4 w-4" />
@@ -191,7 +198,7 @@ export const DocumentList = memo(function DocumentList({
       </div>
 
       {/* Document list */}
-      <ScrollArea className="flex-1 scrollbar-thin">
+      <ScrollArea className="flex-1 scrollbar-thin" aria-label="Document list">
         <div className="p-2 space-y-2">
           {isLoading ? (
             <div className="space-y-3">
@@ -213,7 +220,7 @@ export const DocumentList = memo(function DocumentList({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-3 rounded-lg border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors text-xs"
+                  className="mt-3 rounded-lg border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors text-xs min-h-[44px] px-4"
                   onClick={onUpload}
                 >
                   <Upload className="mr-1.5 h-3.5 w-3.5" />
@@ -246,7 +253,7 @@ export const DocumentList = memo(function DocumentList({
           </div>
         </>
       )}
-    </div>
+    </section>
   );
 });
 

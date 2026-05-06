@@ -115,8 +115,9 @@ export function ShareDialog({ chatId, chatTitle, className }: ShareDialogProps) 
             className
           )}
           onClick={handleOpen}
+          aria-label="Share chat"
         >
-          <Share2 className="h-4 w-4" />
+          <Share2 className="h-4 w-4" aria-hidden="true" />
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -217,11 +218,12 @@ export function ShareDialog({ chatId, chatTitle, className }: ShareDialogProps) 
                   variant="outline"
                   onClick={copyToClipboard}
                   className="shrink-0"
+                  aria-label="Copy share link"
                 >
                   {copied ? (
-                    <Check className="h-4 w-4 text-green-500" />
+                    <Check className="h-4 w-4 text-green-500" aria-hidden="true" />
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <Copy className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               </div>

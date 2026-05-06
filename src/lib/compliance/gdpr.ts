@@ -5,8 +5,11 @@
  * and consent management for GDPR compliance.
  */
 
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { getRedis } from '@/lib/redis';
 
 // =============================================================================
 // Types
@@ -353,7 +356,18 @@ export interface ConsentRecord {
  * Record user consent
  */
 export async function recordConsent(consent: ConsentRecord): Promise<void> {
-  // Store in database (would need Consent model in schema)
+  await prisma.consent.create({
+    data: {
+      userId: consent.userId,
+      consentType: consent.consentType,
+      granted: consent.granted,
+      grantedAt: consent.grantedAt,
+      version: consent.version,
+      ipAddress: consent.ipAddress,
+      userAgent: consent.userAgent,
+    },
+  });
+
   logger.info('Consent recorded', {
     userId: consent.userId,
     type: consent.consentType,
@@ -364,10 +378,12 @@ export async function recordConsent(consent: ConsentRecord): Promise<void> {
 /**
  * Check if user has given consent
  */
-export async function hasConsent(_userId: string, _consentType: string): Promise<boolean> {
-  // Query consent from database
-  // Default to false for strict compliance
-  return false;
+export async function hasConsent(userId: string, consentType: string): Promise<boolean> {
+  const latest = await prisma.consent.findFirst({
+    where: { userId, consentType, revokedAt: null },
+    orderBy: { grantedAt: 'desc' },
+  });
+  return latest?.granted ?? false;
 }
 
 // =============================================================================
@@ -376,18 +392,34 @@ export async function hasConsent(_userId: string, _consentType: string): Promise
 
 /**
  * Generate erasure verification token
+ * Stores a cryptographic token in Redis with a 24-hour TTL.
  */
-export function generateErasureToken(userId: string): string {
-  const data = `${userId}-${Date.now()}-${process.env.ERASURE_SECRET || 'secret'}`;
-  return Buffer.from(data).toString('base64');
+export async function generateErasureToken(userId: string): Promise<string> {
+  const token = randomBytes(32).toString('hex');
+  const redis = getRedis();
+  const key = `gdpr:erasure:${userId}`;
+  await redis.set(key, token, { ex: 86400 }); // 24-hour TTL
+  return token;
 }
 
 /**
  * Verify erasure token
+ * Compares against the stored token using timing-safe comparison.
  */
-async function verifyErasureToken(_userId: string, _token: string): Promise<boolean> {
-  // In production, store and validate tokens properly
-  return true;
+async function verifyErasureToken(userId: string, token: string): Promise<boolean> {
+  const redis = getRedis();
+  const key = `gdpr:erasure:${userId}`;
+  const stored = await redis.get<string>(key);
+
+  if (!stored || typeof stored !== 'string') {
+    return false;
+  }
+
+  try {
+    return timingSafeEqual(Buffer.from(stored), Buffer.from(token));
+  } catch {
+    return false;
+  }
 }
 
 /**
