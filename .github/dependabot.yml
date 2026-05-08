@@ -103,6 +103,9 @@ updates:
     # Note: Requires enabling auto-merge in GitHub settings
     # automerge: true (only for security updates by default)
 
+    # Auto-merge security patches
+    auto-merge: true
+
   # ==========================================
   # GitHub Actions
   # ==========================================

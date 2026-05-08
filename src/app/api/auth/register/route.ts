@@ -1,10 +1,14 @@
+import { hash } from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 
-import { registerUser } from '@/lib/auth';
+import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
+import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { emailService } from '@/lib/notifications/email';
 import { formatValidationErrors, validateRegisterUserInput } from '@/lib/security/input-validator';
 import { checkApiRateLimit, getRateLimitIdentifier } from '@/lib/security/rate-limiter';
+import { createDefaultWorkspace, getAppUrl } from '@/lib/workspace/workspace';
 
 /**
  * POST /api/auth/register
@@ -12,7 +16,6 @@ import { checkApiRateLimit, getRateLimitIdentifier } from '@/lib/security/rate-l
  */
 export async function POST(req: Request) {
   try {
-    // Check rate limit for registration
     const rateLimitIdentifier = getRateLimitIdentifier(req);
     const rateLimitResult = await checkApiRateLimit(rateLimitIdentifier, 'register');
 
@@ -28,7 +31,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Parse request body
     let body: unknown;
     try {
       body = await req.json();
@@ -42,7 +44,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate input
     let validatedInput: ReturnType<typeof validateRegisterUserInput>;
     try {
       validatedInput = validateRegisterUserInput(body);
@@ -61,24 +62,54 @@ export async function POST(req: Request) {
       throw error;
     }
 
-    // Register user
-    const result = await registerUser(validatedInput);
+    const { email, password, name } = validatedInput;
 
-    if (!result.success) {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
       return NextResponse.json(
-        { error: { code: 'REGISTRATION_FAILED', message: result.error } },
+        { error: { code: 'REGISTRATION_FAILED', message: 'User already exists' } },
         { status: 400 }
       );
     }
 
+    const hashedPassword = await hash(password, 12);
+    const user = await prisma.user.create({
+      data: { email, password: hashedPassword, name: name || null, emailVerified: null },
+    });
+
+    await createDefaultWorkspace(user.id, {
+      name: name ? `${name}'s Workspace` : 'My Workspace',
+    });
+
+    await logAuditEvent({
+      event: AuditEvent.USER_REGISTERED,
+      userId: user.id,
+      metadata: { email, provider: 'credentials' },
+    });
+
+    // Send email verification (fire-and-forget)
+    try {
+      const crypto = await import('node:crypto');
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await prisma.verificationToken.create({ data: { identifier: email, token, expires } });
+
+      const appUrl = getAppUrl();
+      const verifyUrl = `${appUrl}/api/auth/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+
+      await emailService.sendEmail({
+        to: email,
+        template: emailService.verificationEmail(name || email.split('@')[0], verifyUrl),
+      });
+    } catch (emailError) {
+      logger.error('Failed to send verification email', {
+        error: emailError instanceof Error ? emailError.message : 'Unknown',
+      });
+    }
+
     return NextResponse.json(
-      {
-        success: true,
-        data: {
-          userId: result.userId,
-          message: 'Account created successfully',
-        },
-      },
+      { success: true, data: { userId: user.id, message: 'Account created successfully' } },
       { status: 201 }
     );
   } catch (error: unknown) {
@@ -86,12 +117,7 @@ export async function POST(req: Request) {
       error: error instanceof Error ? error.message : 'Unknown error',
     });
     return NextResponse.json(
-      {
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
-        },
-      },
+      { error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' } },
       { status: 500 }
     );
   }

@@ -22,13 +22,32 @@ export function ApiKeySettings(): React.ReactElement {
   const handleSave = (providerId: string) => {
     const value = drafts[providerId]?.trim();
     if (value) {
-      save(providerId as 'openrouter' | 'fireworks', value);
+      save(
+        providerId as
+          | 'openrouter'
+          | 'fireworks'
+          | 'groq'
+          | 'nvidia'
+          | 'cerebras'
+          | 'sambanova'
+          | 'mistral',
+        value
+      );
       setDrafts((prev) => ({ ...prev, [providerId]: '' }));
     }
   };
 
   const handleRemove = (providerId: string) => {
-    remove(providerId as 'openrouter' | 'fireworks');
+    remove(
+      providerId as
+        | 'openrouter'
+        | 'fireworks'
+        | 'groq'
+        | 'nvidia'
+        | 'cerebras'
+        | 'sambanova'
+        | 'mistral'
+    );
   };
 
   return (

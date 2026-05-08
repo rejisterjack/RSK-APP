@@ -142,7 +142,8 @@ export function SSOLoginButton({
       if (method.type === 'saml') {
         redirectUrl = `/api/auth/saml/${workspaceId}/login?email=${encodeURIComponent(email)}`;
       } else {
-        redirectUrl = `/api/auth/oauth/${method.id}?workspace=${workspaceId}`;
+        // Use NextAuth's built-in OAuth for standard providers
+        redirectUrl = `/api/auth/signin/${method.id}?callbackUrl=${encodeURIComponent(window.location.href)}`;
       }
 
       window.location.href = redirectUrl;

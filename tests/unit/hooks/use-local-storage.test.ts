@@ -1,11 +1,50 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Mock logger before importing the hook
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 import { useLocalStorage } from '@/hooks/use-local-storage';
 
 describe('useLocalStorage', () => {
+  let localStorageStore: Record<string, string> = {};
+
   beforeEach(() => {
-    localStorage.clear();
+    localStorageStore = {};
+    // Provide a full localStorage implementation
+    const storage = {
+      getItem: vi.fn((key: string) => localStorageStore[key] ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        localStorageStore[key] = value;
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete localStorageStore[key];
+      }),
+      clear: vi.fn(() => {
+        localStorageStore = {};
+      }),
+      get length() {
+        return Object.keys(localStorageStore).length;
+      },
+      key: vi.fn((index: number) => Object.keys(localStorageStore)[index] ?? null),
+    };
+    Object.defineProperty(window, 'localStorage', {
+      value: storage,
+      writable: true,
+      configurable: true,
+    });
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should return default value when localStorage is empty', () => {
@@ -15,7 +54,7 @@ describe('useLocalStorage', () => {
   });
 
   it('should read existing value from localStorage', () => {
-    localStorage.setItem('test-key', JSON.stringify('stored-value'));
+    localStorageStore['test-key'] = JSON.stringify('stored-value');
 
     const { result } = renderHook(() => useLocalStorage('test-key', 'default'));
 
@@ -59,7 +98,7 @@ describe('useLocalStorage', () => {
   it('should handle localStorage errors gracefully', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    // Mock localStorage to throw error
+    // Override setItem to throw
     const originalSetItem = localStorage.setItem;
     localStorage.setItem = vi.fn(() => {
       throw new Error('Storage full');
@@ -79,7 +118,7 @@ describe('useLocalStorage', () => {
   });
 
   it('should handle invalid JSON in localStorage', () => {
-    localStorage.setItem('test-key', 'invalid-json');
+    localStorageStore['test-key'] = 'invalid-json';
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -92,7 +131,7 @@ describe('useLocalStorage', () => {
   });
 
   it('should remove item when set to undefined', () => {
-    localStorage.setItem('test-key', JSON.stringify('value'));
+    localStorageStore['test-key'] = JSON.stringify('value');
 
     const { result } = renderHook(() => useLocalStorage<string | undefined>('test-key', 'default'));
 

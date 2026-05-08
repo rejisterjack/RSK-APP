@@ -25,8 +25,6 @@ export enum Permission {
   MANAGE_WORKSPACE = 'manage:workspace',
   MANAGE_MEMBERS = 'manage:members',
   MANAGE_SETTINGS = 'manage:settings',
-  MANAGE_BILLING = 'manage:billing',
-
   // API permissions
   MANAGE_API_KEYS = 'manage:api_keys',
   READ_API_USAGE = 'read:api_usage',
@@ -57,7 +55,6 @@ const ROLE_PERMISSIONS: Record<MemberRole, Permission[]> = {
     Permission.MANAGE_WORKSPACE,
     Permission.MANAGE_MEMBERS,
     Permission.MANAGE_SETTINGS,
-    Permission.MANAGE_BILLING,
     Permission.MANAGE_API_KEYS,
     Permission.READ_API_USAGE,
     Permission.VIEW_AUDIT_LOGS,

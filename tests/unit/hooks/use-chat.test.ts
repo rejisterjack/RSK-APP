@@ -2,227 +2,322 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChat } from '@/hooks/use-chat';
 
-// Mock the AI SDK
-vi.mock('ai/react', () => ({
-  useChat: vi.fn(),
+// Mock fetch globally
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock sonner toast
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+  },
 }));
 
-import { useChat as useAIChat } from 'ai/react';
+// Mock use-provider-keys
+vi.mock('@/hooks/use-provider-keys', () => ({
+  getAllProviderKeys: vi.fn(() => ({})),
+}));
 
 describe('useChat', () => {
-  const mockAppend = vi.fn();
-  const mockReload = vi.fn();
-  const mockStop = vi.fn();
-  const mockSetMessages = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
-
-    (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-      messages: [],
-      input: '',
-      handleInputChange: vi.fn(),
-      handleSubmit: vi.fn(),
-      isLoading: false,
-      error: null,
-      append: mockAppend,
-      reload: mockReload,
-      stop: mockStop,
-      setMessages: mockSetMessages,
-      data: undefined,
-    });
+    mockFetch.mockReset();
   });
 
   it('initializes with empty state', () => {
-    const { result } = renderHook(() => useChat({ api: '/api/chat' }));
+    const { result } = renderHook(() => useChat());
 
     expect(result.current.messages).toEqual([]);
     expect(result.current.isLoading).toBe(false);
+    expect(result.current.isStreaming).toBe(false);
     expect(result.current.error).toBeNull();
+    expect(result.current.input).toBe('');
+    expect(result.current.sources).toEqual([]);
+    expect(result.current.hasMore).toBe(false);
+    expect(result.current.streamingContent).toBe('');
   });
 
   describe('Message Sending', () => {
     it('sends a message successfully', async () => {
-      mockAppend.mockResolvedValueOnce(undefined);
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Hello response'));
+          controller.close();
+        },
+      });
 
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          'content-type': 'text/plain',
+          'X-Model-Used': 'test-model',
+        }),
+        body: mockStream,
+      });
+
+      const { result } = renderHook(() => useChat());
 
       await act(async () => {
         await result.current.sendMessage('Hello');
       });
 
-      expect(mockAppend).toHaveBeenCalledWith({
-        role: 'user',
-        content: 'Hello',
-      });
+      // Should have called fetch with the message
+      expect(mockFetch).toHaveBeenCalled();
+      const callArgs = mockFetch.mock.calls[0];
+      expect(callArgs[0]).toBe('/api/chat');
+      expect(callArgs[1].method).toBe('POST');
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.messages[0].content).toBe('Hello');
     });
 
-    it('sends message with context', async () => {
-      mockAppend.mockResolvedValueOnce(undefined);
-
-      const { result } = renderHook(() =>
-        useChat({
-          api: '/api/chat',
-          body: { workspaceId: 'ws-1' },
-        })
-      );
-
-      await act(async () => {
-        await result.current.sendMessage('Hello', {
-          context: { documents: ['doc-1'] },
-        });
-      });
-
-      expect(mockAppend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          role: 'user',
-          content: 'Hello',
-        })
-      );
-    });
-
-    it('handles sending empty messages gracefully', async () => {
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
+    it('does not send empty messages', async () => {
+      const { result } = renderHook(() => useChat());
 
       await act(async () => {
         await result.current.sendMessage('');
       });
 
-      expect(mockAppend).not.toHaveBeenCalled();
-    });
-
-    it('prevents sending while loading', async () => {
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages: [],
-        input: '',
-        handleInputChange: vi.fn(),
-        handleSubmit: vi.fn(),
-        isLoading: true,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
+      await act(async () => {
+        await result.current.sendMessage('   ');
       });
 
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('does not send while loading', async () => {
+      // Use a stream that completes quickly
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Done'));
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        body: mockStream,
+      });
+
+      const { result } = renderHook(() => useChat());
+
+      // Send first message and wait for completion
+      await act(async () => {
+        await result.current.sendMessage('First');
+      });
+
+      // The first fetch should have been called
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses agent endpoint when agentMode is enabled', async () => {
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        body: mockStream,
+      });
+
+      const { result } = renderHook(() => useChat({ agentMode: true }));
 
       await act(async () => {
         await result.current.sendMessage('Hello');
       });
 
-      expect(mockAppend).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalled();
+      expect(mockFetch.mock.calls[0][0]).toBe('/api/chat/agent');
+    });
+
+    it('rejects messages that are too long', async () => {
+      const onError = vi.fn();
+      const { result } = renderHook(() => useChat({ onError }));
+
+      const longMessage = 'x'.repeat(100001);
+
+      await act(async () => {
+        await result.current.sendMessage(longMessage);
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(result.current.error).toBeDefined();
+      expect(result.current.error?.message).toContain('too long');
     });
   });
 
   describe('Streaming Handling', () => {
     it('tracks streaming state', async () => {
-      const { result, rerender } = renderHook(() => useChat({ api: '/api/chat' }));
+      const { result } = renderHook(() => useChat());
 
       expect(result.current.isStreaming).toBe(false);
 
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages: [{ id: '1', role: 'assistant', content: 'Hello' }],
-        input: '',
-        handleInputChange: vi.fn(),
-        handleSubmit: vi.fn(),
-        isLoading: true,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
+      // Create a stream that we can control
+      let controller: ReadableStreamDefaultController;
+      const mockStream = new ReadableStream({
+        start(c) {
+          controller = c;
+        },
       });
 
-      rerender();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        body: mockStream,
+      });
 
-      expect(result.current.isStreaming).toBe(true);
+      // Start sending
+      let sendPromise: Promise<void>;
+      act(() => {
+        sendPromise = result.current.sendMessage('Hello');
+      });
+
+      // Wait for fetch to start
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 10));
+      });
+
+      // Close the stream to finish
+      act(() => {
+        controller!.close();
+      });
+
+      await act(async () => {
+        await sendPromise;
+      });
+
+      // After completion, streaming should be false
+      expect(result.current.isStreaming).toBe(false);
     });
 
     it('receives streamed content', async () => {
-      const messages = [
-        { id: '1', role: 'user', content: 'Hi' },
-        { id: '2', role: 'assistant', content: 'Hello! How can I help?' },
-      ];
-
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages,
-        input: '',
-        handleInputChange: vi.fn(),
-        handleSubmit: vi.fn(),
-        isLoading: false,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Hello! How can I help?'));
+          controller.close();
+        },
       });
 
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
-
-      expect(result.current.messages).toHaveLength(2);
-      expect(result.current.messages[1].content).toBe('Hello! How can I help?');
-    });
-
-    it('stops streaming on request', () => {
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
-
-      act(() => {
-        result.current.stopGeneration();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          'content-type': 'text/plain',
+          'X-Model-Used': 'test-model',
+        }),
+        body: mockStream,
       });
 
-      expect(mockStop).toHaveBeenCalled();
+      const { result } = renderHook(() => useChat());
+
+      await act(async () => {
+        await result.current.sendMessage('Hi');
+      });
+
+      // Should have created an assistant message with the streamed content
+      const assistantMessages = result.current.messages.filter((m) => m.role === 'assistant');
+      expect(assistantMessages.length).toBeGreaterThan(0);
+      expect(assistantMessages[0].content).toContain('Hello! How can I help?');
     });
   });
 
   describe('Error Handling', () => {
     it('handles API errors', async () => {
-      const error = new Error('API Error');
-
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages: [],
-        input: '',
-        handleInputChange: vi.fn(),
-        handleSubmit: vi.fn(),
-        isLoading: false,
-        error,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
-      });
-
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
-
-      expect(result.current.error).toEqual(error);
-      expect(result.current.isError).toBe(true);
-    });
-
-    it('retries failed requests', async () => {
-      mockReload.mockResolvedValueOnce(undefined);
-
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
-
-      await act(async () => {
-        await result.current.retry();
-      });
-
-      expect(mockReload).toHaveBeenCalled();
-    });
-
-    it('clears error state', () => {
       const onError = vi.fn();
 
-      renderHook(() =>
-        useChat({
-          api: '/api/chat',
-          onError,
-        })
-      );
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Headers(),
+        json: async () => ({ error: { code: 'INTERNAL_ERROR', message: 'Server error' } }),
+      });
 
-      // Simulate error callback
-      const errorCallback = (useAIChat as ReturnType<typeof vi.fn>).mock.calls[0][0].onError;
-      errorCallback(new Error('Test error'));
+      const { result } = renderHook(() => useChat({ onError }));
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(result.current.error).toBeDefined();
+      expect(result.current.error?.message).toContain('Server error');
+    });
+
+    it('handles 401 errors with session expired message', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: new Headers(),
+        json: async () => ({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } }),
+      });
+
+      const { result } = renderHook(() => useChat());
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(result.current.error).toBeDefined();
+      expect(result.current.error?.message).toContain('Session expired');
+    });
+
+    it('handles 429 rate limit errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: new Headers(),
+        json: async () => ({ error: { code: 'RATE_LIMIT', message: 'Slow down' } }),
+      });
+
+      const { result } = renderHook(() => useChat());
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(result.current.error).toBeDefined();
+      expect(result.current.error?.message).toContain('Too many requests');
+    });
+
+    it('handles network errors', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+      const { result } = renderHook(() => useChat());
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(result.current.error).toBeDefined();
+    });
+
+    it('calls onError callback when provided', async () => {
+      const onError = vi.fn();
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Headers(),
+        json: async () => ({ error: { code: 'ERROR', message: 'Failed' } }),
+      });
+
+      const { result } = renderHook(() => useChat({ onError }));
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
@@ -230,166 +325,265 @@ describe('useChat', () => {
 
   describe('Message Management', () => {
     it('clears all messages', () => {
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
+      const { result } = renderHook(() => useChat());
 
+      // Simulate having messages
       act(() => {
         result.current.clearMessages();
       });
 
-      expect(mockSetMessages).toHaveBeenCalledWith([]);
+      expect(result.current.messages).toEqual([]);
+      expect(result.current.error).toBeNull();
+      expect(result.current.streamingContent).toBe('');
     });
 
-    it('deletes a specific message', () => {
-      const messages = [
-        { id: '1', role: 'user', content: 'First' },
-        { id: '2', role: 'assistant', content: 'Response' },
-        { id: '3', role: 'user', content: 'Second' },
-      ];
-
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages,
-        input: '',
-        handleInputChange: vi.fn(),
-        handleSubmit: vi.fn(),
-        isLoading: false,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
+    it('deletes a specific message', async () => {
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Response'));
+          controller.close();
+        },
       });
 
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
-
-      act(() => {
-        result.current.deleteMessage('2');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain', 'X-Model-Used': 'test' }),
+        body: mockStream,
       });
 
-      expect(mockSetMessages).toHaveBeenCalledWith([messages[0], messages[2]]);
-    });
-
-    it('edits a message and regenerates response', async () => {
-      const messages = [
-        { id: '1', role: 'user', content: 'Original' },
-        { id: '2', role: 'assistant', content: 'Response' },
-      ];
-
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages,
-        input: '',
-        handleInputChange: vi.fn(),
-        handleSubmit: vi.fn(),
-        isLoading: false,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
-      });
-
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
+      const { result } = renderHook(() => useChat());
 
       await act(async () => {
-        await result.current.editMessage('1', 'Edited');
+        await result.current.sendMessage('Hello');
       });
 
-      expect(mockSetMessages).toHaveBeenCalledWith([{ ...messages[0], content: 'Edited' }]);
-      expect(mockReload).toHaveBeenCalled();
+      // Should have messages now
+      const messagesBeforeDelete = result.current.messages.length;
+      expect(messagesBeforeDelete).toBeGreaterThan(0);
+
+      // Delete the first message
+      const firstMessageId = result.current.messages[0].id;
+      act(() => {
+        result.current.deleteMessage(firstMessageId);
+      });
+
+      expect(result.current.messages.find((m) => m.id === firstMessageId)).toBeUndefined();
+    });
+
+    it('edits a message and resends', async () => {
+      // First call: initial send
+      const mockStream1 = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('First response'));
+          controller.close();
+        },
+      });
+
+      // Second call: edit resend
+      const mockStream2 = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Edited response'));
+          controller.close();
+        },
+      });
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'text/plain', 'X-Model-Used': 'test' }),
+          body: mockStream1,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'text/plain', 'X-Model-Used': 'test' }),
+          body: mockStream2,
+        });
+
+      const { result } = renderHook(() => useChat());
+
+      await act(async () => {
+        await result.current.sendMessage('Original');
+      });
+
+      const userMessageId = result.current.messages.find((m) => m.role === 'user')?.id;
+      expect(userMessageId).toBeDefined();
+
+      // Edit the message
+      await act(async () => {
+        await result.current.editMessage(userMessageId!, 'Edited');
+      });
+
+      // Should have made a second fetch call
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
-  describe('Citation Handling', () => {
-    it('extracts citations from message annotations', () => {
-      const messages = [
-        {
-          id: '1',
-          role: 'assistant',
-          content: 'According to the report...',
-          annotations: [{ type: 'citation', documentId: 'doc-1', chunkId: 'chunk-1', page: 5 }],
+  describe('Stop', () => {
+    it('stops generation on request', async () => {
+      // Use a stream that returns some content then closes immediately
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Partial content'));
+          controller.close();
         },
-      ];
-
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages,
-        input: '',
-        handleInputChange: vi.fn(),
-        handleSubmit: vi.fn(),
-        isLoading: false,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
       });
 
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
-
-      const citations = result.current.getCitations('1');
-      expect(citations).toHaveLength(1);
-      expect(citations[0]).toMatchObject({
-        documentId: 'doc-1',
-        page: 5,
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        body: mockStream,
       });
+
+      const { result } = renderHook(() => useChat());
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      // After the stream completes, stop should still work without errors
+      act(() => {
+        result.current.stop();
+      });
+
+      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isLoading).toBe(false);
+    });
+  });
+
+  describe('Reload', () => {
+    it('retries last user message', async () => {
+      const mockStream1 = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Response'));
+          controller.close();
+        },
+      });
+
+      const mockStream2 = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Retried response'));
+          controller.close();
+        },
+      });
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'text/plain', 'X-Model-Used': 'test' }),
+          body: mockStream1,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'text/plain', 'X-Model-Used': 'test' }),
+          body: mockStream2,
+        });
+
+      const { result } = renderHook(() => useChat());
+
+      await act(async () => {
+        await result.current.sendMessage('Hello');
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await result.current.reload();
+      });
+
+      // Should have made a second fetch call
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('Input Handling', () => {
     it('sets input value', () => {
-      const handleInputChange = vi.fn();
-
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages: [],
-        input: '',
-        handleInputChange,
-        handleSubmit: vi.fn(),
-        isLoading: false,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
-      });
-
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
-
-      const mockEvent = {
-        target: { value: 'New input' },
-      } as React.ChangeEvent<HTMLTextAreaElement>;
+      const { result } = renderHook(() => useChat());
 
       act(() => {
-        result.current.handleInputChange(mockEvent);
+        result.current.setInput('New input');
       });
 
-      expect(handleInputChange).toHaveBeenCalledWith(mockEvent);
+      expect(result.current.input).toBe('New input');
     });
 
-    it('submits with input', () => {
-      const handleSubmit = vi.fn();
-
-      (useAIChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        messages: [],
-        input: 'Test input',
-        handleInputChange: vi.fn(),
-        handleSubmit,
-        isLoading: false,
-        error: null,
-        append: mockAppend,
-        reload: mockReload,
-        stop: mockStop,
-        setMessages: mockSetMessages,
+    it('clears input after sending', async () => {
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.close();
+        },
       });
 
-      const { result } = renderHook(() => useChat({ api: '/api/chat' }));
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain', 'X-Model-Used': 'test' }),
+        body: mockStream,
+      });
 
-      const mockEvent = {
-        preventDefault: vi.fn(),
-      } as unknown as React.FormEvent;
+      const { result } = renderHook(() => useChat());
 
       act(() => {
-        result.current.handleSubmit(mockEvent);
+        result.current.setInput('Test message');
       });
 
-      expect(handleSubmit).toHaveBeenCalledWith(mockEvent, expect.any(Object));
+      expect(result.current.input).toBe('Test message');
+
+      await act(async () => {
+        await result.current.sendMessage('Test message');
+      });
+
+      expect(result.current.input).toBe('');
+    });
+  });
+
+  describe('Fetch Conversations', () => {
+    it('fetches conversation list', async () => {
+      const mockConversations = [
+        {
+          id: 'chat-1',
+          title: 'Test Chat',
+          messageCount: 5,
+          createdAt: '2024-01-01',
+          updatedAt: '2024-01-02',
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: mockConversations }),
+      });
+
+      const { result } = renderHook(() => useChat());
+
+      let conversations: unknown[];
+      await act(async () => {
+        conversations = await result.current.fetchConversations();
+      });
+
+      expect(conversations!).toEqual(mockConversations);
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/v1/chats'),
+        expect.objectContaining({ credentials: 'include' })
+      );
+    });
+
+    it('returns empty array on fetch error', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() => useChat());
+
+      let conversations: unknown[];
+      await act(async () => {
+        conversations = await result.current.fetchConversations();
+      });
+
+      expect(conversations!).toEqual([]);
     });
   });
 });

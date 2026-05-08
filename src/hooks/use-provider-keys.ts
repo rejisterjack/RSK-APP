@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-export type ProviderId = 'openrouter' | 'fireworks';
+export type ProviderId =
+  | 'openrouter'
+  | 'fireworks'
+  | 'groq'
+  | 'nvidia'
+  | 'cerebras'
+  | 'sambanova'
+  | 'mistral';
 
 interface ProviderMeta {
   id: ProviderId;
@@ -12,6 +19,11 @@ interface ProviderMeta {
 
 export const PROVIDERS: ProviderMeta[] = [
   { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-v1-...' },
+  { id: 'groq', name: 'Groq (Fast)', placeholder: 'gsk_...' },
+  { id: 'cerebras', name: 'Cerebras (Fastest)', placeholder: 'csk-...' },
+  { id: 'sambanova', name: 'SambaNova', placeholder: 'sk-...' },
+  { id: 'nvidia', name: 'NVIDIA NIM', placeholder: 'nvapi-...' },
+  { id: 'mistral', name: 'Mistral AI', placeholder: 'sk-...' },
   { id: 'fireworks', name: 'Fireworks AI', placeholder: 'fw_...' },
 ];
 

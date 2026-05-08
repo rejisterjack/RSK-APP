@@ -9,6 +9,7 @@ export { RagPipelineDiagram } from './rag-pipeline-diagram';
 export { ScrollProgress } from './scroll-progress';
 export { SetupAnimator } from './setup-animator';
 export { TechStackMarquee } from './tech-stack-marquee';
+export { Testimonials } from './testimonials';
 export { UseCases } from './use-cases';
 export { WhatsIncluded } from './whats-included';
 export { WhoItsFor } from './who-its-for';

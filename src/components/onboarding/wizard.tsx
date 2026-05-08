@@ -452,7 +452,7 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
           )}
 
           {/* Step 3: Upload Document */}
-          {step === 2 && (
+          {step === 3 && (
             <div className="space-y-6">
               <div>
                 <CardTitle className="text-2xl">Upload Your First Document</CardTitle>
@@ -538,7 +538,7 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
               <div>
                 <CardTitle className="text-2xl">You're All Set!</CardTitle>
                 <CardDescription>
-                  Your workspace is ready. Start chatting with your documents!
+                  Your workspace is ready. Try asking one of these questions to get started:
                 </CardDescription>
               </div>
 
@@ -556,6 +556,27 @@ export function OnboardingWizard({ user: _user }: OnboardingWizardProps) {
                 <div className="p-4 bg-muted rounded-lg">
                   <Settings className="h-6 w-6 mx-auto mb-2 text-primary" />
                   <p className="text-sm font-medium">RAG Configured</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Suggested questions</p>
+                <div className="flex flex-col gap-2">
+                  {[
+                    'What is RAG Starter Kit and what are its main features?',
+                    'How do I set up the project locally?',
+                    'What file types are supported for document upload?',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => router.push(`/chat?q=${encodeURIComponent(suggestion)}`)}
+                      className="text-left p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 transition-colors text-sm"
+                    >
+                      <MessageSquare className="inline h-4 w-4 mr-2 text-primary" />
+                      {suggestion}
+                    </button>
+                  ))}
                 </div>
               </div>
 

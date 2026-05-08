@@ -11,7 +11,7 @@ export type DistanceMetric = 'cosine' | 'euclidean' | 'inner_product';
 /**
  * Retrieval strategy types
  */
-export type RetrievalStrategyType = 'vector' | 'keyword' | 'hybrid' | 'multi-query';
+export type RetrievalStrategyType = 'vector' | 'keyword' | 'hybrid' | 'multi-query' | 'decomposed';
 
 /**
  * Options for retrieval operations

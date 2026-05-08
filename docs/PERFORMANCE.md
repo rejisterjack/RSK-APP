@@ -99,12 +99,47 @@ Metrics tracked:
 
 ## Database Optimization
 
+### API Performance Baselines
+
+| Endpoint | p50 | p95 | p99 | Notes |
+|----------|-----|-----|-----|-------|
+| `GET /api/health` | <50ms | <100ms | <200ms | No DB access |
+| `GET /api/documents` | <100ms | <500ms | <1000ms | Paginated, indexed |
+| `POST /api/chat` | <1s | <3s | <5s | Includes LLM streaming |
+| Vector similarity search | <100ms | <300ms | <500ms | HNSW index, top-10 |
+| Document ingestion | - | <10s/doc | - | Chunking + embedding |
+
+### Vector Search Tuning (HNSW)
+
+The project uses HNSW indexes for vector similarity search via pgvector.
+
+**Build-time** (migration):
+- `hnsw.ef_construction = 128` -- Higher = better index quality, slower build
+- `hnsw.m = 16` (default) -- Connections per node
+
+**Query-time** (runtime via env var):
+- `HNSW_EF_SEARCH` -- Controls search accuracy vs speed
+  - Default: `40` (good balance)
+  - `1-20`: Fast, lower recall (real-time suggestions)
+  - `40-100`: Balanced (default)
+  - `100-500`: High recall, slower (precision-critical)
+  - `500+`: Near-exact search, significantly slower
+
+### Connection Pooling
+
+Pool size is environment-aware:
+- **Serverless** (Vercel/Lambda): 5 connections
+- **Production** (Docker/VM): 15 connections
+- **Development**: 3 connections
+
+Override with `DB_POOL_MAX` env var. Use `DATABASE_READ_REPLICA_URL` for read replicas.
+
 ### Indexes
 
 ```sql
--- Vector similarity search
-CREATE INDEX idx_document_chunks_embedding ON document_chunks 
-USING ivfflat (embedding vector_cosine_ops);
+-- HNSW vector similarity search (used in production)
+CREATE INDEX document_chunks_embedding_hnsw_idx
+  ON document_chunks USING hnsw (embedding vector_cosine_ops);
 
 -- Common queries
 CREATE INDEX idx_conversations_workspace ON conversations(workspace_id, created_at DESC);
@@ -149,6 +184,19 @@ CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at A
 - Lighthouse CI for automated audits
 - Web Vitals monitoring
 - Custom performance metrics
+
+### Running Benchmarks
+
+```bash
+# Database performance tests
+pnpm vitest run tests/performance/database.test.ts
+
+# Load tests (k6)
+k6 run tests/performance/load.test.ts
+
+# Load tests (Artillery)
+artillery run tests/performance/artillery-config.yml
+```
 
 ## Profiling
 

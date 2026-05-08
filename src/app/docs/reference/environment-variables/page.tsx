@@ -173,17 +173,6 @@ const sections: { title: string; vars: EnvVar[] }[] = [
       { name: 'RESEND_API_KEY', required: false, description: 'Resend email API key' },
       { name: 'RESEND_FROM_EMAIL', required: false, description: 'Sender email address' },
       { name: 'RESEND_TO_EMAIL', required: false, description: 'Default recipient email' },
-      { name: 'STRIPE_SECRET_KEY', required: false, description: 'Stripe secret key for billing' },
-      {
-        name: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
-        required: false,
-        description: 'Stripe publishable key',
-      },
-      {
-        name: 'STRIPE_WEBHOOK_SECRET',
-        required: false,
-        description: 'Stripe webhook signing secret',
-      },
       {
         name: 'NEXT_PUBLIC_ANALYTICS_HOST',
         required: false,

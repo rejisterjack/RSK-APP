@@ -10,6 +10,7 @@ import { ChatInputArea } from './chat-input-area';
 import { ChatMessages } from './chat-messages';
 import type { Source } from './citations';
 import { ConversationHistoryPanel } from './conversation-history-panel';
+import { DegradationBanner } from './degradation-banner';
 import { SourcesPanel } from './sources-panel';
 
 const noop = () => {};
@@ -184,7 +185,11 @@ const ChatInner = memo(function ChatInner({
         style={{ gridTemplateRows: undefined }}
       >
         {/* Inner grid for desktop to enforce header/messages/input rows */}
-        <div className="flex flex-col h-full md:grid" style={{ gridTemplateRows: 'auto 1fr auto' }}>
+        <div
+          className="flex flex-col h-full md:grid"
+          style={{ gridTemplateRows: 'auto auto 1fr auto' }}
+        >
+          <DegradationBanner />
           <ChatHeader
             selectedModel={selectedModel}
             chatId={chatId}

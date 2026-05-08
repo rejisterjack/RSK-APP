@@ -7,7 +7,7 @@
  * - Sub-query Decomposition: Break complex queries into simpler sub-queries
  */
 
-import { generateChatCompletion, generateEmbedding } from '@/lib/ai';
+import { generateEmbedding, generateTaskCompletion } from '@/lib/ai';
 import { logger } from '@/lib/logger';
 import type { HyDEConfig, QueryExpansionConfig } from './types';
 
@@ -101,8 +101,9 @@ export class QueryExpander {
         { role: 'user', content: prompt },
       ];
 
-      const { text } = await generateChatCompletion(
-        messages as unknown as Parameters<typeof generateChatCompletion>[0],
+      const { text } = await generateTaskCompletion(
+        'fast',
+        messages as unknown as Parameters<typeof generateTaskCompletion>[1],
         { temperature: this.expansionConfig.temperature }
       );
 
@@ -189,8 +190,9 @@ export class QueryExpander {
         { role: 'user', content: prompt },
       ];
 
-      const { text: hypotheticalDoc } = await generateChatCompletion(
-        messages as unknown as Parameters<typeof generateChatCompletion>[0],
+      const { text: hypotheticalDoc } = await generateTaskCompletion(
+        'hyde',
+        messages as unknown as Parameters<typeof generateTaskCompletion>[1],
         { temperature: this.hydeConfig.temperature, maxTokens: 500 }
       );
 
@@ -229,8 +231,9 @@ export class QueryExpander {
         { role: 'user', content: prompt },
       ];
 
-      const { text } = await generateChatCompletion(
-        messages as unknown as Parameters<typeof generateChatCompletion>[0],
+      const { text } = await generateTaskCompletion(
+        'hyde',
+        messages as unknown as Parameters<typeof generateTaskCompletion>[1],
         { temperature: this.hydeConfig.temperature, maxTokens: 500 }
       );
 
@@ -263,8 +266,9 @@ export class QueryExpander {
         { role: 'user', content: prompt },
       ];
 
-      const { text } = await generateChatCompletion(
-        messages as unknown as Parameters<typeof generateChatCompletion>[0],
+      const { text } = await generateTaskCompletion(
+        'fast',
+        messages as unknown as Parameters<typeof generateTaskCompletion>[1],
         { temperature: 0.5 }
       );
 

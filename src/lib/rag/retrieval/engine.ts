@@ -54,7 +54,7 @@ export const retrievalPresets = {
     useSelfQuery: true,
     config: {
       hybrid: { rrfK: 60, vectorWeight: 0.7, keywordWeight: 0.3 },
-      rerank: { provider: 'local' as const, topN: 10 },
+      rerank: { provider: 'cohere' as const, topN: 10 },
     },
   },
 
@@ -89,7 +89,7 @@ export const retrievalPresets = {
     useSelfQuery: true,
     config: {
       hybrid: { rrfK: 60, vectorWeight: 0.7, keywordWeight: 0.3 },
-      rerank: { provider: 'local' as const, topN: 5 },
+      rerank: { provider: 'cohere' as const, topN: 5 },
     },
   },
 
@@ -125,7 +125,23 @@ export const retrievalPresets = {
     useSelfQuery: true,
     config: {
       hybrid: { rrfK: 60 },
-      rerank: { provider: 'local' as const, topN: 15 },
+      rerank: { provider: 'cohere' as const, topN: 15 },
+    },
+  },
+
+  /**
+   * Multi-step reasoning: Decomposes complex queries into sub-questions
+   * Best for: Multi-faceted questions requiring comprehensive coverage
+   */
+  decomposed: {
+    strategies: [{ type: 'decomposed' as const, weight: 1 }],
+    rerank: true,
+    expandQuery: false,
+    compress: true,
+    useHyDE: false,
+    useSelfQuery: true,
+    config: {
+      rerank: { provider: 'cohere' as const, topN: 10 },
     },
   },
 };
@@ -281,6 +297,10 @@ export class RetrievalEngine {
         return this.executeMultiQueryRetrieval(query, options);
       }
 
+      case 'decomposed': {
+        return this.executeDecomposedRetrieval(query, options);
+      }
+
       default:
         return [];
     }
@@ -324,6 +344,50 @@ export class RetrievalEngine {
     }
 
     return deduplicated;
+  }
+
+  /**
+   * Execute decomposed retrieval: break complex query into sub-questions,
+   * retrieve for each independently, then merge results.
+   */
+  private async executeDecomposedRetrieval(
+    query: string,
+    options: RetrievalOptions
+  ): Promise<RetrievedChunk[]> {
+    // Decompose into sub-queries
+    const subQueries = await this.queryExpander.expandSubQueries(query);
+
+    if (subQueries.length <= 1) {
+      // Simple query, fall back to hybrid retrieval
+      return this.hybridRetriever.retrieve(query, options);
+    }
+
+    // Execute retrieval for each sub-query in parallel
+    const results = await Promise.all(
+      subQueries.map(async (subQuery) => {
+        const embedding = await generateEmbedding(subQuery);
+        return this.vectorRetriever.retrieve(embedding, {
+          ...options,
+          topK: Math.ceil((options.topK ?? 5) / subQueries.length) + 2,
+        });
+      })
+    );
+
+    // Flatten and deduplicate, preserving best score per chunk
+    const bestScores = new Map<string, RetrievedChunk>();
+    for (const resultList of results) {
+      for (const chunk of resultList) {
+        const existing = bestScores.get(chunk.id);
+        if (!existing || chunk.score > existing.score) {
+          bestScores.set(chunk.id, {
+            ...chunk,
+            retrievalMethod: 'decomposed',
+          });
+        }
+      }
+    }
+
+    return Array.from(bestScores.values());
   }
 
   /**

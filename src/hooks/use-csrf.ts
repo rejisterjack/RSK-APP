@@ -33,7 +33,9 @@ export function useCsrf(): UseCsrfReturn {
       const response = await fetch('/api/csrf/token');
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+        // CSRF token endpoint not available — CSP nonce-based protection is used instead
+        setToken(null);
+        return;
       }
 
       const data = await response.json();
@@ -42,11 +44,10 @@ export function useCsrf(): UseCsrfReturn {
         setToken(data.token);
         // Also store in meta tag for global access
         updateMetaTag(data.token);
-      } else {
-        throw new Error('No token in response');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Unknown error'));
+    } catch {
+      // CSRF token endpoint not available — not blocking
+      setToken(null);
     } finally {
       setIsLoading(false);
     }

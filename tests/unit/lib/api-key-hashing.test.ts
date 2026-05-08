@@ -4,6 +4,7 @@
  * Tests for bcrypt-based API key hashing
  */
 
+import bcrypt from 'bcryptjs';
 import { describe, expect, it, vi } from 'vitest';
 
 // Mock the audit logger
@@ -24,6 +25,15 @@ vi.mock('@/lib/logger', () => ({
     info: vi.fn(),
     debug: vi.fn(),
   },
+}));
+
+vi.mock('@/lib/cache', () => ({
+  get: vi.fn().mockResolvedValue(null),
+  set: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/security/ssrf-protection', () => ({
+  isIpInCidr: vi.fn().mockReturnValue(true),
 }));
 
 import { prisma } from '@/lib/db';
@@ -114,8 +124,9 @@ describe('API Key Hashing with bcrypt', () => {
     });
 
     it('should validate correct API key using bcrypt', async () => {
-      // This is a real bcrypt hash of "rag_testkey123456789" with a known prefix
-      const bcryptHash = '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VTtYA.qGZvKG6.';
+      // Generate a real bcrypt hash for the test key at runtime
+      const testKey = 'rag_testkey123456789';
+      const bcryptHash = await bcrypt.hash(testKey, 12);
 
       const mockApiKey = {
         id: 'key-123',
@@ -125,11 +136,13 @@ describe('API Key Hashing with bcrypt', () => {
         expiresAt: null,
         workspaceId: mockWorkspaceId,
         permissions: ['read:documents'],
+        allowedIps: [],
+        allowedEndpoints: [],
       };
 
       (prisma.apiKey.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(mockApiKey);
 
-      const result = await validateApiKey('rag_testkey123456789');
+      const result = await validateApiKey(testKey);
 
       expect(result.valid).toBe(true);
       expect(result.keyId).toBe('key-123');

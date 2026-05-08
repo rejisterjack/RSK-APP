@@ -25,6 +25,11 @@ const envSchema = z.object({
   FIREWORKS_API_KEY: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  NVIDIA_API_KEY: z.string().optional(),
+  CEREBRAS_API_KEY: z.string().optional(),
+  SAMBANOVA_API_KEY: z.string().optional(),
+  MISTRAL_API_KEY: z.string().optional(),
 
   // Optional variables with defaults
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -110,14 +115,6 @@ const envSchema = z.object({
       (val) => process.env.NODE_ENV !== 'production' || (val !== undefined && val.length >= 32),
       { message: 'ENCRYPTION_MASTER_KEY is required in production' }
     ),
-
-  // CSRF protection key (falls back to NEXTAUTH_SECRET if not set)
-  CSRF_SECRET: z.string().min(32).optional(),
-
-  // Stripe configuration
-  STRIPE_SECRET_KEY: z.string().optional(),
-  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
 });
 
 // =============================================================================

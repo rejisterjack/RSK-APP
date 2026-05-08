@@ -158,6 +158,12 @@ export interface RAGResponse {
     total: number;
   };
   latency: number;
+  confidence?: {
+    score: number;
+    faithfulness: number;
+    relevance: number;
+    riskLevel: 'low' | 'medium' | 'high';
+  };
 }
 
 // =============================================================================

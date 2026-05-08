@@ -21,13 +21,14 @@ export function cn(...inputs: ClassValue[]): string {
  * Format a date string or Date object to a human-readable format
  */
 export function formatDate(
-  date: Date | string | number,
+  date: Date | string | number | null,
   options: Intl.DateTimeFormatOptions = {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   }
 ): string {
+  if (date === null || date === undefined) return '';
   const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
   if (Number.isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('en-US', options).format(d);
@@ -65,7 +66,8 @@ export function truncateText(
 ): string {
   if (text.length <= maxLength) return text;
 
-  let truncated = text.slice(0, maxLength);
+  const truncationTarget = Math.max(0, maxLength - suffix.length);
+  let truncated = text.slice(0, truncationTarget);
 
   if (respectWordBoundaries) {
     const lastSpace = truncated.lastIndexOf(' ');

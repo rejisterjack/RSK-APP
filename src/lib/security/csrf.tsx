@@ -314,7 +314,7 @@ export function CsrfTokenScript({ nonce }: CsrfTokenScriptProps): React.ReactEle
                   meta.content = token;
                 }
               } catch (e) {
-                console.error('Failed to initialize CSRF token:', e);
+                // CSRF endpoint not available — CSP nonce protection is used instead
               }
             }
             

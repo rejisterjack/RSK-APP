@@ -26,6 +26,12 @@ interface CliArgs {
   apiKey?: string;
   format: 'markdown' | 'json' | 'table';
   includeAnswer: boolean;
+  ci: boolean;
+  minPrecision: number;
+  minRecall: number;
+  minF1: number;
+  maxLatencyMs: number;
+  maxFailureRate: number;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -34,6 +40,12 @@ function parseArgs(argv: string[]): CliArgs {
     apiUrl: 'http://localhost:3000',
     format: 'markdown',
     includeAnswer: true,
+    ci: false,
+    minPrecision: 0.7,
+    minRecall: 0.6,
+    minF1: 0.65,
+    maxLatencyMs: 5000,
+    maxFailureRate: 0.1,
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -58,6 +70,21 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case '--no-answer':
         args.includeAnswer = false;
+        break;
+      case '--ci':
+        args.ci = true;
+        break;
+      case '--min-precision':
+        args.minPrecision = Number.parseFloat(argv[++i]);
+        break;
+      case '--min-recall':
+        args.minRecall = Number.parseFloat(argv[++i]);
+        break;
+      case '--min-f1':
+        args.minF1 = Number.parseFloat(argv[++i]);
+        break;
+      case '--max-latency':
+        args.maxLatencyMs = Number.parseInt(argv[++i], 10);
         break;
       case '--help':
       case '-h':
@@ -89,6 +116,11 @@ Options:
   --api-key <key>            API key for authentication
   --format <fmt>             Output format: markdown, json, table (default: markdown)
   --no-answer                Skip answer generation, only evaluate retrieval
+  --ci                       CI mode: exit with error code on quality regression
+  --min-precision <0-1>      Minimum precision threshold (default: 0.7)
+  --min-recall <0-1>         Minimum recall threshold (default: 0.6)
+  --min-f1 <0-1>             Minimum F1 threshold (default: 0.65)
+  --max-latency <ms>         Maximum average latency in ms (default: 5000)
   --help, -h                 Show this help message
 
 Examples:
@@ -192,6 +224,41 @@ async function main(): Promise<void> {
     console.warn(`  WARNING: ${report.failedQueries} queries failed.`);
     for (const r of report.results.filter((r) => r.error)) {
       console.warn(`    - [${r.queryId}] ${r.error}`);
+    }
+  }
+
+  // CI mode: check quality thresholds
+  if (args.ci) {
+    const failures: string[] = [];
+    const precision = report.avgRetrievalMetrics.precision;
+    const recall = report.avgRetrievalMetrics.recall;
+    const f1 = report.avgRetrievalMetrics.f1;
+    const failureRate = report.totalQueries > 0 ? report.failedQueries / report.totalQueries : 1;
+
+    if (precision < args.minPrecision) {
+      failures.push(`Precision ${precision.toFixed(3)} below threshold ${args.minPrecision}`);
+    }
+    if (recall < args.minRecall) {
+      failures.push(`Recall ${recall.toFixed(3)} below threshold ${args.minRecall}`);
+    }
+    if (f1 < args.minF1) {
+      failures.push(`F1 ${f1.toFixed(3)} below threshold ${args.minF1}`);
+    }
+    if (report.avgLatencyMs > args.maxLatencyMs) {
+      failures.push(`Avg latency ${report.avgLatencyMs.toFixed(0)}ms exceeds ${args.maxLatencyMs}ms`);
+    }
+    if (failureRate > args.maxFailureRate) {
+      failures.push(`Failure rate ${(failureRate * 100).toFixed(1)}% exceeds ${(args.maxFailureRate * 100).toFixed(1)}%`);
+    }
+
+    if (failures.length > 0) {
+      console.error('\n  CI QUALITY GATES FAILED:');
+      for (const f of failures) {
+        console.error(`    - ${f}`);
+      }
+      process.exit(1);
+    } else {
+      console.log('\n  CI quality gates PASSED');
     }
   }
 }

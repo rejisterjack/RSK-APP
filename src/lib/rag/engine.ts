@@ -8,6 +8,8 @@
 import type { LanguageModelUsage, UIMessage } from 'ai';
 import { createEmbeddingProviderFromEnv } from '@/lib/ai/embeddings';
 import { logger } from '@/lib/logger';
+import { StreamingContentFilter } from '@/lib/security/content-filter';
+import { analyzePromptSafety, filterOutput } from '@/lib/security/prompt-guard';
 import type { RAGConfig, RAGQuery, RAGResponse, Source } from '@/types';
 
 // Define message type compatible with the AI SDK
@@ -27,7 +29,7 @@ export const defaultRAGConfig: RAGConfig = {
   similarityThreshold: 0.7,
   temperature: 0.7,
   maxTokens: 2000,
-  model: process.env.DEFAULT_MODEL || 'google/gemma-3-12b-it:free',
+  model: process.env.DEFAULT_MODEL || 'groq/llama-3.3-70b-versatile',
   embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-004',
 };
 
@@ -52,8 +54,15 @@ export async function generateRAGResponse(query: RAGQuery): Promise<RAGResponse>
   const config = { ...defaultRAGConfig, ...query.config };
 
   try {
+    // Step 0: Prompt injection guard
+    const safety = analyzePromptSafety(query.query);
+    if (safety.blocked) {
+      throw new Error(`Query blocked by security filter: ${safety.reasons.join('; ')}`);
+    }
+    const safeQuery = safety.sanitizedQuery ?? query.query;
+
     // Step 1: Retrieve relevant chunks
-    const sources = await retrieveSources(query.query, query.userId ?? '', config);
+    const sources = await retrieveSources(safeQuery, query.userId ?? '', config);
 
     // Step 2: Build context from sources
     const context = buildContext(sources, config.maxContextLength);
@@ -64,19 +73,28 @@ export async function generateRAGResponse(query: RAGQuery): Promise<RAGResponse>
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...(query.history ?? []).map((m): ChatMessage => ({ role: m.role, content: m.content })),
-      { role: 'user', content: query.query },
+      { role: 'user', content: safeQuery },
     ];
 
     const response = await generateChatCompletion(messages as unknown as UIMessage[], config);
 
     const latency = Date.now() - startTime;
 
+    // Filter output for leaked system prompts
+    const { filtered: safeAnswer, hadLeak } = filterOutput(response.text);
+    if (hadLeak) {
+      logger.warn('System prompt leakage detected and filtered in response');
+    }
+
+    // Calculate confidence score
+    const confidence = calculateConfidence(safeAnswer, safeQuery, sources);
+
     // Extract token usage from response
     const usage: LanguageModelUsage = response.usage;
 
     // FIXED: Use correct field names from LanguageModelUsage (promptTokens/completionTokens)
     return {
-      answer: response.text,
+      answer: safeAnswer,
       sources,
       tokensUsed: {
         prompt: usage.promptTokens ?? 0,
@@ -84,6 +102,7 @@ export async function generateRAGResponse(query: RAGQuery): Promise<RAGResponse>
         total: usage.totalTokens ?? 0,
       },
       latency,
+      confidence,
     };
   } catch (error) {
     logger.error('RAG pipeline error', {
@@ -113,26 +132,47 @@ export async function* streamRAGResponse(query: RAGQuery): AsyncGenerator<{
   const config = { ...defaultRAGConfig, ...query.config };
 
   try {
+    // Step 0: Prompt injection guard
+    const safety = analyzePromptSafety(query.query);
+    if (safety.blocked) {
+      yield {
+        type: 'error',
+        error: `Query blocked by security filter: ${safety.reasons.join('; ')}`,
+      };
+      return;
+    }
+    const safeQuery = safety.sanitizedQuery ?? query.query;
+
     // Step 1: Retrieve sources
-    const sources = await retrieveSources(query.query, query.userId ?? '', config);
+    const sources = await retrieveSources(safeQuery, query.userId ?? '', config);
 
     yield { type: 'sources', sources };
 
     // Step 2: Build context
     const context = buildContext(sources, config.maxContextLength);
-    const systemPrompt = buildRAGSystemPrompt(context, config.systemInstructions);
+    const systemPrompt = buildRAGSystemPrompt(context, query.config?.systemInstructions);
 
-    // Step 3: Stream response
+    // Step 3: Stream response with content filter
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
       ...(query.history ?? []).map((m): ChatMessage => ({ role: m.role, content: m.content })),
-      { role: 'user', content: query.query },
+      { role: 'user', content: safeQuery },
     ];
 
     const stream = await streamChatCompletion(messages as unknown as UIMessage[], config);
+    const contentFilter = new StreamingContentFilter();
 
     for await (const chunk of stream.textStream) {
-      yield { type: 'content', content: chunk };
+      const filtered = contentFilter.processToken(chunk);
+      if (filtered) {
+        yield { type: 'content', content: filtered };
+      }
+    }
+
+    // Flush remaining buffered tokens
+    const remaining = contentFilter.flush();
+    if (remaining) {
+      yield { type: 'content', content: remaining };
     }
 
     yield { type: 'done' };
@@ -255,6 +295,77 @@ export function buildContextFromSources(sources: Source[]): string {
       return `[${index + 1}] From "${meta.documentName}"${meta.page ? `, page ${meta.page}` : ''}:\n${source.content}`;
     })
     .join('\n\n');
+}
+
+// ============================================================================
+// Confidence Scoring
+// ============================================================================
+
+/**
+ * Calculate confidence score for a RAG response.
+ * Uses faithfulness (answer supported by sources) and relevance (answer addresses query).
+ */
+function calculateConfidence(
+  answer: string,
+  query: string,
+  sources: Source[]
+): RAGResponse['confidence'] {
+  if (!answer || sources.length === 0) {
+    return { score: 0, faithfulness: 0, relevance: 0, riskLevel: 'high' };
+  }
+
+  // Use existing eval metrics
+  const sourceTexts = sources.map((s) => s.content);
+
+  // Faithfulness: fraction of answer claims supported by sources
+  const claims = answer.split(/[.!?]+/).filter((s) => s.trim());
+  const normalizedSources = sourceTexts.map((s) =>
+    s
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+  const supportedClaims = claims.filter((claim) => {
+    const normalized = claim
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return normalizedSources.some((src) => src.includes(normalized));
+  });
+  const faithfulness = claims.length > 0 ? supportedClaims.length / claims.length : 0.5;
+
+  // Relevance: keyword overlap between answer and query
+  const answerTokens = new Set(
+    answer
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 2)
+  );
+  const queryTokens = new Set(
+    query
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length > 2)
+  );
+  const overlap = [...queryTokens].filter((t) => answerTokens.has(t));
+  const relevance = queryTokens.size > 0 ? Math.min(overlap.length / queryTokens.size, 1) : 0.5;
+
+  // Combined score (weighted average)
+  const score = Math.round((faithfulness * 0.6 + relevance * 0.4) * 100) / 100;
+
+  // Risk level based on score
+  const riskLevel = score >= 0.7 ? 'low' : score >= 0.4 ? 'medium' : 'high';
+
+  return {
+    score,
+    faithfulness: Math.round(faithfulness * 100) / 100,
+    relevance: Math.round(relevance * 100) / 100,
+    riskLevel,
+  };
 }
 
 // ============================================================================

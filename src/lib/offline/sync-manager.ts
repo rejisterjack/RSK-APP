@@ -243,8 +243,7 @@ class SyncManager {
       }
 
       this.progress.lastSyncAt = Date.now();
-    } catch (error) {
-      console.error('[SyncManager] Queue processing error:', error);
+    } catch (_error) {
     } finally {
       this.isSyncing = false;
       this.syncAbortController = null;
@@ -287,9 +286,6 @@ class SyncManager {
           // Permanent failure - mark completed to remove from queue
           await pendingActions.markCompleted(action.id);
           this.progress.failed++;
-          console.warn(
-            `[SyncManager] Permanent failure for action ${action.id}: HTTP ${response.status}`
-          );
         }
       } else {
         // Server error - retry

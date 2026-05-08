@@ -4,7 +4,6 @@
  * Handles document ingestion processing in the background
  */
 
-import { detectCostAnomalies } from '@/lib/billing/cost-monitor';
 import { prisma } from '@/lib/db';
 import {
   checkPartitionHealth,
@@ -518,44 +517,6 @@ export const anomalyDetectionJob = inngest.createFunction(
     }
 
     return { checked: true, alertCount: alerts.length };
-  }
-);
-
-// =============================================================================
-// Cost Monitoring Job
-// =============================================================================
-
-export const costMonitoringJob = inngest.createFunction(
-  {
-    id: 'cost-monitoring',
-    name: 'Run Cost Anomaly Detection',
-  },
-  { cron: '*/15 * * * *' },
-  async ({ step }: { step: InngestContext['step'] }) => {
-    const anomalies = await step.run('detect-cost-anomalies', async () => {
-      return detectCostAnomalies();
-    });
-
-    if (anomalies.length > 0) {
-      await step.run('dispatch-cost-alerts', async () => {
-        for (const anomaly of anomalies) {
-          await dispatchAlert({
-            type: `cost_anomaly:${anomaly.severity === 'CRITICAL' ? 'critical' : 'warning'}`,
-            severity: anomaly.severity,
-            description: `Workspace ${anomaly.workspaceId}: ${anomaly.multiplier}x normal spend (${anomaly.currentHourTokens} tokens vs ${anomaly.hourlyAverage} avg)`,
-            workspaceId: anomaly.workspaceId,
-            metadata: {
-              currentHourTokens: anomaly.currentHourTokens,
-              hourlyAverage: anomaly.hourlyAverage,
-              multiplier: anomaly.multiplier,
-            },
-            detectedAt: new Date(),
-          });
-        }
-      });
-    }
-
-    return { checked: true, anomalyCount: anomalies.length };
   }
 );
 

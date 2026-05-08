@@ -136,7 +136,13 @@ export interface CircuitBreakerOptions {
   onOpen?: () => void;
 }
 
-type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+export const CircuitState = {
+  CLOSED: 'CLOSED' as const,
+  OPEN: 'OPEN' as const,
+  HALF_OPEN: 'HALF_OPEN' as const,
+} satisfies Record<string, CircuitState>;
 
 export class CircuitBreaker {
   private state: CircuitState = 'CLOSED';

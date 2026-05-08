@@ -83,7 +83,6 @@ function blockToText(block: NotionBlock): string {
       return '---';
     case 'callout':
       return `💡 ${text}`;
-    case 'paragraph':
     default:
       return text;
   }

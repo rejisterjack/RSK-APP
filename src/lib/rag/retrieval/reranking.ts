@@ -22,8 +22,8 @@ export interface Reranker {
  * Default re-ranking configuration
  */
 export const defaultRerankConfig: RerankConfig = {
-  provider: 'local',
-  model: 'cross-encoder/ms-marco-MiniLM-L-6-v2',
+  provider: 'cohere',
+  model: 'rerank-english-v2.0',
   topN: 10,
 };
 

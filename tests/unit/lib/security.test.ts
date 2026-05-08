@@ -68,7 +68,19 @@ vi.mock('@/lib/security/rate-limiter', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    redis: mockRedis,
+    redis: {
+      get: vi.fn(),
+      set: vi.fn(),
+      del: vi.fn(),
+      keys: vi.fn(),
+      pipeline: vi.fn().mockReturnThis(),
+      zremrangebyscore: vi.fn().mockReturnThis(),
+      zcard: vi.fn().mockReturnThis(),
+      zadd: vi.fn().mockReturnThis(),
+      pexpire: vi.fn().mockReturnThis(),
+      exec: vi.fn().mockResolvedValue([]),
+      ttl: vi.fn().mockResolvedValue(-2),
+    },
   };
 });
 

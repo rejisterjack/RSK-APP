@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputArea as ChatInput } from '@/components/chat/chat-input-area';
 
 describe('ChatInput', () => {
   const defaultProps = {

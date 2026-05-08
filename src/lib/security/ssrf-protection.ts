@@ -42,7 +42,7 @@ const BLOCKED_HOSTNAMES = new Set([
  */
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) {
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) {
     return true; // Invalid IPs are treated as private (blocked)
   }
 
@@ -241,7 +241,7 @@ export function isIpInCidr(ip: string, cidr: string): boolean {
   if (!network || !prefixStr) return false;
 
   const prefix = parseInt(prefixStr, 10);
-  if (isNaN(prefix) || prefix < 0 || prefix > 32) return false;
+  if (Number.isNaN(prefix) || prefix < 0 || prefix > 32) return false;
 
   const ipNum = ipToNumber(ip);
   const networkNum = ipToNumber(network);
@@ -260,7 +260,7 @@ export function isIpInCidr(ip: string, cidr: string): boolean {
  */
 function ipToNumber(ip: string): number | null {
   const parts = ip.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) {
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) {
     return null;
   }
   return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
@@ -296,8 +296,8 @@ function isIPAddress(hostname: string): boolean {
 async function resolveDNS(hostname: string): Promise<string[]> {
   try {
     // Use dynamic import to handle Edge Runtime where 'dns' is not available
-    const dns = await import('dns');
-    const { promisify } = await import('util');
+    const dns = await import('node:dns');
+    const { promisify } = await import('node:util');
     const resolve4 = promisify(dns.resolve4);
     const resolve6 = promisify(dns.resolve6);
 

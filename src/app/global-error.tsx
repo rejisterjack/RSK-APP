@@ -17,14 +17,6 @@ interface GlobalErrorProps {
  *   3. Replace the console.error below with Sentry.captureException(error)
  */
 function reportError(error: Error & { digest?: string }): void {
-  // Always log to console for Vercel's log drain / runtime logs
-  console.error('[GlobalError]', {
-    message: error.message,
-    digest: error.digest,
-    stack: error.stack,
-    timestamp: new Date().toISOString(),
-  });
-
   // ─── Sentry Integration (uncomment after installing @sentry/nextjs) ───
   // import * as Sentry from '@sentry/nextjs';
   // Sentry.captureException(error, {

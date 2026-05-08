@@ -17,7 +17,7 @@ interface WorkspaceSettings {
   slug: string;
   description: string | null;
   avatar: string | null;
-  plan: 'FREE' | 'PRO' | 'ENTERPRISE';
+  plan: 'FREE';
   settings?: {
     defaultModel?: string;
     defaultTemperature?: number;
@@ -162,13 +162,8 @@ export function SettingsPanel({
             <Label>Plan</Label>
             <div className="flex items-center gap-4">
               <div className="rounded-lg border px-4 py-2">
-                <span className="font-medium">{workspace.plan}</span>
+                <span className="font-medium">Free Forever</span>
               </div>
-              {workspace.plan === 'FREE' && (
-                <Button variant="outline" size="sm">
-                  Upgrade
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -332,7 +327,7 @@ export function SettingsPanel({
           </div>
         </div>
 
-        {canManageSettings && workspace.plan !== 'FREE' && (
+        {canManageSettings && (
           <>
             <Separator />
             <div className="rounded-lg border border-destructive/50 p-4">

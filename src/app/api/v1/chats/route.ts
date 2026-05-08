@@ -74,10 +74,32 @@ export async function GET(request: NextRequest) {
     cursorField: 'updatedAt',
   });
 
-  const where = {
+  const searchQuery = searchParams.get('search')?.trim();
+  const where: Record<string, unknown> = {
     workspaceId: workspace.id,
     ...cursorWhere,
   };
+
+  // When search query provided, filter by title or message content
+  let chatIdsFromMessages: Set<string> | null = null;
+  if (searchQuery) {
+    // Find chats containing the search term in message content
+    const matchingMessages = await prisma.message.findMany({
+      where: {
+        content: { contains: searchQuery, mode: 'insensitive' },
+        chat: { workspaceId: workspace.id },
+      },
+      select: { chatId: true },
+      take: 200,
+      distinct: ['chatId'],
+    });
+    chatIdsFromMessages = new Set(matchingMessages.map((m) => m.chatId));
+
+    where.OR = [
+      { title: { contains: searchQuery, mode: 'insensitive' } },
+      ...(chatIdsFromMessages.size > 0 ? [{ id: { in: Array.from(chatIdsFromMessages) } }] : []),
+    ];
+  }
 
   const [chats, total] = await Promise.all([
     prisma.chat.findMany({

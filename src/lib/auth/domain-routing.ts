@@ -165,9 +165,8 @@ export function getSSORedirectUrl(
 
   if (method.type === 'saml') {
     return `${baseUrl}/api/auth/saml/${workspaceId}/login?${params.toString()}`;
-  } else {
-    return `${baseUrl}/api/auth/oauth/${method.id}?${params.toString()}`;
   }
+  return `${baseUrl}/api/auth/signin/${method.id}?${params.toString()}`;
 }
 
 // =============================================================================

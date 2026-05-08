@@ -137,9 +137,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Audit dependencies
+      - name: Audit dependencies (critical)
+        run: pnpm audit --audit-level=critical
+
+      - name: Audit dependencies (high)
+        if: always()
         run: pnpm audit --audit-level=high
-        continue-on-error: true # Don't block deploy on audit warnings, but surface them
+        continue-on-error: true
 
   # ─────────────────────────────────────────────
   # E2E Tests (only on main branch pushes)
@@ -186,3 +190,51 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # RAG Evaluation (manual or scheduled)
+  # ─────────────────────────────────────────────
+  rag-eval:
+    name: RAG Quality Eval
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Run RAG eval against staging
+        run: |
+          npx tsx scripts/eval.ts \
+            --dataset tests/evaluation/fixtures/golden-dataset.json \
+            --api-url ${{ vars.EVAL_API_URL || 'http://localhost:3000' }} \
+            --ci \
+            --min-precision 0.5 \
+            --min-recall 0.4 \
+            --max-latency 10000 \
+            --format json \
+            --output eval-results/ci-report.json
+        env:
+          EVAL_API_KEY: ${{ secrets.EVAL_API_KEY }}
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-eval-report
+          path: eval-results/
+          retention-days: 30

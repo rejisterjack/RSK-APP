@@ -6,6 +6,7 @@ import type { Source } from '@/components/chat/citations';
 import { DocumentList } from '@/components/documents/document-list';
 import { DocumentPreview } from '@/components/documents/document-preview';
 import { UploadDropzone } from '@/components/documents/upload-dropzone';
+import { ProductTour } from '@/components/onboarding/product-tour';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useChat } from '@/hooks/use-chat';
 import { useCreateChat, useSendFeedback } from '@/hooks/use-chat-operations';
@@ -17,6 +18,7 @@ import {
   useUploadDocument,
   useUploadUrl,
 } from '@/hooks/use-documents';
+import { useFeatureLevel } from '@/hooks/use-feature-level';
 
 // UUID v4 pattern for chatId validation
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,6 +54,7 @@ export default function ChatPage(): React.ReactElement {
   const previewQuery = useDocumentPreview(previewDocumentId);
   const createChatMutation = useCreateChat();
   const feedbackMutation = useSendFeedback();
+  const { recordMessage } = useFeatureLevel();
 
   const documents = documentsQuery.data || [];
 
@@ -134,9 +137,33 @@ export default function ChatPage(): React.ReactElement {
       }
 
       await sendMessage(content, undefined, chatId);
+      recordMessage();
     },
-    [sendMessage, handleUpload, currentChatId, createChatMutation, clearMessages, selectedModel]
+    [
+      sendMessage,
+      handleUpload,
+      currentChatId,
+      createChatMutation,
+      clearMessages,
+      selectedModel,
+      recordMessage,
+    ]
   );
+
+  // Handle pre-filled query from onboarding (e.g. /chat?q=What+is+RAG?)
+  const [initialQuerySent, setInitialQuerySent] = useState(false);
+  useEffect(() => {
+    if (initialQuerySent || messages === undefined) return;
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q && messages.length === 0) {
+      setInitialQuerySent(true);
+      window.history.replaceState(null, '', '/chat');
+      setTimeout(() => {
+        handleSendMessage(q);
+      }, 300);
+    }
+  }, [messages, initialQuerySent, handleSendMessage]);
 
   const handleSelectConversation = useCallback(
     (chatId: string) => {
@@ -178,6 +205,7 @@ export default function ChatPage(): React.ReactElement {
 
   return (
     <div className="h-full w-full overflow-hidden">
+      <ProductTour />
       <ChatContainer
         messages={messages}
         sources={effectiveSources}

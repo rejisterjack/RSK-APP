@@ -41,8 +41,7 @@
  */
 
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { compare, hash } from 'bcryptjs';
-import { NextResponse } from 'next/server';
+import { compare } from 'bcryptjs';
 import type { DefaultSession } from 'next-auth';
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
@@ -57,11 +56,7 @@ import {
   recordFailedAttempt,
   recordSuccessfulLogin,
 } from '@/lib/security/account-lockout';
-import {
-  isSessionRevoked,
-  revokeAllUserSessions,
-  trackSession,
-} from '@/lib/security/session-store';
+import { isSessionRevoked, trackSession } from '@/lib/security/session-store';
 import { createDefaultWorkspace, getAppUrl, getUserWorkspaces } from '@/lib/workspace/workspace';
 
 // =============================================================================
@@ -403,224 +398,16 @@ export const {
 });
 
 // =============================================================================
-// Helper Functions
+// Re-exports from session.ts for backward compatibility
+// Consumers can import from '@/lib/auth' or '@/lib/auth/session'
 // =============================================================================
 
-/**
- * Register a new user with email and password
- */
-export async function registerUser({
-  email,
-  password,
-  name,
-}: {
-  email: string;
-  password: string;
-  name?: string;
-}): Promise<{ success: boolean; error?: string; userId?: string }> {
-  try {
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return { success: false, error: 'User already exists' };
-    }
-
-    // Hash password
-    const hashedPassword = await hash(password, 12);
-
-    // Create user — emailVerified is null until they click the verification link
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name: name || null,
-        emailVerified: null,
-      },
-    });
-
-    // Create default workspace
-    await createDefaultWorkspace(user.id, {
-      name: name ? `${name}'s Workspace` : 'My Workspace',
-    });
-
-    // Log registration
-    await logAuditEvent({
-      event: AuditEvent.USER_REGISTERED,
-      userId: user.id,
-      metadata: { email, provider: 'credentials' },
-    });
-
-    // Send email verification link (fire-and-forget)
-    try {
-      const crypto = await import('crypto');
-      const token = crypto.randomBytes(32).toString('hex');
-      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-      await prisma.verificationToken.create({
-        data: { identifier: email, token, expires },
-      });
-
-      const appUrl = getAppUrl();
-      const verifyUrl = `${appUrl}/api/auth/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
-
-      await emailService.sendEmail({
-        to: email,
-        template: emailService.verificationEmail(name || email.split('@')[0], verifyUrl),
-      });
-    } catch (emailError) {
-      logger.error('Failed to send verification email', {
-        error: emailError instanceof Error ? emailError.message : 'Unknown',
-      });
-      // Non-fatal: user can request a resend via POST /api/auth/verify-email
-    }
-
-    return { success: true, userId: user.id };
-  } catch (error) {
-    logger.error('Registration error', {
-      error: error instanceof Error ? error.message : 'Unknown',
-    });
-    return { success: false, error: 'Failed to create account' };
-  }
-}
-
-/**
- * Change user password
- */
-export async function changePassword({
-  userId,
-  currentPassword,
-  newPassword,
-}: {
-  userId: string;
-  currentPassword: string;
-  newPassword: string;
-}): Promise<{ success: boolean; error?: string }> {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user || !user.password) {
-      return { success: false, error: 'User not found' };
-    }
-
-    // Verify current password
-    const isValid = await compare(currentPassword, user.password);
-    if (!isValid) {
-      return { success: false, error: 'Current password is incorrect' };
-    }
-
-    // Hash new password
-    const hashedPassword = await hash(newPassword, 12);
-
-    // Update password
-    await prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-    });
-
-    // Revoke all existing sessions so user must re-authenticate
-    await revokeAllUserSessions(userId);
-
-    // Log password change
-    await logAuditEvent({
-      event: AuditEvent.PASSWORD_CHANGED,
-      userId,
-    });
-
-    // Send password change notification (fire-and-forget)
-    try {
-      await emailService.sendEmail({
-        to: user.email,
-        template: emailService.passwordChangedNotificationEmail({
-          userName: user.name || user.email,
-          changedAt: new Date(),
-        }),
-      });
-    } catch (emailError) {
-      logger.error('Failed to send password change notification', {
-        error: emailError instanceof Error ? emailError.message : 'Unknown',
-      });
-    }
-
-    return { success: true };
-  } catch (error) {
-    logger.error('Password change error', {
-      error: error instanceof Error ? error.message : 'Unknown',
-    });
-    return { success: false, error: 'Failed to change password' };
-  }
-}
-
-/**
- * Get current authenticated user with workspace info
- */
-export async function getCurrentUser() {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: {
-      workspaceMembers: {
-        include: { workspace: true },
-      },
-    },
-  });
-
-  return user;
-}
-
-/**
- * Require authentication for server components
- */
-export async function requireAuth() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    throw new Error('Unauthorized');
-  }
-  return session;
-}
-
-/**
- * Check if user is admin
- */
-export async function requireAdmin() {
-  const session = await auth();
-  if (session?.user?.role !== 'ADMIN') {
-    throw new Error('Forbidden');
-  }
-  return session;
-}
-
-/**
- * Wrap an API route handler with authentication.
- * If the user is not authenticated, returns a 401 JSON response.
- *
- * @example
- * export const GET = withApiAuth(async (req, session) => {
- *   const userId = session.user.id;
- *   // ... handler logic
- *   return NextResponse.json({ data });
- * });
- */
-export function withApiAuth<TReq extends Request = Request, TContext = unknown>(
-  handler: (req: TReq, session: AuthSession, context: TContext) => Promise<NextResponse>
-): (req: TReq, context: TContext) => Promise<NextResponse> {
-  function wrapper(req: TReq, context: TContext): Promise<NextResponse> {
-    return (async () => {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json(
-          { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
-          { status: 401 }
-        );
-      }
-      return handler(req, session as AuthSession, context);
-    })();
-  }
-  return wrapper;
-}
+export {
+  getCurrentUser,
+  getCurrentUserId,
+  getCurrentWorkspaceId,
+  getServerSession,
+  requireAdmin,
+  requireAuth,
+  withApiAuth,
+} from './session';

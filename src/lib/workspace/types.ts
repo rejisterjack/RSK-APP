@@ -4,7 +4,7 @@
 
 export type MemberRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export type MemberStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'SUSPENDED';
-export type WorkspacePlan = 'FREE' | 'PRO' | 'ENTERPRISE';
+export type WorkspacePlan = 'FREE';
 export type InvitationStatus = 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'CANCELLED';
 
 export interface Workspace {

@@ -15,6 +15,7 @@ import {
   OpenSourceCTA,
   ScrollProgress,
   SetupAnimator,
+  Testimonials,
   UseCases,
   WhatsIncluded,
   WhoItsFor,
@@ -59,6 +60,9 @@ export default function HomePage(): React.ReactElement {
 
       {/* Tech Stack Marquee - Infinite scrolling badges */}
       <TechStackMarquee />
+
+      {/* Testimonials & Showcase */}
+      <Testimonials />
 
       {/* Open Source CTA - GitHub celebration + deploy badges */}
       <OpenSourceCTA />

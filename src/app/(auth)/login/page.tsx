@@ -137,7 +137,8 @@ export default function LoginPage(): React.ReactElement {
       if (method.type === 'saml') {
         redirectUrl = `/api/auth/saml/${workspaceId}/login?email=${encodeURIComponent(email)}&returnUrl=${encodeURIComponent(callbackUrl)}`;
       } else {
-        redirectUrl = `/api/auth/oauth/${method.id}?workspace=${workspaceId}&returnUrl=${encodeURIComponent(callbackUrl)}`;
+        // Use NextAuth's built-in OAuth for standard providers
+        redirectUrl = `/api/auth/signin/${method.id}?workspace=${workspaceId}&callbackUrl=${encodeURIComponent(callbackUrl)}`;
       }
       window.location.href = redirectUrl;
     },

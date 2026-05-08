@@ -5,7 +5,7 @@
  * POST /api/auth/verify-email             — Resend verification email
  */
 
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { type NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';

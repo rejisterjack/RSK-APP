@@ -25,6 +25,20 @@ export const defaultVectorSearchConfig: VectorSearchConfig = {
 };
 
 /**
+ * Runtime HNSW ef_search tuning.
+ * Higher values = better recall, slower queries.
+ * Defaults: 40 (fast), can be overridden via HNSW_EF_SEARCH env var.
+ */
+function getHNSWEfSearch(): number {
+  const envVal = process.env.HNSW_EF_SEARCH;
+  if (envVal) {
+    const parsed = Number.parseInt(envVal, 10);
+    if (parsed > 0 && parsed <= 1000) return parsed;
+  }
+  return 40;
+}
+
+/**
  * Get the SQL operator for the specified distance metric
  */
 function getDistanceOperator(metric: DistanceMetric): string {
@@ -184,6 +198,10 @@ export class VectorRetriever {
     `;
 
     try {
+      // Set HNSW ef_search for this session (tunes recall vs speed)
+      const efSearch = getHNSWEfSearch();
+      await prisma.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${efSearch}`);
+
       // Add embedding, threshold, and limit to params
       const queryParams = [...params, queryEmbedding, minScore, topK * 2]; // Get more for post-filtering
 

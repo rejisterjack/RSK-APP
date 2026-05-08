@@ -5,7 +5,7 @@
  * Uses LLM to extract the most relevant sentences from each chunk.
  */
 
-import { estimateTokens, generateChatCompletion } from '@/lib/ai';
+import { estimateTokens, generateTaskCompletion } from '@/lib/ai';
 import { logger } from '@/lib/logger';
 import type { CompressionConfig, RetrievedChunk } from './types';
 
@@ -160,8 +160,9 @@ export class ContextualCompressor {
       { role: 'user', content: prompt },
     ];
 
-    const { text } = await generateChatCompletion(
-      messages as unknown as Parameters<typeof generateChatCompletion>[0],
+    const { text } = await generateTaskCompletion(
+      'fast',
+      messages as unknown as Parameters<typeof generateTaskCompletion>[1],
       { temperature: 0.3, maxTokens: this.config.maxTokensPerChunk * 2 }
     );
 
@@ -201,8 +202,9 @@ export class ContextualCompressor {
       { role: 'user', content: prompt },
     ];
 
-    const { text } = await generateChatCompletion(
-      messages as unknown as Parameters<typeof generateChatCompletion>[0],
+    const { text } = await generateTaskCompletion(
+      'fast',
+      messages as unknown as Parameters<typeof generateTaskCompletion>[1],
       { temperature: 0.3, maxTokens: this.config.maxTokensPerChunk }
     );
 

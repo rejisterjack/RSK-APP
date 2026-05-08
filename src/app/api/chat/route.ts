@@ -29,6 +29,7 @@ import {
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { CitationHandler, sourcesToChunks } from '@/lib/rag/citations';
+import { defaultRAGConfig } from '@/lib/rag/engine';
 import { ConversationMemory } from '@/lib/rag/memory';
 import { retrieveSources } from '@/lib/rag/retrieval';
 import { estimateMessageTokens } from '@/lib/rag/token-budget';
@@ -53,14 +54,8 @@ import type { RAGConfig } from '@/types';
 // =============================================================================
 
 const defaultConfig: RAGConfig = {
-  chunkSize: 1000,
-  chunkOverlap: 200,
-  topK: 5,
-  similarityThreshold: 0.7,
-  temperature: 0.7,
-  maxTokens: 2000,
-  model: 'google/gemini-2.0-flash-exp:free',
-  embeddingModel: 'text-embedding-004',
+  ...defaultRAGConfig,
+  model: process.env.DEFAULT_MODEL || defaultRAGConfig.model,
 };
 
 /**
@@ -162,6 +157,11 @@ export async function POST(req: Request) {
     // Step 4: Extract and validate custom provider keys from headers
     const rawOpenRouterKey = req.headers.get('x-key-openrouter') || undefined;
     const rawFireworksKey = req.headers.get('x-key-fireworks') || undefined;
+    const rawGroqKey = req.headers.get('x-key-groq') || undefined;
+    const rawNvidiaKey = req.headers.get('x-key-nvidia') || undefined;
+    const rawCerebrasKey = req.headers.get('x-key-cerebras') || undefined;
+    const rawSambanovaKey = req.headers.get('x-key-sambanova') || undefined;
+    const rawMistralKey = req.headers.get('x-key-mistral') || undefined;
 
     // Validate format — reject obviously malformed keys
     if (rawOpenRouterKey && !rawOpenRouterKey.startsWith('sk-or-')) {
@@ -185,30 +185,55 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    // Enforce max length to prevent header abuse
-    const MAX_KEY_LENGTH = 256;
-    if (rawOpenRouterKey && rawOpenRouterKey.length > MAX_KEY_LENGTH) {
+    if (rawGroqKey && !rawGroqKey.startsWith('gsk_')) {
       return NextResponse.json(
         {
           success: false,
-          error: { code: 'INVALID_API_KEY', message: 'OpenRouter API key is too long.' },
+          error: { code: 'INVALID_API_KEY', message: 'Groq API key must start with "gsk_".' },
         },
         { status: 400 }
       );
     }
-    if (rawFireworksKey && rawFireworksKey.length > MAX_KEY_LENGTH) {
+    if (rawNvidiaKey && !rawNvidiaKey.startsWith('nvapi-')) {
       return NextResponse.json(
         {
           success: false,
-          error: { code: 'INVALID_API_KEY', message: 'Fireworks API key is too long.' },
+          error: { code: 'INVALID_API_KEY', message: 'NVIDIA API key must start with "nvapi-".' },
         },
         { status: 400 }
       );
+    }
+    // Enforce max length to prevent header abuse
+    const MAX_KEY_LENGTH = 256;
+    const keysToValidate = [
+      { key: rawOpenRouterKey, name: 'OpenRouter' },
+      { key: rawFireworksKey, name: 'Fireworks' },
+      { key: rawGroqKey, name: 'Groq' },
+      { key: rawNvidiaKey, name: 'NVIDIA' },
+      { key: rawCerebrasKey, name: 'Cerebras' },
+      { key: rawSambanovaKey, name: 'SambaNova' },
+      { key: rawMistralKey, name: 'Mistral' },
+    ];
+    for (const { key, name } of keysToValidate) {
+      if (key && key.length > MAX_KEY_LENGTH) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: { code: 'INVALID_API_KEY', message: `${name} API key is too long.` },
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const customKeys = {
       openrouter: rawOpenRouterKey,
       fireworks: rawFireworksKey,
+      groq: rawGroqKey,
+      nvidia: rawNvidiaKey,
+      cerebras: rawCerebrasKey,
+      sambanova: rawSambanovaKey,
+      mistral: rawMistralKey,
     };
 
     // Step 5: Parse and validate request body
@@ -1082,8 +1107,81 @@ export async function PATCH(req: Request) {
  */
 function getModel(
   modelName: string,
-  customKeys?: { openrouter?: string; fireworks?: string }
+  customKeys?: {
+    openrouter?: string;
+    fireworks?: string;
+    groq?: string;
+    nvidia?: string;
+    cerebras?: string;
+    sambanova?: string;
+    mistral?: string;
+  }
 ): LanguageModel {
+  // Groq models (prefix: "groq/")
+  if (modelName.startsWith('groq/')) {
+    const groqKey = customKeys?.groq || process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      throw new Error('Groq API key required. Set GROQ_API_KEY or provide your own key.');
+    }
+    const groq = createOpenAI({
+      baseURL: 'https://api.groq.com/openai/v1',
+      apiKey: groqKey,
+    });
+    return groq(modelName.slice(5)) as unknown as LanguageModel;
+  }
+
+  // NVIDIA NIM models (prefix: "nvidia-nim/")
+  if (modelName.startsWith('nvidia-nim/')) {
+    const nvidiaKey = customKeys?.nvidia || process.env.NVIDIA_API_KEY;
+    if (!nvidiaKey) {
+      throw new Error('NVIDIA API key required. Set NVIDIA_API_KEY or provide your own key.');
+    }
+    const nvidia = createOpenAI({
+      baseURL: 'https://integrate.api.nvidia.com/v1',
+      apiKey: nvidiaKey,
+    });
+    return nvidia(modelName.slice(11)) as unknown as LanguageModel;
+  }
+
+  // Cerebras models (prefix: "cerebras/")
+  if (modelName.startsWith('cerebras/')) {
+    const cerebrasKey = customKeys?.cerebras || process.env.CEREBRAS_API_KEY;
+    if (!cerebrasKey) {
+      throw new Error('Cerebras API key required. Set CEREBRAS_API_KEY or provide your own key.');
+    }
+    const cerebras = createOpenAI({
+      baseURL: 'https://api.cerebras.ai/v1',
+      apiKey: cerebrasKey,
+    });
+    return cerebras(modelName.slice(9)) as unknown as LanguageModel;
+  }
+
+  // SambaNova models (prefix: "sambanova/")
+  if (modelName.startsWith('sambanova/')) {
+    const sambanovaKey = customKeys?.sambanova || process.env.SAMBANOVA_API_KEY;
+    if (!sambanovaKey) {
+      throw new Error('SambaNova API key required. Set SAMBANOVA_API_KEY or provide your own key.');
+    }
+    const sambanova = createOpenAI({
+      baseURL: 'https://api.sambanova.ai/v1',
+      apiKey: sambanovaKey,
+    });
+    return sambanova(modelName.slice(10)) as unknown as LanguageModel;
+  }
+
+  // Mistral models (prefix: "mistral/")
+  if (modelName.startsWith('mistral/')) {
+    const mistralKey = customKeys?.mistral || process.env.MISTRAL_API_KEY;
+    if (!mistralKey) {
+      throw new Error('Mistral API key required. Set MISTRAL_API_KEY or provide your own key.');
+    }
+    const mistral = createOpenAI({
+      baseURL: 'https://api.mistral.ai/v1',
+      apiKey: mistralKey,
+    });
+    return mistral(modelName.slice(8)) as unknown as LanguageModel;
+  }
+
   // Fireworks AI models (prefixed with "accounts/fireworks/")
   if (modelName.startsWith('accounts/fireworks/')) {
     const fireworksKey = customKeys?.fireworks || env.FIREWORKS_API_KEY;
@@ -1117,7 +1215,15 @@ async function generateWithFallback(
     temperature: number;
     maxTokens: number;
     primaryModel: string;
-    customKeys?: { openrouter?: string; fireworks?: string };
+    customKeys?: {
+      openrouter?: string;
+      fireworks?: string;
+      groq?: string;
+      nvidia?: string;
+      cerebras?: string;
+      sambanova?: string;
+      mistral?: string;
+    };
   }
 ): Promise<{
   text: string;
@@ -1194,7 +1300,7 @@ async function maybeGenerateTitle(
   userMessage: string,
   assistantResponse: string,
   modelName: string,
-  customKeys?: { openrouter?: string; fireworks?: string }
+  customKeys?: { openrouter?: string; fireworks?: string; groq?: string; nvidia?: string }
 ): Promise<void> {
   try {
     // Check if chat has default title

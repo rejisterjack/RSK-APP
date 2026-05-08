@@ -67,8 +67,55 @@ vi.mock('@/lib/env', () => ({
     DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
     NEXTAUTH_SECRET: 'test-secret',
     NEXTAUTH_URL: 'http://localhost:3000',
+    ENCRYPTION_MASTER_KEY: 'test-encryption-key-for-vitest-32c',
+    GOOGLE_GENERATIVE_AI_API_KEY: 'test-google-api-key',
   },
 }));
+
+// Mock native/optional modules that may not be installed
+vi.mock('pdf2pic', () => ({
+  fromBuffer: vi.fn(() => ({
+    bulk: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+vi.mock('tesseract.js', () => ({
+  createWorker: vi.fn().mockResolvedValue({
+    recognize: vi.fn().mockResolvedValue({ data: { text: 'OCR text' } }),
+    terminate: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+vi.mock('nodemailer', () => ({
+  default: {
+    createTransport: vi.fn(() => ({
+      sendMail: vi.fn().mockResolvedValue({ messageId: 'test-msg-id' }),
+    })),
+  },
+}));
+
+vi.mock('ffmpeg-static', () => ({
+  default: '/path/to/ffmpeg',
+}));
+
+vi.mock('fluent-ffmpeg', () => {
+  return vi.fn(() => ({
+    setFfmpegPath: vi.fn().mockReturnThis(),
+    input: vi.fn().mockReturnThis(),
+    outputOptions: vi.fn().mockReturnThis(),
+    noVideo: vi.fn().mockReturnThis(),
+    audioCodec: vi.fn().mockReturnThis(),
+    save: vi.fn().mockReturnThis(),
+    on: vi.fn().mockImplementation(function (
+      this: unknown,
+      event: string,
+      cb: (arg?: unknown) => void
+    ) {
+      if (event === 'end') cb();
+      return this;
+    }),
+  }));
+});
 
 // ============================================================================
 // Browser APIs Mocks

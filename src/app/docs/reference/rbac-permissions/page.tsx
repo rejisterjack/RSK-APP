@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const roles = [
   {
     name: 'OWNER',
-    description: 'Full control over the workspace including billing and member management.',
+    description: 'Full control over the workspace including member management.',
     permissions: 'All permissions',
   },
   {

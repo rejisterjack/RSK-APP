@@ -18,12 +18,13 @@ import { cn } from '@/lib/utils';
 export interface ModelOption {
   id: string;
   name: string;
-  provider: 'openrouter' | 'fireworks';
+  provider: 'openrouter' | 'groq' | 'nvidia' | 'fireworks' | 'cerebras' | 'sambanova' | 'mistral';
   description: string;
   contextWindow: number;
   isFree?: boolean;
   isPremium?: boolean;
   badge?: string;
+  requiresKey?: string;
 }
 
 /**
@@ -178,6 +179,210 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     contextWindow: 40960,
     isFree: true,
   },
+  // ─── Groq Free Models (ultra-fast LPU inference) ──────────────────────────
+  // Requires GROQ_API_KEY from https://console.groq.com/keys
+  {
+    id: 'groq/llama-3.3-70b-versatile',
+    name: 'Groq: Llama 3.3 70B',
+    provider: 'groq',
+    description: 'Ultra-fast 70B model on LPU hardware, best for real-time chat',
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Fastest',
+    requiresKey: 'GROQ_API_KEY',
+  },
+  {
+    id: 'groq/meta-llama/llama-4-scout-17b-16e-instruct',
+    name: 'Groq: Llama 4 Scout',
+    provider: 'groq',
+    description: 'Latest Llama 4 MoE, 16 experts, ultra-fast streaming',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'GROQ_API_KEY',
+  },
+  {
+    id: 'groq/qwen/qwen3-32b',
+    name: 'Groq: Qwen3 32B',
+    provider: 'groq',
+    description: 'Strong multilingual model, fast inference',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'GROQ_API_KEY',
+  },
+  {
+    id: 'groq/mixtral-8x7b-32768',
+    name: 'Groq: Mixtral 8x7B',
+    provider: 'groq',
+    description: 'MoE with 32K context, great for long documents',
+    contextWindow: 32768,
+    isFree: true,
+    requiresKey: 'GROQ_API_KEY',
+  },
+
+  // ─── NVIDIA NIM Free Models (high-quality DGX Cloud) ──────────────────────
+  // Requires NVIDIA_API_KEY from https://build.nvidia.com/settings/api-keys
+  {
+    id: 'nvidia-nim/nvidia/llama-3.1-nemotron-70b-instruct',
+    name: 'NVIDIA: Nemotron 70B',
+    provider: 'nvidia',
+    description: 'NVIDIA fine-tuned Llama, best for accuracy and reasoning',
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Smartest',
+    requiresKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'nvidia-nim/deepseek-ai/deepseek-r1',
+    name: 'NVIDIA: DeepSeek R1',
+    provider: 'nvidia',
+    description: 'Chain-of-thought reasoning, great for complex analysis',
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Reasoning',
+    requiresKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'nvidia-nim/meta/llama-3.1-70b-instruct',
+    name: 'NVIDIA: Llama 3.1 70B',
+    provider: 'nvidia',
+    description: 'Meta Llama on DGX Cloud, reliable and capable',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'NVIDIA_API_KEY',
+  },
+  {
+    id: 'nvidia-nim/mistralai/mixtral-8x22b-instruct-v0.1',
+    name: 'NVIDIA: Mixtral 8x22B',
+    provider: 'nvidia',
+    description: 'Large MoE model, 141B params, strong quality',
+    contextWindow: 65536,
+    isFree: true,
+    requiresKey: 'NVIDIA_API_KEY',
+  },
+
+  // ─── Cerebras Free Models (fastest inference on the planet) ────────────────
+  // Requires CEREBRAS_API_KEY from https://cloud.cerebras.ai
+  {
+    id: 'cerebras/llama-4-scout-17b-16e-instruct',
+    name: 'Cerebras: Llama 4 Scout',
+    provider: 'cerebras',
+    description: '~2200 tok/s, Llama 4 MoE on wafer-scale hardware',
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Fastest',
+    requiresKey: 'CEREBRAS_API_KEY',
+  },
+  {
+    id: 'cerebras/gpt-oss-120b',
+    name: 'Cerebras: GPT-oss 120B',
+    provider: 'cerebras',
+    description: 'Ultra-fast OpenAI OSS, excellent reasoning quality',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'CEREBRAS_API_KEY',
+  },
+  {
+    id: 'cerebras/llama3.1-8b',
+    name: 'Cerebras: Llama 3.1 8B',
+    provider: 'cerebras',
+    description: 'Blazing fast 8B model, ~2200 tok/s, great for quick queries',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'CEREBRAS_API_KEY',
+  },
+  {
+    id: 'cerebras/qwen-2.5-coder-32b',
+    name: 'Cerebras: Qwen 2.5 Coder 32B',
+    provider: 'cerebras',
+    description: 'Code-specialist Qwen at extreme speed',
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Code',
+    requiresKey: 'CEREBRAS_API_KEY',
+  },
+
+  // ─── SambaNova Free Models (fast Llama & DeepSeek) ────────────────────────
+  // Requires SAMBANOVA_API_KEY from https://cloud.sambanova.ai
+  {
+    id: 'sambanova/DeepSeek-V3.1',
+    name: 'SambaNova: DeepSeek V3.1',
+    provider: 'sambanova',
+    description: 'Latest DeepSeek, top open-source quality, fast inference',
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Smartest',
+    requiresKey: 'SAMBANOVA_API_KEY',
+  },
+  {
+    id: 'sambanova/DeepSeek-R1',
+    name: 'SambaNova: DeepSeek R1',
+    provider: 'sambanova',
+    description: 'Chain-of-thought reasoning on fast hardware',
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Reasoning',
+    requiresKey: 'SAMBANOVA_API_KEY',
+  },
+  {
+    id: 'sambanova/Llama-4-Maverick-17B-128E',
+    name: 'SambaNova: Llama 4 Maverick',
+    provider: 'sambanova',
+    description: 'Latest Llama 4, 128 experts, strong quality',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'SAMBANOVA_API_KEY',
+  },
+  {
+    id: 'sambanova/Meta-Llama-3.3-70B-Instruct',
+    name: 'SambaNova: Llama 3.3 70B',
+    provider: 'sambanova',
+    description: 'Meta Llama 3.3 on fast SambaNova hardware',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'SAMBANOVA_API_KEY',
+  },
+
+  // ─── Mistral Free Models (Codestral + Mistral Large) ──────────────────────
+  // Requires MISTRAL_API_KEY from https://console.mistral.ai
+  {
+    id: 'mistral/mistral-large-latest',
+    name: 'Mistral: Large',
+    provider: 'mistral',
+    description: "Mistral's flagship model, strong reasoning and multilingual",
+    contextWindow: 131072,
+    isFree: true,
+    badge: 'Recommended',
+    requiresKey: 'MISTRAL_API_KEY',
+  },
+  {
+    id: 'mistral/codestral-latest',
+    name: 'Mistral: Codestral',
+    provider: 'mistral',
+    description: 'Specialized code generation model, 22B params',
+    contextWindow: 262144,
+    isFree: true,
+    badge: 'Code',
+    requiresKey: 'MISTRAL_API_KEY',
+  },
+  {
+    id: 'mistral/mistral-small-latest',
+    name: 'Mistral: Small',
+    provider: 'mistral',
+    description: 'Fast and efficient, great for simple tasks',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'MISTRAL_API_KEY',
+  },
+  {
+    id: 'mistral/open-mistral-nemo',
+    name: 'Mistral: Nemo',
+    provider: 'mistral',
+    description: 'Open-weight 12B, multilingual, good for RAG',
+    contextWindow: 131072,
+    isFree: true,
+    requiresKey: 'MISTRAL_API_KEY',
+  },
+
   // ─── OpenRouter Premium Models (require own API key) ──────────────────────
   {
     id: 'anthropic/claude-3.5-sonnet',
@@ -299,6 +504,16 @@ function getProviderIcon(provider: ModelOption['provider']) {
       return <Sparkles className="h-4 w-4 text-yellow-500" />;
     case 'fireworks':
       return <Sparkles className="h-4 w-4 text-orange-500" />;
+    case 'groq':
+      return <Cpu className="h-4 w-4 text-purple-500" />;
+    case 'nvidia':
+      return <Cpu className="h-4 w-4 text-green-600" />;
+    case 'cerebras':
+      return <Cpu className="h-4 w-4 text-red-500" />;
+    case 'sambanova':
+      return <Cpu className="h-4 w-4 text-teal-500" />;
+    case 'mistral':
+      return <Cpu className="h-4 w-4 text-blue-500" />;
     default:
       return <Cpu className="h-4 w-4" />;
   }
@@ -316,16 +531,27 @@ export function ModelPicker({
   // Determine which providers have custom API keys set
   const hasOpenRouterKey = hasKey('openrouter');
   const hasFireworksKey = hasKey('fireworks');
+  const hasGroqKey = hasKey('groq');
+  const hasNvidiaKey = hasKey('nvidia');
+  const hasCerebrasKey = hasKey('cerebras');
+  const hasSambanovaKey = hasKey('sambanova');
+  const hasMistralKey = hasKey('mistral');
 
-  /**
-   * Filter models based on which API keys the user has set:
-   * - Free models are always visible
-   * - Premium OpenRouter models visible when openrouter key is set
-   * - Fireworks premium models visible when fireworks key is set
-   */
   const visibleModels = useMemo(() => {
     return AVAILABLE_MODELS.filter((model) => {
-      // Free models are always available
+      // Provider-locked models require their specific key
+      if (model.requiresKey) {
+        const keyMap: Record<string, boolean> = {
+          GROQ_API_KEY: hasGroqKey,
+          NVIDIA_API_KEY: hasNvidiaKey,
+          CEREBRAS_API_KEY: hasCerebrasKey,
+          SAMBANOVA_API_KEY: hasSambanovaKey,
+          MISTRAL_API_KEY: hasMistralKey,
+        };
+        return keyMap[model.requiresKey] ?? false;
+      }
+
+      // Free models without requiresKey are always available
       if (model.isFree) return true;
 
       // Premium models require the corresponding API key
@@ -335,11 +561,24 @@ export function ModelPicker({
 
       return false;
     });
-  }, [hasOpenRouterKey, hasFireworksKey]);
+  }, [
+    hasOpenRouterKey,
+    hasFireworksKey,
+    hasGroqKey,
+    hasNvidiaKey,
+    hasCerebrasKey,
+    hasSambanovaKey,
+    hasMistralKey,
+  ]);
 
   const currentModel = visibleModels.find((m) => m.id === selectedModel) || visibleModels[0];
 
-  const freeModels = visibleModels.filter((m) => m.isFree);
+  const freeModels = visibleModels.filter((m) => m.isFree && !m.requiresKey);
+  const groqModels = visibleModels.filter((m) => m.provider === 'groq');
+  const cerebrasModels = visibleModels.filter((m) => m.provider === 'cerebras');
+  const sambanovaModels = visibleModels.filter((m) => m.provider === 'sambanova');
+  const nvidiaModels = visibleModels.filter((m) => m.provider === 'nvidia');
+  const mistralModels = visibleModels.filter((m) => m.provider === 'mistral');
   const premiumOpenRouterModels = visibleModels.filter(
     (m) => m.provider === 'openrouter' && m.isPremium
   );
@@ -350,6 +589,11 @@ export function ModelPicker({
   // Count how many providers are locked
   const lockedProviders: string[] = [];
   if (!hasOpenRouterKey) lockedProviders.push('OpenRouter Premium');
+  if (!hasGroqKey) lockedProviders.push('Groq');
+  if (!hasCerebrasKey) lockedProviders.push('Cerebras');
+  if (!hasSambanovaKey) lockedProviders.push('SambaNova');
+  if (!hasNvidiaKey) lockedProviders.push('NVIDIA NIM');
+  if (!hasMistralKey) lockedProviders.push('Mistral');
   if (!hasFireworksKey) lockedProviders.push('Fireworks AI');
 
   const renderModelItem = (model: ModelOption) => (
@@ -439,6 +683,46 @@ export function ModelPicker({
         {/* Free tier models — always visible */}
         {renderGroup('Free Models', freeModels)}
 
+        {/* Groq models — ultra-fast LPU inference */}
+        {groqModels.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {renderGroup('Groq (Ultra-Fast)', groqModels)}
+          </>
+        )}
+
+        {/* Cerebras models — fastest inference on the planet */}
+        {cerebrasModels.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {renderGroup('Cerebras (Fastest)', cerebrasModels)}
+          </>
+        )}
+
+        {/* SambaNova models — fast Llama & DeepSeek */}
+        {sambanovaModels.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {renderGroup('SambaNova (Fast + Smart)', sambanovaModels)}
+          </>
+        )}
+
+        {/* NVIDIA models — high-quality DGX Cloud */}
+        {nvidiaModels.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {renderGroup('NVIDIA NIM (High Quality)', nvidiaModels)}
+          </>
+        )}
+
+        {/* Mistral models — Codestral + Large */}
+        {mistralModels.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {renderGroup('Mistral AI (General + Code)', mistralModels)}
+          </>
+        )}
+
         {/* Premium models — visible only with API keys */}
         {hasPremiumModels && (
           <>
@@ -450,9 +734,8 @@ export function ModelPicker({
           </>
         )}
 
-        {premiumOpenRouterModels.length > 0 && (
-          <>{renderGroup('OpenRouter Premium', premiumOpenRouterModels)}</>
-        )}
+        {premiumOpenRouterModels.length > 0 &&
+          renderGroup('OpenRouter Premium', premiumOpenRouterModels)}
 
         {fireworksModels.length > 0 && (
           <>

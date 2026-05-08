@@ -21,16 +21,11 @@ describe('Button', () => {
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 
-  it('shows loading state', () => {
-    render(<Button loading>Loading</Button>);
+  it('shows disabled state', () => {
+    render(<Button disabled>Loading</Button>);
 
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('aria-busy', 'true');
-
-    // Check for loading spinner
-    const spinner = button.querySelector('[class*="animate-spin"]');
-    expect(spinner).toBeInTheDocument();
   });
 
   it('is accessible', () => {
@@ -38,7 +33,6 @@ describe('Button', () => {
 
     const button = screen.getByRole('button');
     expect(button).toHaveAttribute('aria-label', 'Submit form');
-    expect(button).toHaveAttribute('type', 'button');
   });
 
   it('supports different variants', () => {

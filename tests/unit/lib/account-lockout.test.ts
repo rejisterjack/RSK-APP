@@ -31,13 +31,13 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock Redis
-vi.mock('@/lib/security/rate-limiter', () => ({
-  redis: {
-    get: vi.fn(),
-    set: vi.fn(),
-    del: vi.fn(),
-  },
+// Mock Redis — export redis as null so isRedisAvailable() returns false
+// and the module falls back to the in-memory store
+vi.mock('@/lib/redis', () => ({
+  redis: null,
+  getRedis: vi.fn(),
+  getUpstashRedis: vi.fn(),
+  isRedisConfigured: vi.fn().mockReturnValue(false),
 }));
 
 describe('Account Lockout', () => {
@@ -144,7 +144,7 @@ describe('Account Lockout', () => {
       const stats = await getLockoutStats();
       expect(stats.totalTracking).toBe(2);
       expect(stats.totalLocked).toBe(1);
-      expect(stats.usingRedis).toBe(false); // Mock returns false
+      expect(stats.usingRedis).toBeFalsy(); // Not using Redis in test
     });
   });
 

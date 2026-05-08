@@ -1,6 +1,15 @@
 'use client';
 
-import { ChevronDown, ChevronUp, History, Menu, PanelLeft, Plus, Settings } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  History,
+  Menu,
+  PanelLeft,
+  Plus,
+  Settings,
+  Sparkles,
+} from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { AgentModeToggleCompact } from '@/components/agent/agent-mode-toggle';
 import { Button } from '@/components/ui/button';
@@ -13,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useFeatureLevel } from '@/hooks/use-feature-level';
 import { cn } from '@/lib/utils';
 import { ApiKeySettings } from './api-key-settings';
 import { useChatContext } from './chat-context';
@@ -42,6 +52,7 @@ export const ChatHeader = memo(function ChatHeader({
   onToggleMobileSidebar,
 }: ChatHeaderProps) {
   const { state, dispatch } = useChatContext();
+  const { level, isFeatureVisible, unlockAdvanced } = useFeatureLevel();
 
   const handleAgentModeToggle = useCallback(
     (enabled: boolean) => {
@@ -112,18 +123,24 @@ export const ChatHeader = memo(function ChatHeader({
       <div className="flex items-center gap-1 md:gap-3">
         {/* Desktop-only: Model picker + Agent mode + API key */}
         <div className="hidden md:flex items-center gap-3">
-          <ModelPicker
-            selectedModel={selectedModel}
-            onModelChange={onModelChange || (() => {})}
-            disabled={isStreaming}
-          />
-          <AgentModeToggleCompact
-            enabled={state.isAgentMode}
-            onToggle={handleAgentModeToggle}
-            disabled={isStreaming}
-          />
-          <ApiKeySettings />
-          {chatId && <ShareDialog chatId={chatId} chatTitle={chatTitle || 'Chat'} />}
+          {isFeatureVisible(1) && (
+            <ModelPicker
+              selectedModel={selectedModel}
+              onModelChange={onModelChange || (() => {})}
+              disabled={isStreaming}
+            />
+          )}
+          {isFeatureVisible(1) && (
+            <AgentModeToggleCompact
+              enabled={state.isAgentMode}
+              onToggle={handleAgentModeToggle}
+              disabled={isStreaming}
+            />
+          )}
+          {isFeatureVisible(2) && <ApiKeySettings />}
+          {chatId && isFeatureVisible(1) && (
+            <ShareDialog chatId={chatId} chatTitle={chatTitle || 'Chat'} />
+          )}
         </div>
 
         {/* Right controls group */}
@@ -197,6 +214,18 @@ export const ChatHeader = memo(function ChatHeader({
               <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/20 focus:text-primary cursor-default transition-colors font-medium">
                 <span className="text-muted-foreground mr-1">Streaming:</span> Enabled
               </DropdownMenuItem>
+              {level < 2 && (
+                <>
+                  <DropdownMenuSeparator className="bg-border/20" />
+                  <DropdownMenuItem
+                    className="rounded-xl px-3 py-2.5 focus:bg-primary/20 focus:text-primary cursor-pointer transition-colors font-medium"
+                    onClick={unlockAdvanced}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-2 text-primary" />
+                    Show all features
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -205,18 +234,24 @@ export const ChatHeader = memo(function ChatHeader({
       {/* ── Mobile "More" expandable row ─────────────────────────── */}
       {state.isMobileMoreOpen && (
         <div className="absolute top-full left-0 right-0 bg-background/95 backdrop-blur-md border-b border-border/20 p-2 flex items-center gap-2 z-40 md:hidden">
-          <ModelPicker
-            selectedModel={selectedModel}
-            onModelChange={onModelChange || (() => {})}
-            disabled={isStreaming}
-          />
-          <AgentModeToggleCompact
-            enabled={state.isAgentMode}
-            onToggle={handleAgentModeToggle}
-            disabled={isStreaming}
-          />
-          <ApiKeySettings />
-          {chatId && <ShareDialog chatId={chatId} chatTitle={chatTitle || 'Chat'} />}
+          {isFeatureVisible(1) && (
+            <ModelPicker
+              selectedModel={selectedModel}
+              onModelChange={onModelChange || (() => {})}
+              disabled={isStreaming}
+            />
+          )}
+          {isFeatureVisible(1) && (
+            <AgentModeToggleCompact
+              enabled={state.isAgentMode}
+              onToggle={handleAgentModeToggle}
+              disabled={isStreaming}
+            />
+          )}
+          {isFeatureVisible(2) && <ApiKeySettings />}
+          {chatId && isFeatureVisible(1) && (
+            <ShareDialog chatId={chatId} chatTitle={chatTitle || 'Chat'} />
+          )}
         </div>
       )}
     </header>

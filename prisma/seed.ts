@@ -393,8 +393,30 @@ async function main() {
   console.log(`✅ Demo user added to workspace`);
 
   // -------------------------------------------------------------------------
-  // 4. Sample documents (metadata only — no actual embeddings in seed)
+  // 4. Sample documents with real embeddings
   // -------------------------------------------------------------------------
+  let embeddingProvider: { embedQuery: (text: string) => Promise<number[]> } | null = null;
+
+  try {
+    const { createEmbeddingProviderFromEnv } = await import('../src/lib/ai/embeddings');
+    embeddingProvider = createEmbeddingProviderFromEnv();
+    console.log('✅ Embedding provider initialized');
+  } catch {
+    console.log('⚠️  Embedding provider not available — chunks will be created without vectors');
+    console.log('   Set GOOGLE_GENERATIVE_AI_API_KEY to enable real embeddings in seed.');
+  }
+
+  // Helper: chunk text into pieces of roughly `size` characters with overlap
+  function chunkText(text: string, size: number, overlap: number): string[] {
+    const chunks: string[] = [];
+    let start = 0;
+    while (start < text.length) {
+      chunks.push(text.slice(start, start + size));
+      start += size - overlap;
+    }
+    return chunks;
+  }
+
   for (const doc of SAMPLE_DOCUMENTS) {
     const existing = await prisma.document.findFirst({
       where: {
@@ -415,24 +437,57 @@ async function main() {
           workspaceId: workspace.id,
           metadata: {
             seeded: true,
-            seedVersion: '1.0.0',
+            seedVersion: '2.0.0',
           },
         },
       });
 
-      // Create a sample chunk for each document (without actual vector embeddings)
-      // Real embeddings are created during actual ingestion via Inngest
-      await prisma.documentChunk.create({
-        data: {
-          documentId: document.id,
-          content: doc.content.slice(0, 800),
-          index: 0,
-          start: 0,
-          end: Math.min(800, doc.content.length),
-        },
-      });
+      // Split document into chunks matching the default RAG config
+      const textChunks = chunkText(doc.content, 1000, 200);
 
-      console.log(`✅ Document: ${doc.name}`);
+      for (let i = 0; i < textChunks.length; i++) {
+        const chunkContent = textChunks[i]!;
+        const start = i * 800;
+        const end = Math.min(start + 1000, doc.content.length);
+
+        let embeddingValue: string | null = null;
+
+        if (embeddingProvider) {
+          try {
+            const vector = await embeddingProvider.embedQuery(chunkContent);
+            // Format as pgvector literal: '[0.1,0.2,...]'
+            embeddingValue = `[${vector.join(',')}]`;
+          } catch {
+            console.log(`   ⚠️  Embedding failed for chunk ${i}, creating without vector`);
+          }
+        }
+
+        if (embeddingValue) {
+          // Use raw SQL to insert with the vector embedding
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO document_chunks (id, "documentId", content, index, start, end, embedding, "createdAt")
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, NOW())`,
+            document.id,
+            chunkContent,
+            i,
+            start,
+            end,
+            embeddingValue
+          );
+        } else {
+          await prisma.documentChunk.create({
+            data: {
+              documentId: document.id,
+              content: chunkContent,
+              index: i,
+              start,
+              end,
+            },
+          });
+        }
+      }
+
+      console.log(`✅ Document: ${doc.name} (${textChunks.length} chunks)`);
     } else {
       console.log(`⏭️  Skipped (exists): ${doc.name}`);
     }
@@ -503,108 +558,12 @@ async function main() {
     console.log(`⏭️  Skipped (exists): Sample chat`);
   }
 
-  // -------------------------------------------------------------------------
-  // 6. Seed plans (for billing schema completeness)
-  // -------------------------------------------------------------------------
-  await prisma.plan.upsert({
-    where: { name: 'free' },
-    update: {},
-    create: {
-      name: 'free',
-      displayName: 'Self-Hosted (Free)',
-      description: 'Full-featured self-hosted deployment. MIT licensed.',
-      priceMonth: 0,
-      priceYear: 0,
-      maxWorkspaces: 1,
-      maxDocuments: 100,
-      maxStorageBytes: BigInt(1024 * 1024 * 1024), // 1GB
-      maxMessages: 10000,
-      maxApiCalls: 50000,
-      features: {
-        rag: true,
-        voice: true,
-        collaboration: true,
-        agentMode: true,
-        apiAccess: true,
-        samlSso: false,
-        prioritySupport: false,
-      },
-      isActive: true,
-      sortOrder: 0,
-    },
-  });
-
-  await prisma.plan.upsert({
-    where: { name: 'cloud' },
-    update: {},
-    create: {
-      name: 'cloud',
-      displayName: 'Cloud Hosted',
-      description: 'Managed cloud deployment. Coming soon.',
-      priceMonth: 0,
-      priceYear: 0,
-      maxWorkspaces: 3,
-      maxDocuments: 500,
-      maxStorageBytes: BigInt(10 * 1024 * 1024 * 1024), // 10GB
-      maxMessages: 100000,
-      maxApiCalls: 500000,
-      features: {
-        rag: true,
-        voice: true,
-        collaboration: true,
-        agentMode: true,
-        apiAccess: true,
-        managedInfra: true,
-        samlSso: false,
-        prioritySupport: true,
-      },
-      isActive: false, // Not yet launched
-      sortOrder: 1,
-    },
-  });
-
-  await prisma.plan.upsert({
-    where: { name: 'enterprise' },
-    update: {},
-    create: {
-      name: 'enterprise',
-      displayName: 'Enterprise',
-      description: 'Dedicated infrastructure with SLA. Contact us.',
-      priceMonth: 0,
-      priceYear: 0,
-      maxWorkspaces: -1, // unlimited
-      maxDocuments: -1,
-      maxStorageBytes: BigInt(-1), // unlimited
-      maxMessages: -1,
-      maxApiCalls: -1,
-      features: {
-        rag: true,
-        voice: true,
-        collaboration: true,
-        agentMode: true,
-        apiAccess: true,
-        managedInfra: true,
-        samlSso: true,
-        dedicatedInfra: true,
-        customSla: true,
-        prioritySupport: true,
-        whiteLabel: true,
-      },
-      isActive: true,
-      sortOrder: 2,
-    },
-  });
-
-  console.log(`✅ Plans seeded (free, cloud, enterprise)`);
-
   console.log('\n🎉 Seed complete!');
   console.log('\nDemo accounts:');
   console.log('  Admin: admin@rag-starter.dev / Admin1234!');
   console.log('  Demo:  demo@rag-starter.dev  / Demo1234!');
-  console.log('\nSample documents loaded into "Demo Workspace".');
-  console.log(
-    'Note: Vector embeddings are not seeded — upload real documents to enable RAG search.\n'
-  );
+  console.log('\nSample documents loaded into "Demo Workspace" with real embeddings.');
+  console.log('The chatbot is ready to answer questions about the loaded docs!\n');
 }
 
 main()

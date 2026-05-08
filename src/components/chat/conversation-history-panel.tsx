@@ -1,7 +1,7 @@
 'use client';
 
 import { Clock, FileText, MessageSquare, Plus, Search, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -173,12 +173,60 @@ export function ConversationHistoryPanel({
     };
   }, [isOpen]);
 
-  // Filter conversations by search query
-  const filteredConversations = useMemo(() => {
-    if (!searchQuery.trim()) return conversations;
-    const q = searchQuery.toLowerCase();
-    return conversations.filter((c) => c.title.toLowerCase().includes(q));
-  }, [conversations, searchQuery]);
+  // Debounced server-side search
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    // No query = reload all conversations
+    if (!searchQuery.trim()) {
+      let cancelled = false;
+      async function load() {
+        setIsLoading(true);
+        try {
+          const response = await fetch('/api/v1/chats?limit=50');
+          if (!response.ok) throw new Error('Failed to fetch');
+          const json = await response.json();
+          if (!cancelled) setConversations(json.data as ConversationSummary[]);
+        } catch {
+          if (!cancelled) toast.error('Failed to load conversations');
+        } finally {
+          if (!cancelled) setIsLoading(false);
+        }
+      }
+      load();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Debounce search queries (300ms)
+    searchTimerRef.current = setTimeout(async () => {
+      let cancelled = false;
+      setIsLoading(true);
+      try {
+        const response = await fetch(
+          `/api/v1/chats?limit=50&search=${encodeURIComponent(searchQuery.trim())}`
+        );
+        if (!response.ok) throw new Error('Search failed');
+        const json = await response.json();
+        if (!cancelled) setConversations(json.data as ConversationSummary[]);
+      } catch {
+        if (!cancelled) toast.error('Search failed');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [isOpen, searchQuery]);
 
   // Handlers
   const handleSelect = useCallback(
@@ -313,11 +361,11 @@ export function ConversationHistoryPanel({
             <ConversationListSkeleton />
           ) : conversations.length === 0 ? (
             <EmptyConversationState onNewChat={onNewChat} />
-          ) : filteredConversations.length === 0 ? (
+          ) : conversations.length === 0 ? (
             <NoSearchResults query={searchQuery} />
           ) : (
             <div className="px-2 pb-4 space-y-1">
-              {filteredConversations.map((conversation) => {
+              {conversations.map((conversation) => {
                 const isCurrentChat = conversation.id === currentChatId;
                 const isConfirmingDelete = conversation.id === deleteConfirmId;
 

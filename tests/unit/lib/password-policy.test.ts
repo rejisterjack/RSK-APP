@@ -110,7 +110,7 @@ describe('Password Policy', () => {
     it('should accept valid password change', () => {
       const result = changePasswordSchema.safeParse({
         currentPassword: 'OldPass123!',
-        newPassword: 'NewPass456@',
+        newPassword: 'NewPass4567@',
       });
 
       expect(result.success).toBe(true);

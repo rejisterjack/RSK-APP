@@ -108,8 +108,21 @@ export class FixedChunker implements Chunker {
     text: string,
     chunkSize: number,
     chunkOverlap: number,
-    separators: string[]
+    separators: string[],
+    depth: number = 0
   ): string[] {
+    // Prevent infinite recursion
+    if (depth > 5) {
+      const trimmed = text.trim();
+      return trimmed.length > 0 ? [trimmed] : [];
+    }
+
+    // If text already fits in chunk size, return it directly
+    if (text.length <= chunkSize) {
+      const trimmed = text.trim();
+      return trimmed.length > 0 ? [trimmed] : [];
+    }
+
     const chunks: string[] = [];
     const separator = this.getAppropriateSeparator(text, separators);
 
@@ -152,7 +165,7 @@ export class FixedChunker implements Chunker {
     }
 
     // Handle chunks that are still too large
-    return this.mergeOrSplitChunks(chunks, chunkSize, chunkOverlap, separators);
+    return this.mergeOrSplitChunks(chunks, chunkSize, chunkOverlap, separators, depth);
   }
 
   /**
@@ -198,8 +211,14 @@ export class FixedChunker implements Chunker {
     chunks: string[],
     chunkSize: number,
     chunkOverlap: number,
-    separators: string[]
+    separators: string[],
+    depth: number = 0
   ): string[] {
+    // Prevent infinite recursion
+    if (depth > 5) {
+      return chunks;
+    }
+
     const result: string[] = [];
 
     for (const chunk of chunks) {
@@ -210,7 +229,8 @@ export class FixedChunker implements Chunker {
           chunk,
           chunkSize,
           chunkOverlap,
-          subSeparator ? [subSeparator] : ['']
+          subSeparator ? [subSeparator] : [''],
+          depth + 1
         );
         result.push(...subChunks);
       } else if (result.length > 0 && result[result.length - 1].length + chunk.length < chunkSize) {

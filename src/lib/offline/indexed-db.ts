@@ -86,9 +86,7 @@ export function getDB(): Promise<IDBDatabase> {
         dbPromise = null;
       };
 
-      dbInstance.onerror = (event) => {
-        console.error('[OfflineDB] Database error:', event);
-      };
+      dbInstance.onerror = (_event) => {};
 
       resolve(dbInstance);
     };
@@ -98,9 +96,7 @@ export function getDB(): Promise<IDBDatabase> {
       reject(request.error);
     };
 
-    request.onblocked = () => {
-      console.warn('[OfflineDB] Database blocked - close other tabs');
-    };
+    request.onblocked = () => {};
   });
 
   return dbPromise;
@@ -437,7 +433,6 @@ export const pendingActions = {
     } catch (error) {
       // If constraint error (duplicate idempotency key), skip
       if ((error as DOMException)?.name === 'ConstraintError') {
-        console.warn('[OfflineDB] Duplicate action skipped:', action.idempotencyKey);
         return;
       }
       throw error;
@@ -726,9 +721,7 @@ export async function runMaintenance(): Promise<void> {
     await pendingActions.deleteExpired();
     await pendingActions.deleteCompleted();
     await apiCache.evictOldest(200);
-  } catch (error) {
-    console.error('[OfflineDB] Maintenance error:', error);
-  }
+  } catch (_error) {}
 }
 
 /**
@@ -758,8 +751,7 @@ export async function checkHealth(): Promise<{
       },
       quota,
     };
-  } catch (error) {
-    console.error('[OfflineDB] Health check failed:', error);
+  } catch (_error) {
     return {
       healthy: false,
       stores: {},
