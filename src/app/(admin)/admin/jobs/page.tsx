@@ -2,6 +2,7 @@
 
 import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw, XCircle, Zap } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -134,6 +135,7 @@ export default function AdminJobsPage(): React.ReactElement {
         setJobs(data.jobs || []);
       }
     } catch (_error: unknown) {
+      toast.error('Failed to load jobs');
     } finally {
       setIsLoading(false);
       setLastRefresh(new Date());

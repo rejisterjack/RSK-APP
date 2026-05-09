@@ -2,6 +2,7 @@
 
 import { Check, Copy, ExternalLink, Plus, Shield, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -86,7 +87,9 @@ export default function SSOManagementPage(): React.ReactElement {
       const data = await response.json();
       setConnections(data.connections);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const msg = err instanceof Error ? err.message : 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     }
   }, []);
 
@@ -96,7 +99,9 @@ export default function SSOManagementPage(): React.ReactElement {
       if (!response.ok) throw new Error('Failed to fetch workspaces');
       const data = await response.json();
       setWorkspaces(data.workspaces);
-    } catch (_err) {}
+    } catch (_err) {
+      toast.error('Failed to load workspaces');
+    }
   }, []);
 
   useEffect(() => {
@@ -124,6 +129,7 @@ export default function SSOManagementPage(): React.ReactElement {
       }
 
       setDialogOpen(false);
+      toast.success('SSO connection created');
       setFormData({
         workspaceId: '',
         idpMetadata: '',

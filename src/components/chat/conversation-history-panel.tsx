@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, FileText, MessageSquare, Plus, Search, Trash2 } from 'lucide-react';
+import { Clock, FileText, Loader2, MessageSquare, Plus, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -141,6 +141,8 @@ export function ConversationHistoryPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<'markdown' | 'json' | null>(null);
 
   // Fetch conversations when the sheet opens
   useEffect(() => {
@@ -239,8 +241,9 @@ export function ConversationHistoryPanel({
 
   const handleDelete = useCallback(
     async (chatId: string) => {
+      setDeletingId(chatId);
       try {
-        const response = await fetch(`/api/v1/chats/${chatId}`, {
+        const response = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`, {
           method: 'DELETE',
         });
         if (!response.ok) throw new Error('Failed to delete conversation');
@@ -251,6 +254,7 @@ export function ConversationHistoryPanel({
       } catch (_err) {
         toast.error('Failed to delete conversation');
       } finally {
+        setDeletingId(null);
         setDeleteConfirmId(null);
       }
     },
@@ -258,6 +262,7 @@ export function ConversationHistoryPanel({
   );
 
   const handleExportMarkdown = useCallback(async (chatId: string, title: string) => {
+    setExportingFormat('markdown');
     try {
       const response = await fetch(`/api/export/conversation?id=${chatId}&format=markdown`);
       if (!response.ok) throw new Error('Failed to export conversation');
@@ -275,10 +280,13 @@ export function ConversationHistoryPanel({
       toast.success('Exported as Markdown');
     } catch (_err) {
       toast.error('Failed to export conversation');
+    } finally {
+      setExportingFormat(null);
     }
   }, []);
 
   const handleExportJson = useCallback(async (chatId: string, title: string) => {
+    setExportingFormat('json');
     try {
       const response = await fetch(`/api/export/conversation?id=${chatId}&format=json`);
       if (!response.ok) throw new Error('Failed to export conversation');
@@ -296,6 +304,8 @@ export function ConversationHistoryPanel({
       toast.success('Exported as JSON');
     } catch (_err) {
       toast.error('Failed to export conversation');
+    } finally {
+      setExportingFormat(null);
     }
   }, []);
 
@@ -332,7 +342,11 @@ export function ConversationHistoryPanel({
         {/* Search + New Chat row */}
         <div className="px-4 pt-3 pb-2 space-y-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {isLoading && searchQuery.trim() ? (
+              <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+            ) : (
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            )}
             <Input
               placeholder="Search conversations..."
               value={searchQuery}
@@ -417,6 +431,8 @@ export function ConversationHistoryPanel({
                             title={conversation.title}
                             isShared={conversation.isShared}
                             shareToken={conversation.shareToken}
+                            isExporting={exportingFormat !== null}
+                            isDeleting={deletingId === conversation.id}
                             onExportMarkdown={handleExportMarkdown}
                             onExportJson={handleExportJson}
                             onCopyShareLink={handleCopyShareLink}
@@ -450,15 +466,21 @@ export function ConversationHistoryPanel({
                           variant="destructive"
                           size="sm"
                           className="h-7 text-xs rounded-full px-3"
+                          disabled={deletingId === conversation.id}
                           onClick={() => handleDelete(conversation.id)}
                         >
-                          <Trash2 className="h-3 w-3 mr-1" />
-                          Delete
+                          {deletingId === conversation.id ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3 mr-1" />
+                          )}
+                          {deletingId === conversation.id ? 'Deleting...' : 'Delete'}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs rounded-full px-3"
+                          disabled={deletingId === conversation.id}
                           onClick={() => setDeleteConfirmId(null)}
                         >
                           Cancel

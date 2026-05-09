@@ -147,13 +147,19 @@ export default function DemoPage(): React.ReactElement {
               <Send className="h-4 w-4" />
             </Button>
           </form>
-          <div className="text-center mt-3 sm:hidden">
-            <Link
-              href="/login"
-              className="text-xs text-primary hover:underline flex items-center justify-center"
-            >
+          <div className="text-center mt-3 flex items-center justify-center gap-4 text-xs">
+            <Link href="/login" className="text-primary hover:underline flex items-center">
               Sign in to use your own documents <ArrowRight className="h-3 w-3 ml-1" />
             </Link>
+            <span className="text-muted-foreground">|</span>
+            <a
+              href="https://github.com/your-org/rag-starter-kit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-foreground flex items-center"
+            >
+              Deploy your own <ArrowRight className="h-3 w-3 ml-1" />
+            </a>
           </div>
         </div>
       </div>

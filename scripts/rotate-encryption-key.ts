@@ -110,7 +110,7 @@ async function getDb() {
     // biome-ignore lint/suspicious/noExplicitAny: Prisma export shape varies by version
     const PrismaClient = (prismaModule as any).PrismaClient ?? (prismaModule as any).default?.PrismaClient;
     if (!PrismaClient) throw new Error('PrismaClient not found in @prisma/client exports');
-    return new PrismaClient();
+    return new PrismaClient({ accelerateUrl: process.env.DATABASE_URL });
   } catch (err) {
     throw new Error(
       `Could not import @prisma/client: ${err instanceof Error ? err.message : String(err)}.\nRun \`pnpm prisma generate\` first.`

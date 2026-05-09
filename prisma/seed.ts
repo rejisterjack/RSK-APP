@@ -9,14 +9,32 @@
  * Run: pnpm db:seed
  */
 
-import { PrismaPg } from '@prisma/adapter-pg';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+// Load .env manually (dotenv is not directly accessible in pnpm hoisting)
+const envPath = resolve(import.meta.dirname, '../.env');
+const envContent = readFileSync(envPath, 'utf-8');
+for (const line of envContent.split('\n')) {
+  const match = line.match(/^([^#=]+)=(.*)$/);
+  if (match && !match[1].startsWith('#')) {
+    const key = match[1].trim();
+    const val = match[2].trim().replace(/^"(.*)"$/, '$1');
+    if (!process.env[key]) process.env[key] = val;
+  }
+}
+
 import { hash } from 'bcryptjs';
-import { Pool } from 'pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL must be set');
+  process.exit(1);
+}
+
+const prisma = new PrismaClient({
+  accelerateUrl: process.env.DATABASE_URL,
+});
 
 // ---------------------------------------------------------------------------
 // Sample document content for the RAG knowledge base
@@ -465,7 +483,7 @@ async function main() {
         if (embeddingValue) {
           // Use raw SQL to insert with the vector embedding
           await prisma.$executeRawUnsafe(
-            `INSERT INTO document_chunks (id, "documentId", content, index, start, end, embedding, "createdAt")
+            `INSERT INTO document_chunks (id, "documentId", content, index, start, "end", embedding, "createdAt")
              VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, NOW())`,
             document.id,
             chunkContent,

@@ -2,6 +2,7 @@
 
 import { BarChart3, CheckCircle2, Clock, Loader2, Play, RefreshCw, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -121,7 +122,9 @@ export default function AdminEvaluationPage(): React.ReactElement {
       const data = await res.json();
       setReports(data.reports ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load reports');
+      const msg = err instanceof Error ? err.message : 'Failed to load reports';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -150,9 +153,12 @@ export default function AdminEvaluationPage(): React.ReactElement {
       }
 
       // Refresh the report list
+      toast.success('Evaluation completed');
       await fetchReports();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run evaluation');
+      const msg = err instanceof Error ? err.message : 'Failed to run evaluation';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setRunning(false);
     }

@@ -12,8 +12,6 @@
  * For automated verification, set BACKUP_VERIFY_DB_URL to a test restore target.
  */
 
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 
 const databaseUrl = process.env.BACKUP_VERIFY_DB_URL || process.env.DATABASE_URL;
@@ -42,9 +40,7 @@ async function main() {
   console.log('🔍 Starting backup verification...\n');
   console.log(`   Database: ${safeUrl}\n`);
 
-  const pool = new Pool({ connectionString: databaseUrl });
-  const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
+  const prisma = new PrismaClient({ accelerateUrl: databaseUrl! });
 
   let hasErrors = false;
 
@@ -149,7 +145,6 @@ async function main() {
   }
 
   await prisma.$disconnect();
-  await pool.end();
 }
 
 main().catch((e) => {
