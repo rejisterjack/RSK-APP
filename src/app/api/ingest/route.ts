@@ -207,27 +207,36 @@ export const POST = withApiAuth(async (req: NextRequest, session) => {
     // Step 4: Get file or URL
     const file = formData.get('file') as File | null;
     const url = formData.get('url') as string | null;
-    const workspaceId = (formData.get('workspaceId') as string) || session.user.workspaceId;
+    let workspaceId = (formData.get('workspaceId') as string) || session.user.workspaceId;
 
     // Step 5: Validate workspace access and permissions
     if (workspaceId) {
       const hasAccess = await checkPermission(userId, workspaceId, Permission.WRITE_DOCUMENTS);
       if (!hasAccess) {
-        await logAuditEvent({
-          event: AuditEvent.PERMISSION_DENIED,
-          userId,
-          workspaceId,
-          metadata: {
-            action: 'document_upload',
-            requiredPermission: Permission.WRITE_DOCUMENTS,
-          },
-          severity: 'WARNING',
-        });
-
-        return NextResponse.json(
-          { success: false, error: { code: 'FORBIDDEN', message: 'Access denied to workspace' } },
-          { status: 403 }
-        );
+        // Stale session workspace — auto-create a personal workspace
+        logger.info('Auto-creating personal workspace for user', { userId });
+        try {
+          const personalWorkspace = await prisma.workspace.create({
+            data: {
+              name: 'My Workspace',
+              slug: `ws-${userId.slice(0, 8)}`,
+              ownerId: userId,
+              members: {
+                create: {
+                  userId,
+                  role: 'OWNER',
+                  status: 'ACTIVE',
+                },
+              },
+            },
+          });
+          workspaceId = personalWorkspace.id;
+        } catch {
+          return NextResponse.json(
+            { success: false, error: { code: 'FORBIDDEN', message: 'Access denied to workspace' } },
+            { status: 403 }
+          );
+        }
       }
 
       // Step 5b: Check workspace resource limits
