@@ -1,6 +1,15 @@
 'use client';
 
-import { Clock, FileText, Loader2, MessageSquare, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  Clock,
+  CloudOff,
+  FileText,
+  Loader2,
+  MessageSquare,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -14,6 +23,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useConnectivity } from '@/hooks/use-connectivity';
+import { useConversations } from '@/hooks/use-conversations';
 import { cn } from '@/lib/utils';
 import { ConversationActions } from './conversation-actions';
 
@@ -137,43 +148,22 @@ export function ConversationHistoryPanel({
   isOpen,
   onClose,
 }: ConversationHistoryPanelProps) {
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    data: cachedConversations,
+    isLoading: isOfflineLoading,
+    isFromCache,
+  } = useConversations({ limit: 50, enabled: isOpen });
+  const [searchConversations, setSearchConversations] = useState<ConversationSummary[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<'markdown' | 'json' | null>(null);
+  const { isOffline, isLiefi } = useConnectivity();
 
-  // Fetch conversations when the sheet opens
-  useEffect(() => {
-    if (!isOpen) return;
-
-    let cancelled = false;
-
-    async function load() {
-      setIsLoading(true);
-      try {
-        const response = await fetch('/api/v1/chats?limit=50');
-        if (!response.ok) throw new Error('Failed to fetch conversations');
-
-        const json = await response.json();
-        if (!cancelled) {
-          setConversations(json.data as ConversationSummary[]);
-        }
-      } catch (_err) {
-        if (!cancelled) {
-          toast.error('Failed to load conversations');
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen]);
+  // Use cached data when not searching
+  const conversations = searchQuery.trim() ? searchConversations : (cachedConversations ?? []);
+  const isLoading = searchQuery.trim() ? isSearching : isOfflineLoading;
 
   // Debounced server-side search
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,43 +172,27 @@ export function ConversationHistoryPanel({
 
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    // No query = reload all conversations
+    // No query = use cached data
     if (!searchQuery.trim()) {
-      let cancelled = false;
-      async function load() {
-        setIsLoading(true);
-        try {
-          const response = await fetch('/api/v1/chats?limit=50');
-          if (!response.ok) throw new Error('Failed to fetch');
-          const json = await response.json();
-          if (!cancelled) setConversations(json.data as ConversationSummary[]);
-        } catch {
-          if (!cancelled) toast.error('Failed to load conversations');
-        } finally {
-          if (!cancelled) setIsLoading(false);
-        }
-      }
-      load();
-      return () => {
-        cancelled = true;
-      };
+      setSearchConversations([]);
+      return;
     }
 
     // Debounce search queries (300ms)
     searchTimerRef.current = setTimeout(async () => {
       let cancelled = false;
-      setIsLoading(true);
+      setIsSearching(true);
       try {
         const response = await fetch(
           `/api/v1/chats?limit=50&search=${encodeURIComponent(searchQuery.trim())}`
         );
         if (!response.ok) throw new Error('Search failed');
         const json = await response.json();
-        if (!cancelled) setConversations(json.data as ConversationSummary[]);
+        if (!cancelled) setSearchConversations(json.data as ConversationSummary[]);
       } catch {
         if (!cancelled) toast.error('Search failed');
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsSearching(false);
       }
       return () => {
         cancelled = true;
@@ -248,7 +222,7 @@ export function ConversationHistoryPanel({
         });
         if (!response.ok) throw new Error('Failed to delete conversation');
 
-        setConversations((prev) => prev.filter((c) => c.id !== chatId));
+        setSearchConversations((prev) => prev.filter((c) => c.id !== chatId));
         onDeleteConversation(chatId);
         toast.success('Conversation deleted');
       } catch (_err) {
@@ -341,6 +315,18 @@ export function ConversationHistoryPanel({
 
         {/* Search + New Chat row */}
         <div className="px-4 pt-3 pb-2 space-y-3">
+          {/* Offline indicator */}
+          {(isOffline || isLiefi) && !searchQuery.trim() && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+              <CloudOff className="h-3 w-3 shrink-0" />
+              <span className="flex-1">
+                {isOffline
+                  ? 'Offline — showing cached conversations'
+                  : 'Slow connection — using cached data'}
+              </span>
+            </div>
+          )}
+
           <div className="relative">
             {isLoading && searchQuery.trim() ? (
               <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
@@ -373,10 +359,10 @@ export function ConversationHistoryPanel({
         <ScrollArea className="flex-1">
           {isLoading ? (
             <ConversationListSkeleton />
+          ) : conversations.length === 0 && searchQuery.trim() ? (
+            <NoSearchResults query={searchQuery} />
           ) : conversations.length === 0 ? (
             <EmptyConversationState onNewChat={onNewChat} />
-          ) : conversations.length === 0 ? (
-            <NoSearchResults query={searchQuery} />
           ) : (
             <div className="px-2 pb-4 space-y-1">
               {conversations.map((conversation) => {
@@ -450,6 +436,9 @@ export function ConversationHistoryPanel({
                           <FileText className="h-3 w-3" />
                           {conversation.messageCount}
                         </span>
+                        {(isOffline || isLiefi) && isFromCache && !searchQuery.trim() && (
+                          <span className="text-[10px] text-amber-500/70 ml-auto">cached</span>
+                        )}
                       </div>
                     </div>
 

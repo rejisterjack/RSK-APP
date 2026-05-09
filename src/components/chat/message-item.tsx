@@ -4,10 +4,12 @@ import { motion } from 'framer-motion';
 import {
   Bot,
   Check,
+  CloudOff,
   Copy,
   Loader2,
   Pencil,
   RefreshCw,
+  RotateCcw,
   ThumbsDown,
   ThumbsUp,
   Trash2,
@@ -29,6 +31,8 @@ import { cn, formatRelativeTime } from '@/lib/utils';
 import { CitationList, type Source } from './citations';
 import { Markdown } from './markdown';
 
+export type MessageStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'queued';
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -37,6 +41,10 @@ export interface Message {
   sources?: Source[];
   model?: string;
   isStreaming?: boolean;
+  /** Offline sync status */
+  status?: MessageStatus;
+  /** Error message if failed */
+  error?: string;
 }
 
 export type { Source } from './citations';
@@ -78,6 +86,10 @@ export const MessageItem = React.memo(function MessageItem({
 
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
+  const messageStatus = message.status ?? 'sent';
+  const isPending = messageStatus === 'pending' || messageStatus === 'sending';
+  const isQueued = messageStatus === 'queued';
+  const isFailed = messageStatus === 'failed';
 
   const handleSaveEdit = useCallback(async () => {
     if (editContent.trim() && editContent !== message.content) {
@@ -155,15 +167,38 @@ export const MessageItem = React.memo(function MessageItem({
             {message.model && (
               <span className="text-xs text-muted-foreground/50">· {message.model}</span>
             )}
+
+            {/* Status indicators */}
+            {isPending && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-blue-400 animate-pulse">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                Sending...
+              </span>
+            )}
+            {isQueued && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-amber-400">
+                <CloudOff className="h-2.5 w-2.5" />
+                Queued
+              </span>
+            )}
+            {isFailed && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-destructive">
+                <X className="h-2.5 w-2.5" />
+                Failed
+              </span>
+            )}
           </div>
 
           {/* Message bubble */}
           <div
             className={cn(
-              'relative rounded-2xl px-4 py-3 transition-colors',
+              'relative rounded-2xl px-4 py-3 transition-all',
               isUser
                 ? 'bg-primary/10 border border-primary/15 rounded-tr-sm w-fit'
-                : 'glass-panel border border-white/10 rounded-tl-sm'
+                : 'glass-panel border border-white/10 rounded-tl-sm',
+              isPending && 'opacity-80',
+              isQueued && 'border-amber-500/20 bg-amber-500/5',
+              isFailed && 'border-destructive/20 bg-destructive/5'
             )}
           >
             {isEditing ? (
@@ -234,11 +269,52 @@ export const MessageItem = React.memo(function MessageItem({
       {!isEditing && (
         <div
           className={cn(
-            'mt-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100',
-            isUser ? 'justify-end pr-11' : 'pl-11'
+            'mt-1 flex items-center gap-0.5',
+            isUser ? 'justify-end pr-11' : 'pl-11',
+            isPending || isQueued || isFailed
+              ? 'opacity-100'
+              : 'opacity-0 transition-opacity duration-150 group-hover:opacity-100'
           )}
         >
           <TooltipProvider>
+            {/* Retry / Remove for failed/queued messages */}
+            {(isFailed || isQueued) && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg hover:bg-amber-500/10 text-amber-400"
+                      onClick={() => onEdit?.(message.id, message.content)}
+                      aria-label="Retry message"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="rounded-lg text-xs glass-panel">
+                    <p>Retry</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg hover:bg-destructive/10 text-destructive"
+                      onClick={() => onDelete?.(message.id)}
+                      aria-label="Remove message"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="rounded-lg text-xs glass-panel">
+                    <p>Remove</p>
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            )}
+
             {isAssistant && isLastMessage && !isStreaming && onRegenerate && (
               <Tooltip>
                 <TooltipTrigger asChild>

@@ -118,9 +118,9 @@ export default function OfflinePage() {
               </Link>
             </Button>
             <Button variant="outline" className="flex-1 gap-2" asChild>
-              <Link href="/chat">
+              <Link href="/workspaces">
                 <MessageSquare className="h-4 w-4" />
-                Chat
+                Workspaces
               </Link>
             </Button>
           </div>

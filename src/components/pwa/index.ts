@@ -40,6 +40,8 @@ export {
   IOSInstallHint,
 } from './install-prompt';
 
+export { SmartInstallPrompt } from './smart-install-prompt';
+
 // ─── Offline Indicators (Legacy) ──────────────────────────────────────────────
 
 export {
@@ -73,3 +75,7 @@ export {
   UpdateToast,
   VersionInfo,
 } from './update-toast';
+
+// ─── Storage Manager ──────────────────────────────────────────────────────────
+
+export { OfflineStorageManager } from './storage-manager';

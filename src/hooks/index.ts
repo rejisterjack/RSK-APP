@@ -17,6 +17,7 @@ export { useApiKeys } from './use-api-keys';
 // Connectivity & Offline hooks
 export { useConnectivity, useIsOnline } from './use-connectivity';
 export { useConversationBranch } from './use-conversation-branch';
+export { useConversations } from './use-conversations';
 // CSRF hook
 export { fetchWithCsrf, getCsrfToken, useCsrf } from './use-csrf';
 export { useIntersectionObserver } from './use-intersection-observer';
@@ -26,6 +27,7 @@ export {
   useOfflineQuery,
   useSyncStatus,
 } from './use-offline-query';
+export { usePendingMessages } from './use-pending-messages';
 // PWA hooks
 export { usePWA } from './use-pwa';
 // Accessibility hooks

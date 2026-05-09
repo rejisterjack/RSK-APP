@@ -72,6 +72,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/**/loading.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          }
+        }
+      }
     }
   ]
 }

@@ -1,7 +1,9 @@
 'use client';
 
-import { AlertTriangle, WifiOff } from 'lucide-react';
+import { AlertTriangle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useConnectivity } from '@/hooks/use-connectivity';
+import { cn } from '@/lib/utils';
 
 interface ServiceStatus {
   name: string;
@@ -10,16 +12,9 @@ interface ServiceStatus {
 
 export function DegradationBanner(): React.ReactElement | null {
   const [services, setServices] = useState<ServiceStatus[]>([]);
-  const [isOffline, setIsOffline] = useState(false);
+  const { isDegraded, isOffline, isLiefi, isReconnecting } = useConnectivity();
 
   useEffect(() => {
-    // Check online status
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    setIsOffline(!navigator.onLine);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
     // Check service health periodically
     let cancelled = false;
     async function checkHealth() {
@@ -56,27 +51,81 @@ export function DegradationBanner(): React.ReactElement | null {
 
     return () => {
       cancelled = true;
-      setIsOffline(false);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      setServices([]);
       clearInterval(interval);
     };
   }, []);
 
+  // Offline state
   if (isOffline) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border-b border-yellow-500/20 text-xs text-yellow-600 dark:text-yellow-400">
+      <div
+        className={cn(
+          'flex items-center justify-center gap-2 px-3 py-2 bg-destructive/10 border-b border-destructive/20 text-xs text-destructive animate-in slide-in-from-top'
+        )}
+        role="status"
+        aria-live="polite"
+      >
         <WifiOff className="h-3.5 w-3.5 shrink-0" />
-        <span>You&apos;re offline. Some features may be unavailable.</span>
+        <span>You&apos;re offline. Messages will queue and sync when you reconnect.</span>
       </div>
     );
   }
 
+  // Reconnecting state
+  if (isReconnecting) {
+    return (
+      <div
+        className={cn(
+          'flex items-center justify-center gap-2 px-3 py-2 bg-blue-500/10 border-b border-blue-500/20 text-xs text-blue-600 dark:text-blue-400 animate-in slide-in-from-top'
+        )}
+        role="status"
+        aria-live="polite"
+      >
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        <span>Reconnecting... Your messages are waiting to sync.</span>
+      </div>
+    );
+  }
+
+  // Lie-fi state
+  if (isLiefi) {
+    return (
+      <div
+        className={cn(
+          'flex items-center justify-center gap-2 px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs text-amber-600 dark:text-amber-400 animate-in slide-in-from-top'
+        )}
+        role="status"
+        aria-live="polite"
+      >
+        <Wifi className="h-3.5 w-3.5 shrink-0" />
+        <span>Slow connection detected. Using cached data where possible.</span>
+      </div>
+    );
+  }
+
+  // Degraded connection (but still online)
+  if (isDegraded) {
+    return (
+      <div
+        className={cn(
+          'flex items-center justify-center gap-2 px-3 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-xs text-yellow-600 dark:text-yellow-400 animate-in slide-in-from-top'
+        )}
+        role="status"
+        aria-live="polite"
+      >
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        <span>Connection is slow. Some features may take longer to respond.</span>
+      </div>
+    );
+  }
+
+  // Server-side degradation
   const degraded = services.filter((s) => s.status !== 'healthy');
   if (degraded.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border-b border-orange-500/20 text-xs text-orange-600 dark:text-orange-400">
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border-b border-orange-500/20 text-xs text-orange-600 dark:text-orange-400 animate-in slide-in-from-top">
       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
       <span>
         {degraded.length === 1 ? (

@@ -5,6 +5,7 @@ import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from 'next-themes';
 import { type ReactNode, useState } from 'react';
 import { Toaster } from 'sonner';
+import { PWAProvider } from '@/components/pwa';
 import { PlausibleProvider } from './providers/plausible-provider';
 
 /**
@@ -16,7 +17,7 @@ interface ProvidersProps {
 
 /**
  * Root providers component that wraps the application with all necessary context providers
- * Includes: React Query, Theme Provider, Plausible Analytics
+ * Includes: React Query, Theme Provider, PWA/Offline Provider, Plausible Analytics
  */
 export function Providers({ children }: ProvidersProps): React.ReactElement {
   // Ensure QueryClient is only created once per component lifecycle
@@ -45,7 +46,16 @@ export function Providers({ children }: ProvidersProps): React.ReactElement {
           forcedTheme="dark"
           disableTransitionOnChange={false}
         >
-          <PlausibleProvider>{children}</PlausibleProvider>
+          <PWAProvider
+            showInstallPrompt={true}
+            showUpdateToast={true}
+            showConnectivityBanner={true}
+            showSyncToast={true}
+            connectivityPosition="top"
+            installPromptDelay={10000}
+          >
+            <PlausibleProvider>{children}</PlausibleProvider>
+          </PWAProvider>
           <Toaster richColors closeButton />
         </ThemeProvider>
       </QueryClientProvider>
