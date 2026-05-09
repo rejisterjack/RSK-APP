@@ -51,11 +51,16 @@ export const GET = withApiAuth(async (req) => {
 
     return NextResponse.json({ jobs: result });
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Internal server error',
         },
       },
       { status: 500 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Check, X } from 'lucide-react';
+import { Check, Minus } from 'lucide-react';
 
 const corePlatform = [
   'RAG pipeline (ingest → chunk → embed → retrieve → generate)',
@@ -100,16 +100,29 @@ export function WhatsIncluded(): React.ReactElement {
           </motion.div>
         </div>
 
+        {/* Out of scope */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.6 }}
-          className="mt-12 text-center"
+          className="mt-14 text-center"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/10 text-red-400 text-sm font-medium border border-red-500/20">
-            <X className="h-4 w-4" />
-            Not included: Pricing models, no-code UI, Python, Kubernetes
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-5">
+            Deliberate exclusions
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {['Pricing models', 'No-code UI builder', 'Python backend', 'Kubernetes manifests'].map(
+              (item) => (
+                <div
+                  key={item}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl glass-light border border-white/5 text-sm text-muted-foreground/80 font-medium hover:border-white/10 hover:text-muted-foreground transition-colors"
+                >
+                  <Minus className="h-3.5 w-3.5 text-muted-foreground/40" />
+                  {item}
+                </div>
+              )
+            )}
           </div>
         </motion.div>
       </div>

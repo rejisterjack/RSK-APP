@@ -243,6 +243,8 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-XSS-Protection', '0');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  response.headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
 
   const n = nonce ?? '';
 
@@ -274,8 +276,8 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
 
   const scriptSrc =
     env.NODE_ENV === 'development'
-      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8000`
-      : `script-src 'self' 'nonce-${n}'`;
+      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8000 https://*.vercel-scripts.com https://va.vercel-scripts.com`
+      : `script-src 'self' 'nonce-${n}' https://*.vercel-scripts.com https://va.vercel-scripts.com`;
 
   const styleSrc =
     env.NODE_ENV === 'development'
@@ -289,8 +291,10 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
     "img-src 'self' blob: data: https://res.cloudinary.com https://*.githubusercontent.com https://*.googleusercontent.com",
     "font-src 'self' https://cdn.jsdelivr.net",
     `connect-src https://api.github.com ${connectSrc}`,
+    "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
+    "worker-src 'self' blob:",
     "form-action 'self'",
     ...(env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : []),
     'report-uri /api/csp-report',

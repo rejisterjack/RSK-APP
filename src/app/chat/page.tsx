@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ChatContainer } from '@/components/chat/chat-container';
+import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import type { Source } from '@/components/chat/citations';
-import { DocumentList } from '@/components/documents/document-list';
 import { DocumentPreview } from '@/components/documents/document-preview';
-import { UploadDropzone } from '@/components/documents/upload-dropzone';
+import { UploadDropzone, useUpload } from '@/components/documents/upload-dropzone';
 import { ProductTour } from '@/components/onboarding/product-tour';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useChat } from '@/hooks/use-chat';
@@ -15,8 +15,6 @@ import {
   useDocumentPreview,
   useDocuments,
   useReingestDocument,
-  useUploadDocument,
-  useUploadUrl,
 } from '@/hooks/use-documents';
 import { useFeatureLevel } from '@/hooks/use-feature-level';
 
@@ -47,14 +45,19 @@ export default function ChatPage(): React.ReactElement {
 
   // TanStack Query hooks
   const documentsQuery = useDocuments();
-  const uploadMutation = useUploadDocument();
-  const uploadUrlMutation = useUploadUrl();
   const deleteMutation = useDeleteDocument();
   const reingestMutation = useReingestDocument();
   const previewQuery = useDocumentPreview(previewDocumentId);
   const createChatMutation = useCreateChat();
   const feedbackMutation = useSendFeedback();
   const { recordMessage } = useFeatureLevel();
+
+  // Upload state with progress tracking
+  const uploadState = useUpload({
+    onUploadComplete: () => {
+      documentsQuery.refetch();
+    },
+  });
 
   const documents = documentsQuery.data || [];
 
@@ -92,12 +95,30 @@ export default function ChatPage(): React.ReactElement {
   const effectiveSources = chatSources.length > 0 ? chatSources : sources;
 
   const handleUpload = useCallback(
-    async (files: File[]) => {
-      await uploadMutation.mutateAsync(files);
-      setIsUploadOpen(false);
+    (files: File[]) => {
+      uploadState.addFiles(files);
     },
-    [uploadMutation]
+    [uploadState]
   );
+
+  // Auto-close upload dialog when all files are done
+  useEffect(() => {
+    if (uploadState.files.length === 0) return undefined;
+    const allDone = uploadState.files.every(
+      (f) => f.status === 'completed' || f.status === 'error'
+    );
+    if (allDone) {
+      const timer = setTimeout(() => {
+        setIsUploadOpen(false);
+        // Clear completed files after dialog closes
+        for (const f of uploadState.files) {
+          uploadState.removeFile(f.id);
+        }
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [uploadState.files, uploadState]);
 
   const handleNewChat = useCallback(async () => {
     const newChatId = await createChatMutation.mutateAsync({
@@ -192,14 +213,24 @@ export default function ChatPage(): React.ReactElement {
   }, []);
 
   const sidebar = (
-    <DocumentList
-      documents={documents}
-      isLoading={documentsQuery.isLoading}
-      onUpload={() => setIsUploadOpen(true)}
-      onDelete={(id) => deleteMutation.mutate(id)}
-      onReingest={(id) => reingestMutation.mutate(id)}
-      onPreview={handlePreview}
-      selectedDocumentId={previewDocumentId ?? undefined}
+    <ChatSidebar
+      documentListProps={{
+        documents,
+        isLoading: documentsQuery.isLoading,
+        mutatingDocumentId:
+          (deleteMutation.variables as string) || (reingestMutation.variables as string),
+        onUpload: () => setIsUploadOpen(true),
+        onDelete: (id: string) => deleteMutation.mutate(id),
+        onReingest: (id: string) => reingestMutation.mutate(id),
+        onPreview: handlePreview,
+        selectedDocumentId: previewDocumentId ?? undefined,
+      }}
+      historyListProps={{
+        currentChatId,
+        onSelectConversation: handleSelectConversation,
+        onDeleteConversation: handleDeleteConversation,
+        onNewChat: handleNewChat,
+      }}
     />
   );
 
@@ -227,24 +258,23 @@ export default function ChatPage(): React.ReactElement {
         onAgentModeToggle={setAgentMode}
         onRegenerate={reload}
         onFeedback={(messageId, rating) => feedbackMutation.mutate({ messageId, rating })}
-        onSelectConversation={handleSelectConversation}
-        onDeleteConversation={handleDeleteConversation}
         hasMore={hasMore}
         isLoading={isLoading}
+        isNewChatLoading={createChatMutation.isPending}
         sidebar={sidebar}
       />
 
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-xl border border-white/10">
           <DialogHeader>
-            <DialogTitle>Upload Documents</DialogTitle>
+            <DialogTitle className="text-gradient">Upload Documents</DialogTitle>
           </DialogHeader>
           <UploadDropzone
+            files={uploadState.files}
             onFilesSelected={handleUpload}
-            onUrlSubmit={async (url) => {
-              await uploadUrlMutation.mutateAsync(url);
-              setIsUploadOpen(false);
-            }}
+            onFileRemove={uploadState.removeFile}
+            onRetry={uploadState.retryFile}
+            onUrlSubmit={uploadState.submitUrl}
           />
         </DialogContent>
       </Dialog>

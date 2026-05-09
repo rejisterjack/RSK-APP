@@ -32,6 +32,7 @@ export function GitHubStats(): React.ReactElement {
           });
         }
       } catch (_error: unknown) {
+        // GitHub API rate-limited or unavailable — show zeros gracefully
       } finally {
         setLoading(false);
       }

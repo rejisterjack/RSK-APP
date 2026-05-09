@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -68,13 +69,13 @@ export function WorkspaceLimitsForm({ workspaceId, workspace }: WorkspaceLimitsF
       }
 
       setMessage({ type: 'success', text: 'Limits updated successfully' });
+      toast.success('Limits updated');
       setTimeout(() => setMessage(null), 3000);
       setIsOpen(false);
     } catch (error) {
-      setMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Failed to update limits',
-      });
+      const msg = error instanceof Error ? error.message : 'Failed to update limits';
+      setMessage({ type: 'error', text: msg });
+      toast.error(msg);
     } finally {
       setIsSaving(false);
     }

@@ -2,6 +2,7 @@
 
 import { Calendar, Check, Copy, Globe, Link2, Lock, Share2 } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -57,7 +58,9 @@ export function ShareDialog({ chatId, chatTitle, className }: ShareDialogProps) 
         setIsShared(false);
         setShareUrl('');
       }
-    } catch (_error: unknown) {}
+    } catch (_error: unknown) {
+      toast.error('Failed to check share status');
+    }
   };
 
   const handleOpen = async () => {
@@ -101,7 +104,9 @@ export function ShareDialog({ chatId, chatTitle, className }: ShareDialogProps) 
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (_error: unknown) {}
+    } catch (_error: unknown) {
+      toast.error('Failed to copy link');
+    }
   };
 
   return (

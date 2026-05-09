@@ -1,8 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
-import { memo } from 'react';
+import { Loader2, Sparkles } from 'lucide-react';
+import { memo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface SuggestedFollowUpsProps {
@@ -16,6 +16,8 @@ export const SuggestedFollowUps = memo(function SuggestedFollowUps({
   onSelect,
   className,
 }: SuggestedFollowUpsProps) {
+  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+
   if (!questions || questions.length === 0) return null;
 
   return (
@@ -23,7 +25,7 @@ export const SuggestedFollowUps = memo(function SuggestedFollowUps({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15, duration: 0.25, ease: 'easeOut' }}
-      className={`mt-3 pt-3 border-t border-border/40 ${className ?? ''}`}
+      className={`mt-3 pt-3 border-t border-border/30 ${className ?? ''}`}
     >
       <div className="flex items-center gap-1.5 mb-2">
         <Sparkles className="h-3 w-3 text-primary/70" />
@@ -35,11 +37,16 @@ export const SuggestedFollowUps = memo(function SuggestedFollowUps({
             key={q}
             variant="outline"
             size="sm"
+            disabled={!!selectedQuestion}
             className="h-auto py-1.5 px-3 text-xs font-normal text-left whitespace-normal leading-snug
-                       border-border/60 hover:border-primary/50 hover:bg-primary/5 hover:text-primary
+                       rounded-full border-white/10 bg-background/40 hover:border-primary/40 hover:bg-primary/10 hover:text-primary
                        transition-colors duration-150 max-w-xs"
-            onClick={() => onSelect(q)}
+            onClick={() => {
+              setSelectedQuestion(q);
+              onSelect(q);
+            }}
           >
+            {selectedQuestion === q && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
             {q}
           </Button>
         ))}

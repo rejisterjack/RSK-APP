@@ -13,6 +13,7 @@ import {
 } from 'd3-force';
 // Tree-shaken D3 imports - only import what we need (Fix #12)
 import { select } from 'd3-selection';
+import 'd3-transition';
 import { type D3ZoomEvent, type ZoomBehavior, zoom, zoomIdentity } from 'd3-zoom';
 import { RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';

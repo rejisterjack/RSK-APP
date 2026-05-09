@@ -93,7 +93,7 @@ export function createEmbeddingProviderFromEnv(
 
   switch (provider) {
     case 'google': {
-      const model = overrides?.model ?? process.env.EMBEDDING_MODEL ?? 'text-embedding-004';
+      const model = overrides?.model ?? process.env.EMBEDDING_MODEL ?? 'gemini-embedding-2';
 
       if (!isValidGoogleModel(model)) {
         throw new Error(
@@ -139,7 +139,7 @@ export function createEmbeddingProviderFromEnv(
  * Get default provider (Google Gemini - free via AI Studio)
  */
 export function getDefaultProvider(): EmbeddingProvider {
-  return createGoogleProvider('text-embedding-004');
+  return createGoogleProvider('gemini-embedding-2');
 }
 
 /**
@@ -328,7 +328,7 @@ export function validateEmbeddingDimensions(
   const effectiveModel = model ?? process.env.EMBEDDING_MODEL;
 
   const defaults: Record<string, string> = {
-    google: 'text-embedding-004',
+    google: 'gemini-embedding-2',
     openai: 'text-embedding-3-small',
     ollama: 'nomic-embed-text',
   };

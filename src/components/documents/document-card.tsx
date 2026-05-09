@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   FileText,
   Info,
+  Loader2,
   MoreHorizontal,
   RefreshCw,
   Trash2,
@@ -56,6 +57,7 @@ interface DocumentCardProps {
   onReingest?: (id: string) => void;
   onPreview?: (document: Document) => void;
   isSelected?: boolean;
+  isMutating?: boolean;
   className?: string;
 }
 
@@ -128,6 +130,7 @@ export function DocumentCard({
   onReingest,
   onPreview,
   isSelected,
+  isMutating = false,
   className,
 }: DocumentCardProps) {
   const FileIcon = getFileIcon(document.type);
@@ -137,23 +140,30 @@ export function DocumentCard({
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: Conditional ARIA props based on interactive state
     <div
       className={cn(
-        'group relative rounded-lg border bg-card p-3 transition-all',
-        'hover:border-primary/50 hover:shadow-sm',
-        isSelected && 'border-primary ring-1 ring-primary',
-        onPreview && 'cursor-pointer',
+        'group relative rounded-xl border bg-card/50 p-3 transition-all',
+        'hover:border-primary/40 hover:shadow-md hover:shadow-primary/5',
+        isSelected && 'border-primary/60 ring-1 ring-primary/30 bg-primary/5',
+        isMutating && 'opacity-60 pointer-events-none',
+        onPreview && !isMutating && 'cursor-pointer',
         className
       )}
-      onClick={() => onPreview?.(document)}
+      onClick={() => !isMutating && onPreview?.(document)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onPreview?.(document);
+          !isMutating && onPreview?.(document);
         }
       }}
-      role={onPreview ? 'button' : undefined}
-      tabIndex={onPreview ? 0 : undefined}
+      role={onPreview && !isMutating ? 'button' : undefined}
+      tabIndex={onPreview && !isMutating ? 0 : undefined}
       aria-label={onPreview ? `Preview document: ${document.name}` : undefined}
     >
+      {/* Loading overlay */}
+      {isMutating && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/40 backdrop-blur-[2px] rounded-xl z-10">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        </div>
+      )}
       <div className="flex items-start gap-3">
         {/* File icon */}
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">

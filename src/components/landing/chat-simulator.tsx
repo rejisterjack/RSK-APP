@@ -291,7 +291,7 @@ export function ChatSimulator(): React.ReactElement {
                 </div>
               </div>
             </div>
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 relative z-20">
+            <div className="mt-8 pb-10 flex flex-col sm:flex-row items-center justify-center gap-4 relative z-20">
               <Link href="/demo" className="w-full sm:w-auto">
                 <button
                   type="button"

@@ -2,7 +2,6 @@
 
 import { Bot, Square } from 'lucide-react';
 import React from 'react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Markdown } from './markdown';
@@ -23,20 +22,18 @@ export const StreamingMessage = React.memo(function StreamingMessage({
   className,
 }: StreamingMessageProps) {
   return (
-    <div className={cn('relative py-6 bg-muted/30', className)}>
-      <div className="mx-auto flex max-w-3xl gap-4 px-4">
+    <div className={cn('mb-3 mr-auto max-w-3xl w-full', className)}>
+      <div className="flex gap-2.5">
         {/* Avatar */}
-        <div className="flex shrink-0 flex-col items-center">
-          <Avatar className="h-8 w-8 bg-green-600 text-white">
-            <AvatarFallback>
-              <Bot className="h-4 w-4" aria-hidden="true" />
-            </AvatarFallback>
-          </Avatar>
+        <div className="flex shrink-0 flex-col items-center pt-0.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full shadow-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-emerald-500/20">
+            <Bot className="h-4 w-4" aria-hidden="true" />
+          </div>
           {/* Animated indicator */}
           <div className="mt-2 flex gap-0.5" aria-hidden="true">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-600 [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-600 [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-600" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-500 [animation-delay:-0.3s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-500 [animation-delay:-0.15s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-500" />
           </div>
         </div>
 
@@ -44,36 +41,43 @@ export const StreamingMessage = React.memo(function StreamingMessage({
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-sm font-semibold">Assistant</span>
-            <span className="text-xs text-muted-foreground">generating...</span>
+            <span className="text-sm font-semibold tracking-tight text-emerald-400">Assistant</span>
+            <span className="text-xs text-muted-foreground/70">generating...</span>
           </div>
 
-          {/* Message content */}
-          <div
-            className="text-foreground"
-            role="log"
-            aria-live="polite"
-            aria-label="Assistant response"
-          >
-            <MemoizedMarkdown content={content || '▌'} />
-            {content && (
-              <span
-                className="inline-block h-4 w-2 animate-pulse bg-primary align-middle"
-                aria-hidden="true"
-              />
-            )}
+          {/* Message bubble */}
+          <div className="glass-panel border border-white/10 rounded-2xl rounded-tl-sm px-4 py-3 min-w-[140px]">
+            <div
+              className="text-foreground/90 leading-relaxed prose prose-invert max-w-none text-sm"
+              role="log"
+              aria-live="polite"
+              aria-label="Assistant response"
+            >
+              <MemoizedMarkdown content={content || '▌'} />
+              {content && (
+                <span
+                  className="inline-block h-4 w-[2px] animate-pulse bg-primary align-middle"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
           </div>
+
+          {/* Cancel button */}
+          {onCancel && (
+            <div className="mt-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCancel}
+                className="gap-1.5 rounded-xl text-xs h-8 border-white/10 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+              >
+                <Square className="h-3 w-3 fill-current" />
+                Stop generating
+              </Button>
+            </div>
+          )}
         </div>
-
-        {/* Cancel button */}
-        {onCancel && (
-          <div>
-            <Button variant="outline" size="sm" onClick={onCancel} className="gap-1">
-              <Square className="h-3 w-3 fill-current" />
-              Stop
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

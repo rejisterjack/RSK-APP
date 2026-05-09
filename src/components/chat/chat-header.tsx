@@ -3,7 +3,7 @@
 import {
   ChevronDown,
   ChevronUp,
-  History,
+  Loader2,
   Menu,
   PanelLeft,
   Plus,
@@ -24,7 +24,6 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useFeatureLevel } from '@/hooks/use-feature-level';
 import { cn } from '@/lib/utils';
-import { ApiKeySettings } from './api-key-settings';
 import { useChatContext } from './chat-context';
 import { KeyboardShortcutsTrigger } from './keyboard-shortcuts';
 import { ModelPicker } from './model-picker';
@@ -35,6 +34,7 @@ interface ChatHeaderProps {
   chatId?: string;
   chatTitle?: string;
   isStreaming: boolean;
+  isNewChatLoading?: boolean;
   onNewChat?: () => void;
   onModelChange?: (modelId: string) => void;
   onAgentModeToggle?: (enabled: boolean) => void;
@@ -42,10 +42,11 @@ interface ChatHeaderProps {
 }
 
 export const ChatHeader = memo(function ChatHeader({
-  selectedModel = 'google/gemini-2.0-flash-exp:free',
+  selectedModel = 'groq/llama-3.3-70b-versatile',
   chatId,
   chatTitle,
   isStreaming,
+  isNewChatLoading = false,
   onNewChat,
   onModelChange,
   onAgentModeToggle,
@@ -63,7 +64,7 @@ export const ChatHeader = memo(function ChatHeader({
   );
 
   return (
-    <header className="flex items-center justify-between border-b border-border/20 bg-white/5 backdrop-blur-sm relative z-30 h-12 md:h-12">
+    <header className="flex items-center justify-between border-b border-border/20 relative z-30 h-12 md:h-12 px-2 md:px-3">
       {/* ── Left section ─────────────────────────────────────────── */}
       <div className="flex items-center gap-1 md:gap-2">
         {/* Mobile hamburger (only on < md) */}
@@ -71,7 +72,7 @@ export const ChatHeader = memo(function ChatHeader({
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden min-h-[44px] min-w-[44px] rounded-full text-muted-foreground hover:text-foreground hover:bg-background/50 transition-colors"
+            className="md:hidden min-h-[40px] min-w-[40px] rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             onClick={onToggleMobileSidebar}
             aria-label="Open sidebar"
           >
@@ -79,35 +80,23 @@ export const ChatHeader = memo(function ChatHeader({
           </Button>
         )}
 
-        {/* History button */}
-        <TooltipProvider delayDuration={0}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'min-h-[44px] min-w-[44px] rounded-full transition-colors',
-              state.isHistoryPanelOpen
-                ? 'bg-primary/20 text-primary'
-                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            )}
-            onClick={() => dispatch({ type: 'SET_HISTORY_PANEL_OPEN', open: true })}
-            aria-label="Chat history"
-            aria-expanded={state.isHistoryPanelOpen}
-          >
-            <History className="h-4 w-4" />
-          </Button>
-        </TooltipProvider>
-
         {/* New chat button */}
         {onNewChat && (
           <Button
             variant="default"
             size="sm"
-            className="gap-1.5 rounded-full shadow-lg shadow-primary/30 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-3 md:px-4 min-h-[44px] h-auto text-xs"
+            disabled={isNewChatLoading}
+            className="gap-1.5 rounded-full shadow-lg shadow-primary/25 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-3.5 md:px-4 min-h-[40px] h-auto text-xs"
             onClick={onNewChat}
           >
-            <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">New Chat</span>
+            {isNewChatLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">
+              {isNewChatLoading ? 'Creating...' : 'New Chat'}
+            </span>
           </Button>
         )}
       </div>
@@ -120,9 +109,9 @@ export const ChatHeader = memo(function ChatHeader({
       </div>
 
       {/* ── Right section ────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 md:gap-3">
-        {/* Desktop-only: Model picker + Agent mode + API key */}
-        <div className="hidden md:flex items-center gap-3">
+      <div className="flex items-center gap-1 md:gap-2">
+        {/* Desktop-only: Model picker + Agent mode + Share */}
+        <div className="hidden md:flex items-center gap-2">
           {isFeatureVisible(1) && (
             <ModelPicker
               selectedModel={selectedModel}
@@ -137,24 +126,23 @@ export const ChatHeader = memo(function ChatHeader({
               disabled={isStreaming}
             />
           )}
-          {isFeatureVisible(2) && <ApiKeySettings />}
           {chatId && isFeatureVisible(1) && (
             <ShareDialog chatId={chatId} chatTitle={chatTitle || 'Chat'} />
           )}
         </div>
 
         {/* Right controls group */}
-        <div className="flex items-center gap-1 md:gap-2 bg-foreground/5 p-0.5 md:p-1 rounded-full border border-white/5 shadow-inner">
+        <div className="flex items-center gap-0.5 md:gap-1 bg-muted/40 p-0.5 md:p-1 rounded-2xl border border-white/5">
           {/* Desktop-only: Sources inline toggle */}
           <TooltipProvider delayDuration={0}>
             <Button
               variant="ghost"
               size="icon"
               className={cn(
-                'hidden md:flex min-h-[44px] min-w-[44px] rounded-full transition-colors',
+                'hidden md:flex min-h-[40px] min-w-[40px] rounded-xl transition-colors',
                 !state.isSourcesInlineCollapsed
-                  ? 'bg-primary/20 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
               onClick={() => dispatch({ type: 'TOGGLE_SOURCES_INLINE' })}
               aria-label="Toggle sources panel"
@@ -164,7 +152,7 @@ export const ChatHeader = memo(function ChatHeader({
             </Button>
           </TooltipProvider>
 
-          <div className="w-px h-4 bg-border/40 hidden md:block mx-1" />
+          <div className="w-px h-4 bg-border/40 hidden md:block mx-0.5" />
 
           <KeyboardShortcutsTrigger />
 
@@ -172,7 +160,7 @@ export const ChatHeader = memo(function ChatHeader({
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden min-h-[44px] min-w-[44px] rounded-full text-muted-foreground hover:text-foreground hover:bg-background/50 transition-colors"
+            className="md:hidden min-h-[40px] min-w-[40px] rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MORE' })}
             aria-label="More options"
             aria-expanded={state.isMobileMoreOpen}
@@ -184,13 +172,13 @@ export const ChatHeader = memo(function ChatHeader({
             )}
           </Button>
 
-          {/* Settings dropdown (always visible) */}
+          {/* Settings dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="min-h-[44px] min-w-[44px] rounded-full hover:bg-background/50 text-muted-foreground hover:text-foreground transition-colors"
+                className="min-h-[40px] min-w-[40px] rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Settings"
               >
                 <Settings className="h-4 w-4" />
@@ -198,27 +186,27 @@ export const ChatHeader = memo(function ChatHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="glass-panel border-border/30 shadow-2xl rounded-2xl min-w-56 mt-3 p-2"
+              className="glass-panel border-border/30 shadow-2xl rounded-2xl min-w-56 mt-2 p-2"
             >
               <DropdownMenuLabel className="font-bold text-foreground px-3 py-2">
                 Preferences
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/20" />
-              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/20 focus:text-primary cursor-default transition-colors font-medium">
+              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/15 focus:text-primary cursor-default transition-colors font-medium">
                 <span className="text-muted-foreground mr-1">Model:</span>{' '}
                 {selectedModel.split('/').pop()?.replace(':free', '') || selectedModel}
               </DropdownMenuItem>
-              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/20 focus:text-primary cursor-default transition-colors font-medium">
+              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/15 focus:text-primary cursor-default transition-colors font-medium">
                 <span className="text-muted-foreground mr-1">Temperature:</span> 0.7
               </DropdownMenuItem>
-              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/20 focus:text-primary cursor-default transition-colors font-medium">
+              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/15 focus:text-primary cursor-default transition-colors font-medium">
                 <span className="text-muted-foreground mr-1">Streaming:</span> Enabled
               </DropdownMenuItem>
               {level < 2 && (
                 <>
                   <DropdownMenuSeparator className="bg-border/20" />
                   <DropdownMenuItem
-                    className="rounded-xl px-3 py-2.5 focus:bg-primary/20 focus:text-primary cursor-pointer transition-colors font-medium"
+                    className="rounded-xl px-3 py-2.5 focus:bg-primary/15 focus:text-primary cursor-pointer transition-colors font-medium"
                     onClick={unlockAdvanced}
                   >
                     <Sparkles className="h-3.5 w-3.5 mr-2 text-primary" />
@@ -233,7 +221,7 @@ export const ChatHeader = memo(function ChatHeader({
 
       {/* ── Mobile "More" expandable row ─────────────────────────── */}
       {state.isMobileMoreOpen && (
-        <div className="absolute top-full left-0 right-0 bg-background/95 backdrop-blur-md border-b border-border/20 p-2 flex items-center gap-2 z-40 md:hidden">
+        <div className="absolute top-full left-0 right-0 glass-panel border-b border-border/20 p-2 flex items-center gap-2 z-40 md:hidden">
           {isFeatureVisible(1) && (
             <ModelPicker
               selectedModel={selectedModel}
@@ -248,7 +236,6 @@ export const ChatHeader = memo(function ChatHeader({
               disabled={isStreaming}
             />
           )}
-          {isFeatureVisible(2) && <ApiKeySettings />}
           {chatId && isFeatureVisible(1) && (
             <ShareDialog chatId={chatId} chatTitle={chatTitle || 'Chat'} />
           )}

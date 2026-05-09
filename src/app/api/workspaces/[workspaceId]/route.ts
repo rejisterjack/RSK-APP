@@ -119,12 +119,18 @@ export const PATCH = withApiAuth(async (req, session, { params }: RouteParams) =
     }
 
     let validatedInput: ReturnType<typeof validateUpdateWorkspaceInput>;
+    const isDev = process.env.NODE_ENV === 'development';
     try {
       validatedInput = validateUpdateWorkspaceInput(body);
     } catch (error) {
       if (error instanceof Error) {
         return NextResponse.json(
-          { error: { code: 'VALIDATION_ERROR', message: error.message } },
+          {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: isDev ? error.message : 'Validation failed',
+            },
+          },
           { status: 400 }
         );
       }
@@ -192,12 +198,18 @@ export const DELETE = withApiAuth(async (_req, session, { params }: RouteParams)
   try {
     const { workspaceId } = await params;
 
+    const isDev = process.env.NODE_ENV === 'development';
     try {
       await deleteWorkspace(workspaceId, session.user.id);
     } catch (error) {
       if (error instanceof Error) {
         return NextResponse.json(
-          { error: { code: 'DELETE_FAILED', message: error.message } },
+          {
+            error: {
+              code: 'DELETE_FAILED',
+              message: isDev ? error.message : 'Failed to delete workspace',
+            },
+          },
           { status: 400 }
         );
       }

@@ -1,9 +1,10 @@
 'use client';
 
-import { Building2, Check, ChevronDown, Plus, Settings } from 'lucide-react';
+import { Building2, Check, ChevronDown, Loader2, Plus, Settings } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -35,25 +36,36 @@ export function WorkspaceSwitcher({
 }: WorkspaceSwitcherProps): React.ReactElement {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
   const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
   const otherWorkspaces = workspaces.filter((w) => w.id !== currentWorkspaceId);
 
-  const handleSwitchWorkspace = async (workspaceId: string) => {
-    try {
-      // Update session with new workspace
-      const response = await fetch('/api/auth/session', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId }),
-      });
+  const handleSwitchWorkspace = useCallback(
+    async (workspaceId: string) => {
+      setSwitchingId(workspaceId);
+      try {
+        const response = await fetch('/api/auth/session', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspaceId }),
+        });
 
-      if (response.ok) {
-        router.refresh();
-        setIsOpen(false);
+        if (response.ok) {
+          toast.success('Workspace switched');
+          router.refresh();
+          setIsOpen(false);
+        } else {
+          toast.error('Failed to switch workspace');
+        }
+      } catch (_error: unknown) {
+        toast.error('Failed to switch workspace');
+      } finally {
+        setSwitchingId(null);
       }
-    } catch (_error: unknown) {}
-  };
+    },
+    [router]
+  );
 
   const handleCreateWorkspace = () => {
     router.push('/workspaces/new');
@@ -73,10 +85,13 @@ export function WorkspaceSwitcher({
         <Button
           variant="outline"
           className="w-full justify-between gap-2 px-3"
+          disabled={!!switchingId}
           aria-label="Switch workspace"
         >
           <div className="flex items-center gap-2 overflow-hidden">
-            {currentWorkspace?.avatar ? (
+            {switchingId ? (
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+            ) : currentWorkspace?.avatar ? (
               <Image
                 src={currentWorkspace.avatar}
                 alt=""
@@ -129,10 +144,13 @@ export function WorkspaceSwitcher({
               {otherWorkspaces.map((workspace) => (
                 <DropdownMenuItem
                   key={workspace.id}
+                  disabled={!!switchingId}
                   onClick={() => handleSwitchWorkspace(workspace.id)}
                   className="flex items-center gap-2"
                 >
-                  {workspace.avatar ? (
+                  {switchingId === workspace.id ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                  ) : workspace.avatar ? (
                     <Image
                       src={workspace.avatar}
                       alt=""

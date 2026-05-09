@@ -18,19 +18,17 @@ import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import {
-  isValidImage,
-  OCRConfigBuilder,
-  type OCRConfiguration,
-  OCRParserError,
-  parseImageWithOCR,
-} from '@/lib/rag/ingestion/parsers/ocr';
-import {
   addRateLimitHeaders,
   checkApiRateLimit,
   getRateLimitIdentifier,
 } from '@/lib/security/rate-limiter';
 import { assertSafeUrl } from '@/lib/security/ssrf-protection';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
+
+// Lazy-loaded — tesseract.js and sharp are heavy (only needed when actually running OCR)
+async function ocr() {
+  return await import('@/lib/rag/ingestion/parsers/ocr');
+}
 
 // Maximum file size: 20MB for images
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -197,12 +195,17 @@ export async function POST(req: NextRequest) {
         filename = fetchResult.filename;
         mimeType = fetchResult.mimeType;
       } catch (error) {
+        const isDev = process.env.NODE_ENV === 'development';
         return NextResponse.json(
           {
             success: false,
             error: {
               code: 'FETCH_ERROR',
-              message: error instanceof Error ? error.message : 'Failed to fetch image from URL',
+              message: isDev
+                ? error instanceof Error
+                  ? error.message
+                  : 'Failed to fetch image from URL'
+                : 'Failed to fetch image from URL',
             },
           },
           { status: 400 }
@@ -222,6 +225,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 6: Validate image
+    const { isValidImage } = await ocr();
     if (!(await isValidImage(buffer))) {
       return NextResponse.json(
         {
@@ -236,7 +240,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 7: Configure OCR
-    const ocrConfig: OCRConfiguration = new OCRConfigBuilder()
+    const { OCRConfigBuilder, parseImageWithOCR } = await ocr();
+    const ocrConfig = new OCRConfigBuilder()
       .withLanguage(language)
       .withConfidenceThreshold(confidenceThreshold)
       .withPreprocessing({
@@ -306,13 +311,15 @@ export async function POST(req: NextRequest) {
     return response;
   } catch (error) {
     // Handle specific OCR errors
+    const { OCRParserError } = await ocr();
+    const isDev = process.env.NODE_ENV === 'development';
     if (error instanceof OCRParserError) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: error.code,
-            message: error.message,
+            message: isDev ? error.message : 'OCR processing failed',
           },
         },
         { status: 422 }
@@ -324,7 +331,11 @@ export async function POST(req: NextRequest) {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Internal server error',
         },
       },
       { status: 500 }
@@ -375,12 +386,17 @@ export async function GET(_req: NextRequest) {
       },
     });
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Internal server error',
         },
       },
       { status: 500 }
@@ -446,7 +462,8 @@ async function fetchImageFromURL(url: string): Promise<FetchedImage> {
     const buffer = Buffer.from(arrayBuffer);
 
     // Validate image
-    if (!(await isValidImage(buffer))) {
+    const { isValidImage: validateImg } = await ocr();
+    if (!(await validateImg(buffer))) {
       throw new Error('Downloaded file is not a valid image');
     }
 

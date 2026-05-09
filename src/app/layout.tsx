@@ -7,6 +7,7 @@ import { Navbar } from '@/components/navbar';
 import { Providers } from '@/components/providers';
 import { PWAScripts } from '@/components/pwa/pwa-scripts';
 import { StructuredData } from '@/components/seo';
+import { NavigationProgress } from '@/components/ui/navigation-progress';
 import { Toaster } from '@/components/ui/toaster';
 import { CsrfTokenScript } from '@/lib/security/csrf';
 import '@/styles/globals.css';
@@ -190,6 +191,7 @@ export default async function RootLayout({
         </a>
         <div className="vibrant-bg" />
         <Providers>
+          <NavigationProgress />
           <div className="fixed inset-0 grid grid-rows-[auto_1fr] overflow-hidden">
             <Navbar />
             <main id="main-content" className="min-h-0 overflow-y-auto" tabIndex={-1}>

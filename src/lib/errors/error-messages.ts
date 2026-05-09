@@ -254,6 +254,27 @@ const EN_ERROR_MESSAGES: Partial<Record<ErrorCode, ErrorMessage>> = {
     retryable: true,
     statusCode: 500,
   },
+  [ERROR_CODES.RAG_LLM_TIMEOUT]: {
+    message: 'AI response took too long',
+    description: 'The AI service did not respond in time.',
+    action: 'Please try again. The server may be busy.',
+    retryable: true,
+    statusCode: 504,
+  },
+  [ERROR_CODES.RAG_MODEL_UNAVAILABLE]: {
+    message: 'All AI models unavailable',
+    description: 'None of the AI models are currently available.',
+    action: 'Please wait a moment and try again.',
+    retryable: true,
+    statusCode: 503,
+  },
+  [ERROR_CODES.RAG_SERVICE_DEGRADED]: {
+    message: 'AI service temporarily limited',
+    description: 'The AI service is running in a reduced capacity.',
+    action: 'Some features may be limited. Please try again shortly.',
+    retryable: true,
+    statusCode: 503,
+  },
   [ERROR_CODES.RAG_NO_RESULTS]: {
     message: 'No relevant documents found',
     description: 'Could not find any documents matching your query.',

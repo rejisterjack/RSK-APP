@@ -28,13 +28,6 @@ import {
 } from '@/lib/db/optimistic-locking';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { CitationHandler, sourcesToChunks } from '@/lib/rag/citations';
-import { defaultRAGConfig } from '@/lib/rag/engine';
-import { ConversationMemory } from '@/lib/rag/memory';
-import { retrieveSources } from '@/lib/rag/retrieval';
-import { estimateMessageTokens } from '@/lib/rag/token-budget';
-import { isFeatureDegraded } from '@/lib/resilience/degradation';
-import { llmCircuitBreaker } from '@/lib/resilience/external-services';
 import {
   chatCreateSchema,
   chatUpdateSchema,
@@ -45,17 +38,60 @@ import {
   checkApiRateLimit,
   getRateLimitIdentifier,
 } from '@/lib/security/rate-limiter';
-import { withSpan } from '@/lib/tracing';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
-import type { RAGConfig } from '@/types';
+
+// Lazy-loaded modules to reduce cold-start time.
+// These are heavy and only needed inside the handler body.
+async function citations() {
+  return await import('@/lib/rag/citations');
+}
+async function memory() {
+  return await import('@/lib/rag/memory');
+}
+async function retrieval() {
+  return await import('@/lib/rag/retrieval');
+}
+async function tokenBudget() {
+  return await import('@/lib/rag/token-budget');
+}
+async function degradation() {
+  return await import('@/lib/resilience/degradation');
+}
+async function externalServices() {
+  return await import('@/lib/resilience/external-services');
+}
+async function tracing() {
+  return await import('@/lib/tracing');
+}
+
+// =============================================================================
+// Route Configuration
+// =============================================================================
+
+// Vercel maxDuration: streaming chat can run up to 120s
+export const maxDuration = 120;
 
 // =============================================================================
 // Configuration
 // =============================================================================
 
-const defaultConfig: RAGConfig = {
-  ...defaultRAGConfig,
-  model: process.env.DEFAULT_MODEL || defaultRAGConfig.model,
+/** Timeout for AI calls — allows complex RAG responses while preventing hung connections */
+const AI_CALL_TIMEOUT_MS = 60_000;
+/** Shorter timeout for model health probes (just checking liveness) */
+const PROBE_TIMEOUT_MS = 3_000;
+
+const defaultConfig = {
+  model: process.env.DEFAULT_MODEL || 'groq/llama-3.3-70b-versatile',
+  temperature: 0.7,
+  maxTokens: 2048,
+  topP: 0.9,
+  chunkSize: 1000,
+  chunkOverlap: 200,
+  maxMessages: 10,
+  hybridSearchEnabled: true,
+  rerankingEnabled: true,
+  topK: 5,
+  similarityThreshold: 0.7,
 };
 
 /**
@@ -63,12 +99,11 @@ const defaultConfig: RAGConfig = {
  * IMPLEMENTED: Fallback logic tries each model in order until one succeeds
  */
 const MODEL_FALLBACK_CHAIN = [
-  'google/gemini-2.0-flash-exp:free',
-  'stepfun/step-3.5-flash:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'qwen/qwen3-coder:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
+  'groq/llama-3.3-70b-versatile',
+  'minimax/minimax-m2.5:free',
+  'google/gemma-4-26b-a4b-it:free',
   'liquid/lfm-2.5-1.2b-instruct:free',
+  'openai/gpt-oss-20b:free',
 ];
 
 // =============================================================================
@@ -77,6 +112,17 @@ const MODEL_FALLBACK_CHAIN = [
 
 export async function POST(req: Request) {
   const startTime = Date.now();
+
+  // Cold-start monitoring: track time from module load to first response
+  if (process.env.SENTRY_DSN) {
+    try {
+      const Sentry = await import('@sentry/nextjs');
+      Sentry.setTag('route', '/api/chat');
+      Sentry.setTag('method', 'POST');
+    } catch {
+      // Sentry not available
+    }
+  }
 
   try {
     // Step 1: Authenticate user
@@ -119,6 +165,7 @@ export async function POST(req: Request) {
     }
 
     // Step 2b: Check if LLM generation is degraded
+    const { isFeatureDegraded } = await degradation();
     if (await isFeatureDegraded('llm_generation')) {
       return NextResponse.json(
         {
@@ -154,89 +201,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // Step 4: Extract and validate custom provider keys from headers
-    const rawOpenRouterKey = req.headers.get('x-key-openrouter') || undefined;
-    const rawFireworksKey = req.headers.get('x-key-fireworks') || undefined;
-    const rawGroqKey = req.headers.get('x-key-groq') || undefined;
-    const rawNvidiaKey = req.headers.get('x-key-nvidia') || undefined;
-    const rawCerebrasKey = req.headers.get('x-key-cerebras') || undefined;
-    const rawSambanovaKey = req.headers.get('x-key-sambanova') || undefined;
-    const rawMistralKey = req.headers.get('x-key-mistral') || undefined;
+    // Step 4: Parse and validate request body
 
-    // Validate format — reject obviously malformed keys
-    if (rawOpenRouterKey && !rawOpenRouterKey.startsWith('sk-or-')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_API_KEY',
-            message: 'OpenRouter API key must start with "sk-or-".',
-          },
-        },
-        { status: 400 }
-      );
-    }
-    if (rawFireworksKey && !rawFireworksKey.startsWith('fw_')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: 'INVALID_API_KEY', message: 'Fireworks API key must start with "fw_".' },
-        },
-        { status: 400 }
-      );
-    }
-    if (rawGroqKey && !rawGroqKey.startsWith('gsk_')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: 'INVALID_API_KEY', message: 'Groq API key must start with "gsk_".' },
-        },
-        { status: 400 }
-      );
-    }
-    if (rawNvidiaKey && !rawNvidiaKey.startsWith('nvapi-')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: { code: 'INVALID_API_KEY', message: 'NVIDIA API key must start with "nvapi-".' },
-        },
-        { status: 400 }
-      );
-    }
-    // Enforce max length to prevent header abuse
-    const MAX_KEY_LENGTH = 256;
-    const keysToValidate = [
-      { key: rawOpenRouterKey, name: 'OpenRouter' },
-      { key: rawFireworksKey, name: 'Fireworks' },
-      { key: rawGroqKey, name: 'Groq' },
-      { key: rawNvidiaKey, name: 'NVIDIA' },
-      { key: rawCerebrasKey, name: 'Cerebras' },
-      { key: rawSambanovaKey, name: 'SambaNova' },
-      { key: rawMistralKey, name: 'Mistral' },
-    ];
-    for (const { key, name } of keysToValidate) {
-      if (key && key.length > MAX_KEY_LENGTH) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: { code: 'INVALID_API_KEY', message: `${name} API key is too long.` },
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    const customKeys = {
-      openrouter: rawOpenRouterKey,
-      fireworks: rawFireworksKey,
-      groq: rawGroqKey,
-      nvidia: rawNvidiaKey,
-      cerebras: rawCerebrasKey,
-      sambanova: rawSambanovaKey,
-      mistral: rawMistralKey,
-    };
-
-    // Step 5: Parse and validate request body
     let body: unknown;
     try {
       body = await req.json();
@@ -250,7 +216,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 6: Validate input
+    // Step 5: Validate input
     let validatedInput: ReturnType<typeof validateChatInput>;
     try {
       validatedInput = validateChatInput(body);
@@ -282,8 +248,9 @@ export async function POST(req: Request) {
     const effectiveConversationId = conversationId ?? chatId;
     const userMessage = messages[messages.length - 1].content;
 
-    // Step 7: Get conversation history
-    const memory = new ConversationMemory(prisma);
+    // Step 6: Get conversation history
+    const { ConversationMemory } = await memory();
+    const conversationMemory = new ConversationMemory(prisma);
     let history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
     if (effectiveConversationId) {
@@ -302,7 +269,10 @@ export async function POST(req: Request) {
         );
       }
 
-      const recentMessages = await memory.getRecentMessages(effectiveConversationId, 10);
+      const recentMessages = await conversationMemory.getRecentMessages(
+        effectiveConversationId,
+        10
+      );
       history = recentMessages
         .filter((m) => m.role !== 'system')
         .map((m) => ({
@@ -311,14 +281,17 @@ export async function POST(req: Request) {
         }));
     }
 
-    // Step 8: Retrieve relevant sources (graceful fallback if embedding/vector search fails)
-    let sources: Awaited<ReturnType<typeof retrieveSources>> = [];
+    // Step 7: Retrieve relevant sources (graceful fallback if embedding/vector search fails)
+    let sources: Awaited<ReturnType<typeof import('@/lib/rag/retrieval')['retrieveSources']>> = [];
     let vectorSearchDegraded = false;
     try {
-      if (await isFeatureDegraded('vector_search')) {
+      const { isFeatureDegraded: checkDegraded } = await degradation();
+      if (await checkDegraded('vector_search')) {
         vectorSearchDegraded = true;
         logger.info('Vector search degraded, skipping RAG retrieval');
       } else {
+        const { retrieveSources } = await retrieval();
+        const { withSpan } = await tracing();
         sources = await withSpan('chat.retrieve_sources', async (span) => {
           span.setAttribute('chat.query_length', userMessage.length);
           const result = await retrieveSources(userMessage, userId, config);
@@ -332,24 +305,26 @@ export async function POST(req: Request) {
       });
     }
 
-    // Step 9: Build context with citations
+    // Step 8: Build context with citations
+    const { CitationHandler, sourcesToChunks } = await citations();
     const citationHandler = new CitationHandler();
     const chunks = sourcesToChunks(sources);
     const { context, citationMap } = citationHandler.formatContextWithCitations(chunks);
 
-    // Step 10: Build system prompt
+    // Step 9: Build system prompt
     const systemPrompt = buildSystemPromptWithContext(context, {
       style: config.temperature < 0.5 ? 'concise' : 'balanced',
     });
 
-    // Step 11: Prepare messages for LLM
+    // Step 10: Prepare messages for LLM
     const llmMessages: LLMMessage[] = [
       { role: 'system', content: systemPrompt },
       ...history,
       { role: 'user', content: userMessage },
     ];
 
-    // Step 11b: Estimate token usage for budget tracking
+    // Step 10b: Estimate token usage for budget tracking
+    const { estimateMessageTokens } = await tokenBudget();
     const estimatedTokens = estimateMessageTokens(llmMessages);
     if (estimatedTokens > config.maxTokens * 2) {
       return NextResponse.json(
@@ -365,15 +340,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 12: Save user message to database
+    // Step 11: Save user message to database
     if (effectiveConversationId) {
-      await memory.addMessage(effectiveConversationId, {
+      await conversationMemory.addMessage(effectiveConversationId, {
         role: 'user',
         content: userMessage,
       });
     }
 
-    // Step 13: Log chat message
+    // Step 12: Log chat message
     await logAuditEvent({
       event: AuditEvent.CHAT_MESSAGE_SENT,
       userId,
@@ -392,6 +367,7 @@ export async function POST(req: Request) {
       const allModels = [config.model, ...MODEL_FALLBACK_CHAIN.filter((m) => m !== config.model)];
 
       // If the circuit breaker is open, fail fast
+      const { llmCircuitBreaker } = await externalServices();
       if (llmCircuitBreaker.getState() === 'OPEN') {
         return NextResponse.json(
           {
@@ -436,9 +412,10 @@ export async function POST(req: Request) {
           try {
             await llmCircuitBreaker.execute(async () => {
               await generateText({
-                model: getModel(modelName, customKeys),
+                model: getModel(modelName),
                 messages: [{ role: 'user', content: userMessage.slice(0, 100) }],
                 maxTokens: 1,
+                abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
               });
             });
             usedModel = modelName;
@@ -472,10 +449,11 @@ export async function POST(req: Request) {
       }
 
       const result = streamText({
-        model: getModel(usedModel, customKeys),
+        model: getModel(usedModel),
         messages: llmMessages,
         temperature: config.temperature,
         maxTokens: config.maxTokens,
+        abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
         onFinish: async (completion) => {
           try {
             if (effectiveConversationId) {
@@ -508,8 +486,7 @@ export async function POST(req: Request) {
                 effectiveConversationId,
                 userMessage,
                 completion.text,
-                usedModel,
-                customKeys
+                usedModel
               );
             }
           } catch (txError) {
@@ -547,7 +524,6 @@ export async function POST(req: Request) {
         temperature: config.temperature,
         maxTokens: config.maxTokens,
         primaryModel: config.model,
-        customKeys,
       });
 
       // Extract citations
@@ -599,8 +575,7 @@ export async function POST(req: Request) {
           effectiveConversationId,
           userMessage,
           response.text,
-          response.model,
-          customKeys
+          response.model
         );
       }
 
@@ -627,8 +602,10 @@ export async function POST(req: Request) {
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const statusCode =
-      error instanceof Error && 'code' in error
+    const isTimeout = error instanceof Error && error.name === 'TimeoutError';
+    const statusCode = isTimeout
+      ? 503
+      : error instanceof Error && 'code' in error
         ? getErrorStatusCode((error as { code: string }).code)
         : 500;
 
@@ -638,8 +615,10 @@ export async function POST(req: Request) {
       {
         success: false,
         error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to process chat request',
+          code: isTimeout ? 'TIMEOUT' : 'INTERNAL_ERROR',
+          message: isTimeout
+            ? 'The AI service took too long to respond. Please try again.'
+            : 'Failed to process chat request',
           ...(isDev && { details: errorMessage }),
         },
       },
@@ -855,8 +834,9 @@ export async function GET(req: Request) {
       );
     }
 
-    const memory = new ConversationMemory(prisma);
-    const messages = await memory.getHistory(effectiveId, limit);
+    const { ConversationMemory: ConvMem } = await memory();
+    const convMemory = new ConvMem(prisma);
+    const messages = await convMemory.getHistory(effectiveId, limit);
 
     return NextResponse.json({
       success: true,
@@ -1103,25 +1083,14 @@ export async function PATCH(req: Request) {
 // =============================================================================
 
 /**
- * Get the appropriate model based on model name and optional custom API keys
+ * Get the appropriate model based on model name using server-side env vars
  */
-function getModel(
-  modelName: string,
-  customKeys?: {
-    openrouter?: string;
-    fireworks?: string;
-    groq?: string;
-    nvidia?: string;
-    cerebras?: string;
-    sambanova?: string;
-    mistral?: string;
-  }
-): LanguageModel {
+function getModel(modelName: string): LanguageModel {
   // Groq models (prefix: "groq/")
   if (modelName.startsWith('groq/')) {
-    const groqKey = customKeys?.groq || process.env.GROQ_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
-      throw new Error('Groq API key required. Set GROQ_API_KEY or provide your own key.');
+      throw new Error('Groq API key required. Set GROQ_API_KEY environment variable.');
     }
     const groq = createOpenAI({
       baseURL: 'https://api.groq.com/openai/v1',
@@ -1132,9 +1101,9 @@ function getModel(
 
   // NVIDIA NIM models (prefix: "nvidia-nim/")
   if (modelName.startsWith('nvidia-nim/')) {
-    const nvidiaKey = customKeys?.nvidia || process.env.NVIDIA_API_KEY;
+    const nvidiaKey = process.env.NVIDIA_API_KEY;
     if (!nvidiaKey) {
-      throw new Error('NVIDIA API key required. Set NVIDIA_API_KEY or provide your own key.');
+      throw new Error('NVIDIA API key required. Set NVIDIA_API_KEY environment variable.');
     }
     const nvidia = createOpenAI({
       baseURL: 'https://integrate.api.nvidia.com/v1',
@@ -1145,9 +1114,9 @@ function getModel(
 
   // Cerebras models (prefix: "cerebras/")
   if (modelName.startsWith('cerebras/')) {
-    const cerebrasKey = customKeys?.cerebras || process.env.CEREBRAS_API_KEY;
+    const cerebrasKey = process.env.CEREBRAS_API_KEY;
     if (!cerebrasKey) {
-      throw new Error('Cerebras API key required. Set CEREBRAS_API_KEY or provide your own key.');
+      throw new Error('Cerebras API key required. Set CEREBRAS_API_KEY environment variable.');
     }
     const cerebras = createOpenAI({
       baseURL: 'https://api.cerebras.ai/v1',
@@ -1158,9 +1127,9 @@ function getModel(
 
   // SambaNova models (prefix: "sambanova/")
   if (modelName.startsWith('sambanova/')) {
-    const sambanovaKey = customKeys?.sambanova || process.env.SAMBANOVA_API_KEY;
+    const sambanovaKey = process.env.SAMBANOVA_API_KEY;
     if (!sambanovaKey) {
-      throw new Error('SambaNova API key required. Set SAMBANOVA_API_KEY or provide your own key.');
+      throw new Error('SambaNova API key required. Set SAMBANOVA_API_KEY environment variable.');
     }
     const sambanova = createOpenAI({
       baseURL: 'https://api.sambanova.ai/v1',
@@ -1171,9 +1140,9 @@ function getModel(
 
   // Mistral models (prefix: "mistral/")
   if (modelName.startsWith('mistral/')) {
-    const mistralKey = customKeys?.mistral || process.env.MISTRAL_API_KEY;
+    const mistralKey = process.env.MISTRAL_API_KEY;
     if (!mistralKey) {
-      throw new Error('Mistral API key required. Set MISTRAL_API_KEY or provide your own key.');
+      throw new Error('Mistral API key required. Set MISTRAL_API_KEY environment variable.');
     }
     const mistral = createOpenAI({
       baseURL: 'https://api.mistral.ai/v1',
@@ -1184,9 +1153,9 @@ function getModel(
 
   // Fireworks AI models (prefixed with "accounts/fireworks/")
   if (modelName.startsWith('accounts/fireworks/')) {
-    const fireworksKey = customKeys?.fireworks || env.FIREWORKS_API_KEY;
+    const fireworksKey = env.FIREWORKS_API_KEY;
     if (!fireworksKey) {
-      throw new Error('Fireworks API key required. Set FIREWORKS_API_KEY or provide your own key.');
+      throw new Error('Fireworks API key required. Set FIREWORKS_API_KEY environment variable.');
     }
     const fireworks = createOpenAI({
       baseURL: 'https://api.fireworks.ai/inference/v1',
@@ -1196,7 +1165,7 @@ function getModel(
   }
 
   // OpenRouter models (contains '/' or ends with ':free') - default
-  const openrouterKey = customKeys?.openrouter || env.OPENROUTER_API_KEY;
+  const openrouterKey = env.OPENROUTER_API_KEY;
   if (openrouterKey) {
     const openrouter = createOpenRouter({ apiKey: openrouterKey });
     return openrouter.chat(modelName) as unknown as LanguageModel;
@@ -1215,15 +1184,6 @@ async function generateWithFallback(
     temperature: number;
     maxTokens: number;
     primaryModel: string;
-    customKeys?: {
-      openrouter?: string;
-      fireworks?: string;
-      groq?: string;
-      nvidia?: string;
-      cerebras?: string;
-      sambanova?: string;
-      mistral?: string;
-    };
   }
 ): Promise<{
   text: string;
@@ -1239,12 +1199,14 @@ async function generateWithFallback(
 
   for (const modelName of modelsToTry) {
     try {
-      const result = await llmCircuitBreaker.execute(async () =>
+      const { llmCircuitBreaker: breaker } = await externalServices();
+      const result = await breaker.execute(async () =>
         generateText({
-          model: getModel(modelName, options.customKeys),
+          model: getModel(modelName),
           messages,
           temperature: options.temperature,
           maxTokens: options.maxTokens,
+          abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
         })
       );
 
@@ -1299,8 +1261,7 @@ async function maybeGenerateTitle(
   chatId: string,
   userMessage: string,
   assistantResponse: string,
-  modelName: string,
-  customKeys?: { openrouter?: string; fireworks?: string; groq?: string; nvidia?: string }
+  modelName: string
 ): Promise<void> {
   try {
     // Check if chat has default title
@@ -1317,7 +1278,7 @@ async function maybeGenerateTitle(
     const titleModel = modelName.includes(':') ? 'mistralai/mistral-7b-instruct:free' : modelName;
 
     const { text: title } = await generateText({
-      model: getModel(titleModel, customKeys),
+      model: getModel(titleModel),
       messages: [
         {
           role: 'system',
@@ -1331,6 +1292,7 @@ async function maybeGenerateTitle(
       ],
       maxTokens: 20,
       temperature: 0.7,
+      abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
 
     const cleanTitle = title

@@ -5,8 +5,9 @@
  * Free tier available through Google AI Studio.
  *
  * Models:
- * - text-embedding-004 (latest, 768 dimensions)
- * - embedding-001 (legacy, 768 dimensions)
+ * - gemini-embedding-2 (latest, supports outputDimensionality, 768 dims)
+ * - gemini-embedding-001 (3072 dimensions, requires outputDimensionality for 768)
+ * - text-embedding-004 (deprecated, replaced by gemini-embedding-001)
  *
  * Get API key: https://aistudio.google.com/app/apikey
  *
@@ -15,25 +16,29 @@
  * - Tracks usage via Redis with daily TTL
  */
 
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { embed, embedMany } from 'ai';
-
 import { logger } from '@/lib/logger';
 import { redis } from '@/lib/redis';
 import type { EmbeddingProvider } from './types';
+
+const OUTPUT_DIMENSIONALITY = 768;
 
 /**
  * Supported Google embedding models
  */
 export const GOOGLE_MODELS = {
-  'text-embedding-004': {
+  'gemini-embedding-2': {
     dimensions: 768,
-    description: 'Latest Gemini embedding model',
+    description: 'Latest Gemini embedding model with configurable dimensions',
+    maxTokens: 8192,
+  },
+  'gemini-embedding-001': {
+    dimensions: 3072,
+    description: 'Gemini embedding model (use outputDimensionality for 768)',
     maxTokens: 2048,
   },
-  'embedding-001': {
+  'text-embedding-004': {
     dimensions: 768,
-    description: 'Legacy embedding model',
+    description: 'Deprecated — use gemini-embedding-2 instead',
     maxTokens: 2048,
   },
 } as const;
@@ -120,9 +125,9 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
   readonly name = 'google';
   readonly modelName: string;
   readonly dimensions: number;
-  private readonly googleAI: ReturnType<typeof createGoogleGenerativeAI>;
+  private readonly apiKey: string;
 
-  constructor(model: GoogleModel = 'text-embedding-004', apiKey?: string, _baseUrl?: string) {
+  constructor(model: GoogleModel = 'gemini-embedding-2', apiKey?: string, _baseUrl?: string) {
     const modelInfo = GOOGLE_MODELS[model];
     if (!modelInfo) {
       throw new Error(
@@ -141,7 +146,31 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
 
     this.modelName = model;
     this.dimensions = modelInfo.dimensions;
-    this.googleAI = createGoogleGenerativeAI({ apiKey: key });
+    this.apiKey = key;
+  }
+
+  private async callEmbedAPI(texts: string[]): Promise<number[][]> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:batchEmbedContents?key=${this.apiKey}`;
+
+    const requests = texts.map((text) => ({
+      model: `models/${this.modelName}`,
+      content: { parts: [{ text }] },
+      outputDimensionality: OUTPUT_DIMENSIONALITY,
+    }));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Google embedding API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    return data.embeddings.map((e: { values: number[] }) => e.values);
   }
 
   /**
@@ -151,13 +180,8 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
     // Check quota before making request
     await checkAndIncrementQuota();
 
-    const result = await embed({
-      // biome-ignore lint/suspicious/noExplicitAny: AI SDK version compatibility
-      model: this.googleAI.textEmbeddingModel(this.modelName) as any,
-      value: text,
-    });
-
-    return Array.from(result.embedding);
+    const results = await this.callEmbedAPI([text]);
+    return results[0] ?? [];
   }
 
   /**
@@ -173,14 +197,8 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
 
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
-
-      const result = await embedMany({
-        // biome-ignore lint/suspicious/noExplicitAny: AI SDK version compatibility
-        model: this.googleAI.textEmbeddingModel(this.modelName) as any,
-        values: batch,
-      });
-
-      embeddings.push(...result.embeddings.map((e) => Array.from(e)));
+      const results = await this.callEmbedAPI(batch);
+      embeddings.push(...results);
     }
 
     return embeddings;
@@ -206,7 +224,7 @@ export class GoogleEmbeddingProvider implements EmbeddingProvider {
  * Create a Google embedding provider
  */
 export function createGoogleProvider(
-  model: GoogleModel = 'text-embedding-004',
+  model: GoogleModel = 'gemini-embedding-2',
   apiKey?: string
 ): GoogleEmbeddingProvider {
   return new GoogleEmbeddingProvider(model, apiKey);

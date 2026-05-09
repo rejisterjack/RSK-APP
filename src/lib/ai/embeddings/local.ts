@@ -11,9 +11,32 @@
  * - Xenova/gte-base: 768 dimensions, excellent for semantic search
  */
 
-import { type FeatureExtractionPipeline, pipeline } from '@xenova/transformers';
 import { logger } from '@/lib/logger';
 import type { EmbeddingProvider } from './types';
+
+/**
+ * Dynamically load @xenova/transformers so the module still boots when the
+ * optional dependency is not installed (e.g. unsupported platforms).
+ */
+type TransformersModule = typeof import('@xenova/transformers');
+
+let transformersModule: TransformersModule | null = null;
+let transformersLoadAttempted = false;
+
+async function loadTransformers(): Promise<TransformersModule | null> {
+  if (transformersLoadAttempted) return transformersModule;
+  transformersLoadAttempted = true;
+  try {
+    transformersModule = await import('@xenova/transformers');
+    return transformersModule;
+  } catch {
+    logger.warn(
+      '@xenova/transformers could not be loaded. Local embedding provider will be unavailable. ' +
+        'Install the optional dependency with: pnpm add @xenova/transformers'
+    );
+    return null;
+  }
+}
 
 /**
  * Supported local embedding models
@@ -55,7 +78,8 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
   readonly modelName: string;
   readonly dimensions: number;
 
-  private pipeline: FeatureExtractionPipeline | null = null;
+  // biome-ignore lint/suspicious/noExplicitAny: pipeline type from optional dep, not available at compile time
+  private pipeline: any | null = null;
   private readonly maxTokens: number;
   private readonly quantized: boolean;
   private initializing: Promise<void> | null = null;
@@ -90,8 +114,15 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
   }
 
   private async doInitialize(): Promise<void> {
+    const transformers = await loadTransformers();
+    if (!transformers) {
+      throw new Error(
+        '@xenova/transformers is not installed. Local embeddings are unavailable. ' +
+          'Install it with: pnpm add @xenova/transformers'
+      );
+    }
     try {
-      this.pipeline = await pipeline('feature-extraction', this.modelName, {
+      this.pipeline = await transformers.pipeline('feature-extraction', this.modelName, {
         quantized: this.quantized,
         revision: 'main',
       });

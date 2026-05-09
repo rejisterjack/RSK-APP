@@ -1,14 +1,14 @@
 /**
- * Internal GSAP Animation Components
+ * Internal Animation Components
  *
- * Actual GSAP implementations that are lazy-loaded.
+ * Framer-motion implementations that are lazy-loaded.
  * Do not import directly - use the dynamic exports instead.
  */
 
 'use client';
 
+import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
 
 interface AnimationProps {
   children: ReactNode;
@@ -18,32 +18,15 @@ interface AnimationProps {
 }
 
 export function FadeInInternal({ children, delay = 0, duration = 0.5, className }: AnimationProps) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let ctx: { revert: () => void } | undefined;
-
-    import('gsap').then((gsapModule) => {
-      const gsapInstance = gsapModule.gsap;
-
-      if (ref.current) {
-        ctx = gsapInstance.context(() => {
-          gsapInstance.fromTo(
-            ref.current,
-            { opacity: 0 },
-            { opacity: 1, duration, delay, ease: 'power2.out' }
-          );
-        });
-      }
-    });
-
-    return () => ctx?.revert();
-  }, [delay, duration]);
-
   return (
-    <div ref={ref} className={className} style={{ opacity: 0 }}>
+    <motion.div
+      className={className}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration, delay, ease: 'easeOut' }}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }
 
@@ -53,32 +36,15 @@ export function SlideUpInternal({
   duration = 0.5,
   className,
 }: AnimationProps) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let ctx: { revert: () => void } | undefined;
-
-    import('gsap').then((gsapModule) => {
-      const gsap = gsapModule.gsap;
-
-      if (ref.current) {
-        ctx = gsap.context(() => {
-          gsap.fromTo(
-            ref.current,
-            { opacity: 0, y: 30 },
-            { opacity: 1, y: 0, duration, delay, ease: 'power2.out' }
-          );
-        });
-      }
-    });
-
-    return () => ctx?.revert();
-  }, [delay, duration]);
-
   return (
-    <div ref={ref} className={className} style={{ opacity: 0 }}>
+    <motion.div
+      className={className}
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration, delay, ease: 'easeOut' }}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }
 
@@ -92,39 +58,19 @@ export function StaggerContainerInternal({
   staggerDelay = 0.1,
   className,
 }: StaggerProps) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let ctx: { revert: () => void } | undefined;
-
-    import('gsap').then((gsapModule) => {
-      const gsap = gsapModule.gsap;
-
-      if (ref.current) {
-        const children = ref.current.children;
-        ctx = gsap.context(() => {
-          gsap.fromTo(
-            children,
-            { opacity: 0, y: 20 },
-            {
-              opacity: 1,
-              y: 0,
-              duration: 0.4,
-              delay,
-              stagger: staggerDelay,
-              ease: 'power2.out',
-            }
-          );
-        });
-      }
-    });
-
-    return () => ctx?.revert();
-  }, [delay, staggerDelay]);
-
   return (
-    <div ref={ref} className={className}>
+    <motion.div
+      className={className}
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: {},
+        visible: {
+          transition: { staggerChildren: staggerDelay, delayChildren: delay },
+        },
+      }}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }

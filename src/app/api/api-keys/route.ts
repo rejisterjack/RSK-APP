@@ -125,9 +125,12 @@ export const POST = withApiAuth(async (req, session) => {
       { status: 201 }
     );
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     if (error instanceof Error && error.message.startsWith('Invalid')) {
       return NextResponse.json(
-        { error: { code: 'VALIDATION_ERROR', message: error.message } },
+        {
+          error: { code: 'VALIDATION_ERROR', message: isDev ? error.message : 'Validation failed' },
+        },
         { status: 400 }
       );
     }

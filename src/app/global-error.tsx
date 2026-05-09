@@ -1,5 +1,6 @@
 'use client';
 
+import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 
 interface GlobalErrorProps {
@@ -17,15 +18,15 @@ interface GlobalErrorProps {
  *   3. Replace the console.error below with Sentry.captureException(error)
  */
 function reportError(error: Error & { digest?: string }): void {
-  // ─── Sentry Integration (uncomment after installing @sentry/nextjs) ───
-  // import * as Sentry from '@sentry/nextjs';
-  // Sentry.captureException(error, {
-  //   tags: { digest: error.digest },
-  //   level: 'fatal',
-  // });
+  // Report to Sentry
+  if (process.env.SENTRY_DSN) {
+    Sentry.captureException(error, {
+      tags: { digest: error.digest },
+      level: 'fatal',
+    });
+  }
 
-  // ─── Custom Error Reporting Endpoint ───
-  // For environments without Sentry, send errors to your own API
+  // Fallback: custom error reporting endpoint for environments without Sentry
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
     try {
       const payload = {

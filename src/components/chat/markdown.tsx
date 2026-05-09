@@ -1,7 +1,7 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
@@ -18,6 +18,14 @@ interface MarkdownProps {
 
 // Regex to match citation patterns like [1], [2], etc.
 const CITATION_REGEX = /\[(\d+)\]/g;
+
+// Lazy load react-markdown to reduce initial bundle size.
+// While the module loads, show the raw content as a simple text fallback
+// so streaming messages still display content immediately.
+const ReactMarkdown = dynamic(() => import('react-markdown'), {
+  ssr: false,
+  loading: () => <div className="animate-pulse text-muted-foreground">Loading...</div>,
+});
 
 export function Markdown({ content, className, onCitationClick }: MarkdownProps) {
   // Pre-process content to handle citations

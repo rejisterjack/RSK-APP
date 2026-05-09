@@ -169,7 +169,9 @@ export function SSOLoginButton({
             onSSODetected?.(result);
           }
         }
-      } catch (_error: unknown) {}
+      } catch (_error: unknown) {
+        // SSO domain check is best-effort — no toast needed
+      }
     };
 
     const timeoutId = setTimeout(checkDomain, 300); // Debounce

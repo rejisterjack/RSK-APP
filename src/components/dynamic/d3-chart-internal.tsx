@@ -7,7 +7,7 @@
 
 'use client';
 
-import * as d3 from 'd3';
+import { select } from 'd3-selection';
 import { useEffect, useRef } from 'react';
 
 interface D3ChartInternalProps {
@@ -29,11 +29,11 @@ export function D3ChartInternal({
     if (!svgRef.current || data.length === 0) return;
 
     // Clear previous chart
-    d3.select(svgRef.current).selectAll('*').remove();
+    select(svgRef.current).selectAll('*').remove();
 
     // Example: Create a simple scatter plot
     // Customize this based on your needs
-    const svg = d3.select(svgRef.current).attr('width', width).attr('height', height);
+    const svg = select(svgRef.current).attr('width', width).attr('height', height);
 
     const margin = { top: 20, right: 20, bottom: 30, left: 40 };
     const innerWidth = width - margin.left - margin.right;

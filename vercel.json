@@ -7,16 +7,16 @@
   "regions": ["iad1"],
   "functions": {
     "app/api/chat/**/*.ts": {
-      "maxDuration": 300
+      "maxDuration": 10
     },
     "app/api/ingest/**/*.ts": {
-      "maxDuration": 300
+      "maxDuration": 10
     },
     "app/api/voice/**/*.ts": {
-      "maxDuration": 120
+      "maxDuration": 10
     },
     "app/api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 10
     }
   },
   "headers": [
@@ -53,6 +53,12 @@
           "value": "noindex, nofollow"
         }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 3 * * *"
     }
   ]
 }

@@ -2,6 +2,7 @@
 
 import { Check, Copy, Eye, EyeOff, Key } from 'lucide-react';
 import * as React from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -55,7 +56,9 @@ export function ApiKeyQuickCopy({
 
       // Reset after 2 seconds
       setTimeout(() => setIsCopied(false), 2000);
-    } catch (_error: unknown) {}
+    } catch (_error: unknown) {
+      toast.error('Failed to copy to clipboard');
+    }
   }, [apiKey, onCopy]);
 
   return (
@@ -138,7 +141,9 @@ export function ApiKeyInlineCopy({
       onCopy?.();
 
       setTimeout(() => setIsCopied(false), 2000);
-    } catch (_error: unknown) {}
+    } catch (_error: unknown) {
+      toast.error('Failed to copy to clipboard');
+    }
   }, [apiKey, onCopy]);
 
   return (

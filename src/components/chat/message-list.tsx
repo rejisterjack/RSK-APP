@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { AgentThinkingIndicator } from './agent-thinking-indicator';
 import { type Message, MessageItem } from './message-item';
@@ -200,7 +199,7 @@ export function MessageList({
 
         {/* Streaming message */}
         {isStreaming && (
-          <div className="mt-2">
+          <div className="mt-1">
             <StreamingMessage content={streamingContent} onCancel={onCancelStreaming} />
           </div>
         )}
@@ -242,16 +241,24 @@ function MessageSkeleton({ align = 'left' }: { align?: 'left' | 'right' }) {
   const isRight = align === 'right';
   return (
     <div className={cn('flex gap-3', isRight && 'flex-row-reverse')}>
-      <Skeleton
+      <div
         className={cn(
-          'h-8 w-8 shrink-0 rounded-full',
-          isRight ? 'bg-primary/20' : 'bg-emerald-500/20'
+          'h-8 w-8 shrink-0 rounded-full animate-pulse',
+          isRight
+            ? 'bg-gradient-to-br from-primary/30 to-purple-500/30'
+            : 'bg-gradient-to-br from-emerald-500/30 to-teal-600/30'
         )}
       />
-      <div className={cn('flex w-full flex-col', isRight ? 'items-end' : 'items-start')}>
-        <Skeleton className="h-4 w-20 rounded-md mb-1.5 bg-foreground/10" />
-        <Skeleton
-          className={cn('h-16 rounded-xl bg-foreground/5', isRight ? 'w-[60%]' : 'w-[80%]')}
+      <div className={cn('flex w-full flex-col min-w-0', isRight ? 'items-end' : 'items-start')}>
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="h-2.5 w-14 rounded-md animate-pulse" />
+          <div className="h-2.5 w-10 rounded-md animate-pulse opacity-60" />
+        </div>
+        <div
+          className={cn(
+            'h-16 rounded-2xl animate-pulse border border-white/5',
+            isRight ? 'w-[60%] rounded-tr-sm' : 'w-[80%] rounded-tl-sm'
+          )}
         />
       </div>
     </div>

@@ -50,7 +50,7 @@ const TOUR_STEPS: TourStep[] = [
     target: '[data-tour="model-picker"]',
     title: 'Switch Models',
     description:
-      'Choose from multiple AI models including free options (DeepSeek, Llama, Gemma) or bring your own API key.',
+      'Choose from multiple AI models including free options (DeepSeek, Llama, Gemma) across multiple providers.',
     icon: <Settings className="h-4 w-4" />,
     position: 'bottom',
   },
@@ -113,14 +113,14 @@ export function ProductTour() {
       {/* Overlay */}
       <button
         type="button"
-        className="absolute inset-0 bg-black/20 pointer-events-auto cursor-default"
+        className="absolute inset-0 bg-black/60 pointer-events-auto cursor-default"
         onClick={dismiss}
         aria-label="Dismiss tour"
       />
 
       {/* Tour tooltip positioned at center of screen for simplicity */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto z-[101]">
-        <Card className="w-96 shadow-2xl border-primary/20">
+        <Card className="w-96 shadow-2xl border-primary/20 bg-background">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">

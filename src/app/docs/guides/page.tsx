@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+// ISR: documentation rarely changes — revalidate every hour
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: 'Guides',
   description:

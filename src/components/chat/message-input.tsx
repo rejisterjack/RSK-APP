@@ -166,14 +166,14 @@ export const MessageInput = memo(function MessageInput({
             <Badge
               key={`${file.name}-${file.size}-${file.lastModified}`}
               variant="secondary"
-              className="flex items-center gap-1 pr-1 text-xs"
+              className="flex items-center gap-1.5 pr-1 text-xs glass-light border-white/10"
             >
-              <Paperclip className="h-3 w-3" />
+              <Paperclip className="h-3 w-3 text-primary" />
               <span className="max-w-[120px] truncate">{file.name}</span>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-4 w-4 rounded-full p-0 hover:bg-muted"
+                className="h-4 w-4 rounded-full p-0 hover:bg-destructive/20 hover:text-destructive transition-colors"
                 onClick={() => removeFile(fileIndex)}
                 aria-label={`Remove ${file.name}`}
               >
@@ -186,14 +186,14 @@ export const MessageInput = memo(function MessageInput({
 
       {/* Input area */}
       <form
-        className="relative flex items-end gap-2 rounded-xl bg-foreground/5 border border-white/10 p-2 focus-within:bg-background/50 focus-within:ring-1 focus-within:ring-ring/50 transition-colors"
+        className="relative flex items-end gap-2 rounded-2xl glass-panel border border-white/10 p-2 focus-within:border-primary/30 focus-within:shadow-lg focus-within:shadow-primary/10 transition-all"
         aria-label="Chat message input"
       >
-        {/* File attachment button - 44x44 min touch target */}
+        {/* File attachment button */}
         <Button
           variant="ghost"
           size="icon"
-          className="shrink-0 rounded-lg min-h-[44px] min-w-[44px] h-11 w-11"
+          className="shrink-0 rounded-xl min-h-[44px] min-w-[44px] h-11 w-11 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
           disabled={disabled || isLoading}
           aria-label="Attach file"
           asChild
@@ -220,20 +220,20 @@ export const MessageInput = memo(function MessageInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled || isLoading}
-          className="min-h-[44px] max-h-[160px] resize-none border-0 bg-transparent px-2 py-2 text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="min-h-[44px] max-h-[160px] resize-none border-0 bg-transparent px-2 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
           rows={1}
           aria-label="Message input"
         />
 
-        {/* Send button - 44x44 min touch target */}
+        {/* Send button */}
         <Button
           onClick={handleSubmit}
           disabled={!hasContent || disabled || isLoading || isSubmitting}
           size="icon"
           className={cn(
-            'shrink-0 rounded-lg min-h-[44px] min-w-[44px] h-11 w-11 transition-colors',
+            'shrink-0 rounded-xl min-h-[44px] min-w-[44px] h-11 w-11 transition-all',
             hasContent && !disabled && !isLoading
-              ? 'bg-primary text-primary-foreground'
+              ? 'bg-gradient-to-br from-primary to-purple-500 text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-105'
               : 'bg-muted text-muted-foreground'
           )}
           aria-label={isLoading ? 'Sending message' : 'Send message'}

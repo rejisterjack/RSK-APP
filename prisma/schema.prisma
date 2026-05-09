@@ -232,6 +232,9 @@ model Document {
   sourceType  String?
   metadata    Json             @default("{}")
 
+  // Content hash for fast duplicate detection (indexed, unlike JSON path queries)
+  contentHash String?          @unique
+
   // Processing status
   status      DocumentStatus   @default(PENDING)
 
@@ -847,6 +850,29 @@ model RateLimit {
   @@index([userId])
   @@index([windowStart])
   @@map("rate_limits")
+}
+
+// ============================================================================
+// System Health / Feature Degradation
+// ============================================================================
+
+model SystemHealth {
+  id        String   @id @default(cuid())
+
+  // Which feature is tracked (e.g. "llm_generation", "vector_search")
+  feature   String
+
+  // "healthy" | "degraded"
+  status    String   @default("healthy")
+
+  // When the status was last updated
+  updatedAt DateTime @updatedAt
+
+  // Auto-recovery: feature returns to healthy after this time
+  expiresAt DateTime?
+
+  @@unique([feature])
+  @@map("system_health")
 }
 
 // ============================================================================

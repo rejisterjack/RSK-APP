@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 import { z } from 'zod';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,7 @@ export default function LoginPage(): React.ReactElement {
   const error = searchParams.get('error');
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(error);
   const [ssoDetected, setSsoDetected] = useState<DomainLookupResult | null>(null);
   const [isCheckingDomain, setIsCheckingDomain] = useState(false);
@@ -96,6 +98,7 @@ export default function LoginPage(): React.ReactElement {
           setSsoDetected(result);
         }
       } catch (_error: unknown) {
+        // Domain SSO check is best-effort
       } finally {
         setIsCheckingDomain(false);
       }
@@ -145,6 +148,29 @@ export default function LoginPage(): React.ReactElement {
     [email, callbackUrl]
   );
 
+  const handleResendVerification = useCallback(async () => {
+    const emailVal = (document.querySelector('input[type="email"]') as HTMLInputElement)?.value;
+    if (!emailVal) {
+      toast.error('Enter your email address first, then click resend.');
+      return;
+    }
+    setIsResending(true);
+    try {
+      await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailVal }),
+      });
+      toast.success(
+        'If that email is registered and unverified, a new verification link has been sent.'
+      );
+    } catch {
+      toast.error('Failed to resend verification email.');
+    } finally {
+      setIsResending(false);
+    }
+  }, []);
+
   const showSSOOnly = ssoDetected?.forceSSO && ssoDetected.found;
 
   return (
@@ -169,26 +195,11 @@ export default function LoginPage(): React.ReactElement {
                   : 'This verification link is invalid or already used.'}{' '}
                 <button
                   type="button"
-                  className="underline font-medium hover:text-yellow-100"
-                  onClick={async () => {
-                    const emailVal = (
-                      document.querySelector('input[type="email"]') as HTMLInputElement
-                    )?.value;
-                    if (!emailVal) {
-                      alert('Enter your email address first, then click resend.');
-                      return;
-                    }
-                    await fetch('/api/auth/verify-email', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email: emailVal }),
-                    });
-                    alert(
-                      'If that email is registered and unverified, a new verification link has been sent.'
-                    );
-                  }}
+                  disabled={isResending}
+                  className="underline font-medium hover:text-yellow-100 disabled:opacity-50"
+                  onClick={handleResendVerification}
                 >
-                  Resend verification email
+                  {isResending ? 'Sending...' : 'Resend verification email'}
                 </button>
               </AlertDescription>
             </Alert>
@@ -199,26 +210,11 @@ export default function LoginPage(): React.ReactElement {
                 Please verify your email before signing in. Check your inbox or{' '}
                 <button
                   type="button"
-                  className="underline font-medium hover:text-yellow-100"
-                  onClick={async () => {
-                    const emailVal = (
-                      document.querySelector('input[type="email"]') as HTMLInputElement
-                    )?.value;
-                    if (!emailVal) {
-                      alert('Enter your email address first, then click resend.');
-                      return;
-                    }
-                    await fetch('/api/auth/verify-email', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email: emailVal }),
-                    });
-                    alert(
-                      'If that email is registered and unverified, a new verification link has been sent.'
-                    );
-                  }}
+                  disabled={isResending}
+                  className="underline font-medium hover:text-yellow-100 disabled:opacity-50"
+                  onClick={handleResendVerification}
                 >
-                  resend the verification email
+                  {isResending ? 'sending...' : 'resend the verification email'}
                 </button>
                 .
               </AlertDescription>

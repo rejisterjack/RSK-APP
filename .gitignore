@@ -76,3 +76,5 @@ temp
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+.claude/
+.env.vercel

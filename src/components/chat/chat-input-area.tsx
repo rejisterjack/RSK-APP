@@ -17,7 +17,7 @@ export const ChatInputArea = memo(function ChatInputArea({
   onSendMessage,
 }: ChatInputAreaProps) {
   return (
-    <div className="flex justify-center px-2 py-2 md:px-3 md:py-2 border-t border-white/10 bg-background/80 backdrop-blur-md md:backdrop-blur-none md:bg-transparent shrink-0 sticky bottom-0 z-20">
+    <div className="flex justify-center px-3 py-3 md:px-4 md:py-3 shrink-0 sticky bottom-0 z-20 bg-gradient-to-t from-background via-background/95 to-background/80 backdrop-blur-xl border-t border-white/5">
       <MessageInput
         onSend={onSendMessage}
         isLoading={isLoading || isStreaming}

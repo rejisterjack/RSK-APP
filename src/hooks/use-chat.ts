@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { Source } from '@/components/chat/citations';
 import type { Message } from '@/components/chat/message-item';
-import { getAllProviderKeys } from '@/hooks/use-provider-keys';
 
 export interface UseChatOptions {
   conversationId?: string;
@@ -298,18 +297,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           // Use agent endpoint when agent mode is enabled
           const endpoint = agentMode ? '/api/chat/agent' : '/api/chat';
 
-          // Build headers with custom provider keys from localStorage
-          const providerKeys = getAllProviderKeys();
+          // Build headers
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
           };
-          if (providerKeys.openrouter) headers['x-key-openrouter'] = providerKeys.openrouter;
-          if (providerKeys.fireworks) headers['x-key-fireworks'] = providerKeys.fireworks;
-          if (providerKeys.groq) headers['x-key-groq'] = providerKeys.groq;
-          if (providerKeys.nvidia) headers['x-key-nvidia'] = providerKeys.nvidia;
-          if (providerKeys.cerebras) headers['x-key-cerebras'] = providerKeys.cerebras;
-          if (providerKeys.sambanova) headers['x-key-sambanova'] = providerKeys.sambanova;
-          if (providerKeys.mistral) headers['x-key-mistral'] = providerKeys.mistral;
 
           const effectiveChatId = chatIdOverride || conversationIdRef.current;
 

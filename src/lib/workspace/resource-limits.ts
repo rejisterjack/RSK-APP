@@ -225,6 +225,34 @@ export async function getWorkspaceResourceUsage(
 }
 
 // =============================================================================
+// Per-User Limits (for non-workspace uploads)
+// =============================================================================
+
+const MAX_USER_STORAGE_BYTES = 100 * 1024 * 1024; // 100MB per user
+
+/**
+ * Check if a user is within their personal storage limit for non-workspace uploads
+ */
+export async function checkUserStorageLimit(
+  userId: string,
+  additionalBytes: number = 0
+): Promise<{ allowed: boolean; reason?: string }> {
+  const result = await prisma.document.aggregate({
+    where: { userId, workspaceId: null },
+    _sum: { size: true },
+  });
+  const currentBytes = result._sum.size ?? 0;
+  const totalBytes = currentBytes + additionalBytes;
+  if (totalBytes > MAX_USER_STORAGE_BYTES) {
+    return {
+      allowed: false,
+      reason: `Storage limit exceeded (${formatBytes(currentBytes)} used of ${formatBytes(MAX_USER_STORAGE_BYTES)})`,
+    };
+  }
+  return { allowed: true };
+}
+
+// =============================================================================
 // Helpers
 // =============================================================================
 

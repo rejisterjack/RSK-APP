@@ -7,11 +7,11 @@ export type FeatureLevel = 0 | 1 | 2;
 const MESSAGE_COUNT_KEY = 'rag-message-count';
 const MANUAL_UNLOCK_KEY = 'rag-advanced-unlocked';
 
-// Level 0: Basic chat (< 3 messages)
-// Level 1: Model picker + agent mode (3-10 messages)
+// Level 0: Full chat + model picker + agent mode
+// Level 1: Unlocked by default (same as 0 now)
 // Level 2: Advanced agent settings + all features (10+ messages or manual unlock)
 const LEVEL_THRESHOLDS: [number, number][] = [
-  [3, 1],
+  [0, 1],
   [10, 2],
 ];
 

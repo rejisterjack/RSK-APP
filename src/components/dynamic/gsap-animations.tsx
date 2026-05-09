@@ -1,7 +1,7 @@
 /**
- * Dynamic GSAP Animation Components
+ * Dynamic Animation Components
  *
- * GSAP is a heavy animation library. These components are lazy-loaded
+ * Framer-motion based animation components. These components are lazy-loaded
  * and only render when animations are needed.
  *
  * Usage:
@@ -20,10 +20,10 @@ interface AnimationProps {
   className?: string;
 }
 
-// Dynamic GSAP animation components
+// Dynamic animation components (framer-motion)
 const FadeIn = dynamic(() => import('./gsap-internal').then((mod) => mod.FadeInInternal), {
   loading: () => null,
-  ssr: false, // GSAP requires DOM
+  ssr: false,
 });
 
 const SlideUp = dynamic(() => import('./gsap-internal').then((mod) => mod.SlideUpInternal), {

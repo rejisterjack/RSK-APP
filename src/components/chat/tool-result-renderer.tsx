@@ -409,6 +409,7 @@ function formatRaw(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch (_error: unknown) {
+    // Circular reference or unserializable — fall back to toString
     return String(value);
   }
 }

@@ -111,6 +111,12 @@ export const RAG_ERRORS = {
   RAG_EMBEDDING: 'RAG_EMBEDDING',
   /** LLM generation failed */
   RAG_LLM_ERROR: 'RAG_LLM_ERROR',
+  /** AI call timed out */
+  RAG_LLM_TIMEOUT: 'RAG_LLM_TIMEOUT',
+  /** All models unavailable */
+  RAG_MODEL_UNAVAILABLE: 'RAG_MODEL_UNAVAILABLE',
+  /** Service degraded */
+  RAG_SERVICE_DEGRADED: 'RAG_SERVICE_DEGRADED',
   /** No relevant documents found */
   RAG_NO_RESULTS: 'RAG_NO_RESULTS',
   /** Document processing failed */

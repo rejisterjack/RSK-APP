@@ -2,6 +2,7 @@
 
 import { Crown, MoreHorizontal, Shield, User, UserX } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -88,8 +89,10 @@ export function MemberList({
         throw new Error('Failed to update role');
       }
 
+      toast.success('Role updated');
       onUpdate?.();
     } catch (_error: unknown) {
+      toast.error('Failed to update role');
     } finally {
       setIsLoading(null);
     }
@@ -110,8 +113,10 @@ export function MemberList({
         throw new Error('Failed to remove member');
       }
 
+      toast.success('Member removed');
       onUpdate?.();
     } catch (_error: unknown) {
+      toast.error('Failed to remove member');
     } finally {
       setIsLoading(null);
     }

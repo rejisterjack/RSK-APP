@@ -42,7 +42,14 @@ import { validateUrlSafety } from '@/lib/security/ssrf-protection';
 import { virusScanner } from '@/lib/security/virus-scanner';
 import { withSpan } from '@/lib/tracing';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
-import { checkDocumentLimit, checkStorageLimit } from '@/lib/workspace/resource-limits';
+import {
+  checkDocumentLimit,
+  checkStorageLimit,
+  checkUserStorageLimit,
+} from '@/lib/workspace/resource-limits';
+
+// Vercel maxDuration: ingestion (parsing, virus scan) can take up to 60s
+export const maxDuration = 60;
 
 // Maximum file size: 50MB
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -248,12 +255,17 @@ export const POST = withApiAuth(async (req: NextRequest, session) => {
 
     return handleFileIngestion(file, userId, workspaceId, startTime, rateLimitResult);
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Failed to process document',
         },
       },
       { status: 500 }
@@ -291,6 +303,17 @@ async function handleFileIngestion(
     if (!storageLimit.allowed) {
       return NextResponse.json(
         { success: false, error: { code: 'LIMIT_EXCEEDED', message: storageLimit.reason } },
+        { status: 403 }
+      );
+    }
+  }
+
+  // Check per-user storage limit for non-workspace uploads
+  if (!workspaceId) {
+    const userStorageLimit = await checkUserStorageLimit(userId, file.size);
+    if (!userStorageLimit.allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'LIMIT_EXCEEDED', message: userStorageLimit.reason } },
         { status: 403 }
       );
     }
@@ -425,12 +448,17 @@ async function handleFileIngestion(
       return parsed;
     });
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'PARSE_ERROR',
-          message: error instanceof Error ? error.message : 'Failed to parse document',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Failed to parse document'
+            : 'Failed to parse document',
         },
       },
       { status: 422 }
@@ -439,14 +467,11 @@ async function handleFileIngestion(
 
   // Step 6: Check for duplicate content (simple hash check)
   const contentHash = await hashContent(content.slice(0, 1000));
-  const targetId = workspaceId || userId;
+  const duplicateWhere = workspaceId ? { workspaceId } : { userId, workspaceId: null };
   const existingDoc = await prisma.document.findFirst({
     where: {
-      OR: [{ userId: targetId }, { workspaceId: targetId }],
-      metadata: {
-        path: ['contentHash'],
-        equals: contentHash,
-      },
+      ...duplicateWhere,
+      contentHash,
     },
   });
 
@@ -476,11 +501,11 @@ async function handleFileIngestion(
       userId: userId, // Always use the actual user's ID
       workspaceId: workspaceId || null,
       content,
+      contentHash,
       metadata: {
         ...metadata,
         originalName: file.name,
         mimeType: file.type,
-        contentHash,
         uploadedBy: userId,
         uploadedAt: new Date().toISOString(),
         scanned: ENABLE_VIRUS_SCAN,
@@ -493,7 +518,7 @@ async function handleFileIngestion(
     name: 'document/ingest',
     data: {
       documentId: document.id,
-      userId: targetId,
+      userId,
     },
   });
 
@@ -804,12 +829,17 @@ export const GET = withApiAuth(async (req: NextRequest, session) => {
       data: status,
     });
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Failed to retrieve document status',
         },
       },
       { status: 500 }
@@ -922,12 +952,17 @@ export const DELETE = withApiAuth(async (req: NextRequest, session) => {
       },
     });
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Failed to cancel document processing',
         },
       },
       { status: 500 }
@@ -1036,15 +1071,24 @@ async function handleRawContentIngestion(
     }
   }
 
+  // Check per-user storage limit for non-workspace uploads
+  if (!workspaceId) {
+    const userStorageLimit = await checkUserStorageLimit(userId, docSize);
+    if (!userStorageLimit.allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: 'LIMIT_EXCEEDED', message: userStorageLimit.reason } },
+        { status: 403 }
+      );
+    }
+  }
+
   // Check for duplicate content
   const contentHash = await hashContent(content.slice(0, 1000));
+  const duplicateWhere = workspaceId ? { workspaceId } : { userId, workspaceId: null };
   const existingDoc = await prisma.document.findFirst({
     where: {
-      userId,
-      metadata: {
-        path: ['contentHash'],
-        equals: contentHash,
-      },
+      ...duplicateWhere,
+      contentHash,
     },
   });
 
@@ -1072,9 +1116,9 @@ async function handleRawContentIngestion(
       userId,
       workspaceId: workspaceId || null,
       content,
+      contentHash,
       metadata: {
         source: 'raw_content',
-        contentHash,
         uploadedBy: userId,
         uploadedAt: new Date().toISOString(),
       },

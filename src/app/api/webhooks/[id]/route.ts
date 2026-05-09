@@ -360,11 +360,15 @@ export async function POST(req: Request, { params }: RouteParams) {
       );
     }
 
+    const isDev = process.env.NODE_ENV === 'development';
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     // Distinguish validation errors from internal errors
     if (message === 'Invalid URL provided in payload' || message.startsWith('Invalid')) {
-      return NextResponse.json({ error: { code: 'VALIDATION_ERROR', message } }, { status: 400 });
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', message: isDev ? message : 'Validation failed' } },
+        { status: 400 }
+      );
     }
 
     logger.error('Webhook ingestion failed', {
@@ -372,7 +376,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     });
 
     return NextResponse.json(
-      { error: { code: 'INTERNAL_ERROR', message: 'Webhook ingestion failed' } },
+      { error: { code: 'INTERNAL_ERROR', message: isDev ? message : 'Webhook ingestion failed' } },
       { status: 500 }
     );
   }
@@ -431,12 +435,18 @@ export const PATCH = withApiAuth(async (req: Request, session, { params }: Route
     }
 
     let validatedInput: UpdateWebhookInput;
+    const isDev = process.env.NODE_ENV === 'development';
     try {
       validatedInput = validateUpdateWebhookInput(body);
     } catch (error) {
       if (error instanceof Error) {
         return NextResponse.json(
-          { error: { code: 'VALIDATION_ERROR', message: error.message } },
+          {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: isDev ? error.message : 'Validation failed',
+            },
+          },
           { status: 400 }
         );
       }

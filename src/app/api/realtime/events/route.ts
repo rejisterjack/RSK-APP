@@ -12,6 +12,9 @@ import { logger } from '@/lib/logger';
 import { isRedisConfigured } from '@/lib/realtime/presence';
 import { getRateLimiter } from '@/lib/security/rate-limiter';
 
+// Vercel maxDuration: SSE connections stay open for up to 300s
+export const maxDuration = 300;
+
 // =============================================================================
 // SSE Client Store
 // =============================================================================

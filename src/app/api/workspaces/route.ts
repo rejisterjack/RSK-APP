@@ -100,12 +100,18 @@ export const POST = withApiAuth(async (req, session) => {
     }
 
     let validatedInput: ReturnType<typeof validateCreateWorkspaceInput>;
+    const isDev = process.env.NODE_ENV === 'development';
     try {
       validatedInput = validateCreateWorkspaceInput(body);
     } catch (error) {
       if (error instanceof Error) {
         return NextResponse.json(
-          { error: { code: 'VALIDATION_ERROR', message: error.message } },
+          {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: isDev ? error.message : 'Validation failed',
+            },
+          },
           { status: 400 }
         );
       }
@@ -139,8 +145,22 @@ export const POST = withApiAuth(async (req, session) => {
       );
     }
 
+    const isDev = process.env.NODE_ENV === 'development';
+    logger.error('Failed to create workspace', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+
     return NextResponse.json(
-      { error: { code: 'INTERNAL_ERROR', message: 'Failed to create workspace' } },
+      {
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Failed to create workspace',
+        },
+      },
       { status: 500 }
     );
   }

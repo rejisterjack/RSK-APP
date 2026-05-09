@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { checkMemoryRateLimit } from '@/lib/security/rate-limiter';
 
 /**
  * POST /api/error-report
@@ -10,6 +11,14 @@ import { logger } from '@/lib/logger';
  * Sentry, or any observability pipeline.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // In-memory rate limit (30/min per IP) — client error reports are
+  // high-volume, low-value; avoids burning Redis commands on the free tier.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const errorLimit = checkMemoryRateLimit(`error-report:${ip}`, 30, 60_000);
+  if (!errorLimit.allowed) {
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
   try {
     const body = await req.json();
 

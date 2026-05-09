@@ -145,7 +145,9 @@ export function IngestionProgress({
           es.close();
           eventSourceRef.current = null;
         }
-      } catch (_error: unknown) {}
+      } catch (_error: unknown) {
+        // SSE message parse failure — handled by state machine timeouts
+      }
     });
 
     // Listen for custom ingestion progress events (if server emits them directly)
@@ -153,7 +155,9 @@ export function IngestionProgress({
       try {
         const data = JSON.parse(event.data) as ProgressEvent;
         handleProgressEvent(data);
-      } catch (_error: unknown) {}
+      } catch (_error: unknown) {
+        // Malformed SSE event — skip
+      }
     });
 
     es.addEventListener('document_ingestion_completed', (event: MessageEvent) => {
@@ -168,7 +172,9 @@ export function IngestionProgress({
           es.close();
           eventSourceRef.current = null;
         }
-      } catch (_error: unknown) {}
+      } catch (_error: unknown) {
+        // Malformed SSE event — skip
+      }
     });
 
     es.addEventListener('document_ingestion_failed', (event: MessageEvent) => {
@@ -181,7 +187,9 @@ export function IngestionProgress({
           es.close();
           eventSourceRef.current = null;
         }
-      } catch (_error: unknown) {}
+      } catch (_error: unknown) {
+        // Malformed SSE event — skip
+      }
     });
 
     es.onerror = () => {

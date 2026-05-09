@@ -9,11 +9,8 @@ import { ChatHeader } from './chat-header';
 import { ChatInputArea } from './chat-input-area';
 import { ChatMessages } from './chat-messages';
 import type { Source } from './citations';
-import { ConversationHistoryPanel } from './conversation-history-panel';
 import { DegradationBanner } from './degradation-banner';
 import { SourcesPanel } from './sources-panel';
-
-const noop = () => {};
 
 interface ChatContainerProps {
   messages: import('./message-item').Message[];
@@ -34,12 +31,11 @@ interface ChatContainerProps {
   onAgentModeToggle?: (enabled: boolean) => void;
   onRegenerate?: () => void;
   onFeedback?: (messageId: string, rating: 'UP' | 'DOWN') => void;
-  onSelectConversation?: (chatId: string) => void;
-  onDeleteConversation?: (chatId: string) => void;
   onUploadClick?: () => void;
   onFilesDrop?: (files: File[]) => void;
   hasMore?: boolean;
   isLoading?: boolean;
+  isNewChatLoading?: boolean;
   sidebar?: React.ReactNode;
   className?: string;
 }
@@ -63,12 +59,11 @@ export const ChatContainer = memo(function ChatContainer({
   onAgentModeToggle,
   onRegenerate,
   onFeedback,
-  onSelectConversation,
-  onDeleteConversation,
   onUploadClick,
   onFilesDrop,
   hasMore = false,
   isLoading = false,
+  isNewChatLoading = false,
   sidebar,
   className,
 }: ChatContainerProps) {
@@ -92,12 +87,11 @@ export const ChatContainer = memo(function ChatContainer({
         onAgentModeToggle={onAgentModeToggle}
         onRegenerate={onRegenerate}
         onFeedback={onFeedback}
-        onSelectConversation={onSelectConversation}
-        onDeleteConversation={onDeleteConversation}
         onUploadClick={onUploadClick}
         onFilesDrop={onFilesDrop}
         hasMore={hasMore}
         isLoading={isLoading}
+        isNewChatLoading={isNewChatLoading}
         sidebar={sidebar}
         className={className}
       />
@@ -106,9 +100,11 @@ export const ChatContainer = memo(function ChatContainer({
 });
 
 // Inner component that has access to ChatContext
-interface ChatInnerProps extends Omit<ChatContainerProps, 'hasMore' | 'isLoading'> {
+interface ChatInnerProps
+  extends Omit<ChatContainerProps, 'hasMore' | 'isLoading' | 'isNewChatLoading'> {
   hasMore: boolean;
   isLoading: boolean;
+  isNewChatLoading: boolean;
 }
 
 const ChatInner = memo(function ChatInner({
@@ -129,12 +125,11 @@ const ChatInner = memo(function ChatInner({
   onAgentModeToggle,
   onRegenerate,
   onFeedback,
-  onSelectConversation,
-  onDeleteConversation,
   onUploadClick,
   onFilesDrop,
   hasMore,
   isLoading,
+  isNewChatLoading,
   sidebar,
   className,
 }: ChatInnerProps) {
@@ -195,6 +190,7 @@ const ChatInner = memo(function ChatInner({
             chatId={chatId}
             chatTitle={chatTitle}
             isStreaming={isStreaming}
+            isNewChatLoading={isNewChatLoading}
             onNewChat={onNewChat}
             onModelChange={onModelChange}
             onAgentModeToggle={onAgentModeToggle}
@@ -234,16 +230,6 @@ const ChatInner = memo(function ChatInner({
         isOpen={state.isSourcesPanelOpen}
         onClose={() => dispatch({ type: 'SET_SOURCES_PANEL_OPEN', open: false })}
         onSourceClick={(source) => dispatch({ type: 'SET_SELECTED_SOURCE', source })}
-      />
-
-      {/* ── Conversation History Panel ─────────────────────────────── */}
-      <ConversationHistoryPanel
-        currentChatId={chatId}
-        onSelectConversation={onSelectConversation || noop}
-        onDeleteConversation={onDeleteConversation || noop}
-        onNewChat={onNewChat || noop}
-        isOpen={state.isHistoryPanelOpen}
-        onClose={() => dispatch({ type: 'SET_HISTORY_PANEL_OPEN', open: false })}
       />
     </div>
   );

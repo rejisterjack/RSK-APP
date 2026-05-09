@@ -2,6 +2,7 @@
 
 import { Building2, Palette, Save, Shield } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,7 +74,10 @@ export function SettingsPanel({
       if (!response.ok) {
         throw new Error('Failed to update workspace');
       }
+
+      toast.success('General settings saved');
     } catch (_error: unknown) {
+      toast.error('Failed to save general settings');
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +97,10 @@ export function SettingsPanel({
       if (!response.ok) {
         throw new Error('Failed to update RAG settings');
       }
+
+      toast.success('RAG settings saved');
     } catch (_error: unknown) {
+      toast.error('Failed to save RAG settings');
     } finally {
       setIsLoading(false);
     }

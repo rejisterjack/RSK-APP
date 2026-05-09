@@ -120,8 +120,9 @@ export async function GET(req: NextRequest) {
     if (workspaceIdFilter) {
       where.workspaceId = workspaceIdFilter;
     } else {
-      // Get user's personal documents and workspace documents
-      where.OR = [{ userId }, { workspaceId: workspaceId ?? null }];
+      // User has no workspace — show only their personal documents
+      where.userId = userId;
+      where.workspaceId = null;
     }
 
     // Filter by status if provided
@@ -182,14 +183,20 @@ export async function GET(req: NextRequest) {
     });
 
     addRateLimitHeaders(response.headers, rateLimitResult);
+    response.headers.set('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
     return response;
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Failed to retrieve documents',
         },
       },
       { status: 500 }
@@ -286,12 +293,17 @@ export async function DELETE(req: NextRequest) {
       },
     });
   } catch (error) {
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Internal server error',
+          message: isDev
+            ? error instanceof Error
+              ? error.message
+              : 'Internal server error'
+            : 'Failed to delete document',
         },
       },
       { status: 500 }

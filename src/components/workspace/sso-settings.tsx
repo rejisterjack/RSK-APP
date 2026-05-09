@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -83,9 +84,12 @@ export function SSOSettings({
       }
 
       setSuccess('SSO settings saved successfully');
+      toast.success('SSO settings saved');
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save settings');
+      const msg = err instanceof Error ? err.message : 'Failed to save settings';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }

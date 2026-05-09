@@ -77,6 +77,7 @@ export const ChatMessages = memo(function ChatMessages({
     lastAssistantIdRef.current = lastMsg.id;
 
     const prevUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+    setFollowUpQuestions([]);
     fetchFollowUps(lastMsg.content, prevUserMsg?.content).then((qs) => {
       setFollowUpQuestions(qs);
     });
@@ -119,19 +120,27 @@ export const ChatMessages = memo(function ChatMessages({
         aria-busy={showLoading || isStreaming}
       >
         {showLoading ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 p-4">
-            <div className="flex items-center gap-3 w-full max-w-3xl px-4">
-              <div className="h-8 w-8 rounded-full bg-emerald-500/20 animate-pulse" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3 w-20 rounded bg-foreground/10 animate-pulse" />
-                <div className="h-16 w-full rounded-xl bg-foreground/5 animate-pulse" />
+          <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
+            {/* Assistant message skeleton */}
+            <div className="flex gap-3 w-full max-w-3xl">
+              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-emerald-500/30 to-teal-600/30 animate-pulse" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="h-2.5 w-16 rounded-md animate-pulse" />
+                  <div className="h-2.5 w-12 rounded-md animate-pulse opacity-60" />
+                </div>
+                <div className="h-14 w-full rounded-2xl rounded-tl-sm animate-pulse border border-white/5" />
               </div>
             </div>
-            <div className="flex items-center gap-3 w-full max-w-3xl px-4">
-              <div className="h-8 w-8 rounded-full bg-primary/20 animate-pulse" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3 w-16 rounded bg-foreground/10 animate-pulse" />
-                <div className="h-12 w-3/4 rounded-xl bg-foreground/5 animate-pulse" />
+            {/* User message skeleton */}
+            <div className="flex flex-row-reverse gap-3 w-full max-w-3xl">
+              <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-primary/30 to-purple-500/30 animate-pulse" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 justify-end">
+                  <div className="h-2.5 w-10 rounded-md animate-pulse" />
+                  <div className="h-2.5 w-12 rounded-md animate-pulse opacity-60" />
+                </div>
+                <div className="h-10 w-3/4 rounded-2xl rounded-tr-sm animate-pulse border border-white/5 ml-auto" />
               </div>
             </div>
           </div>

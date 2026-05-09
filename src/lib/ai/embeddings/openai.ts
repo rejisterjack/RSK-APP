@@ -1,12 +1,14 @@
 /**
  * OpenAI Embedding Provider
  *
+ * Uses @ai-sdk/openai and the `ai` package for embeddings.
  * Supports text-embedding-3-small (1536 dims, fast)
  * and text-embedding-3-large (3072 dims, best quality).
  * Includes batch processing, rate limiting, and retry logic.
  */
 
-import { OpenAIEmbeddings } from '@langchain/openai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { embed, embedMany } from 'ai';
 import { logger } from '@/lib/logger';
 import { RetryableError, withRetry } from '@/lib/utils/retry';
 import {
@@ -21,10 +23,10 @@ import {
  * OpenAI Embedding Provider Implementation
  */
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
-  private embeddings: OpenAIEmbeddings;
   private config: Required<EmbeddingConfig>;
   private lastRequestTime = 0;
   private minRequestInterval: number;
+  private openai: ReturnType<typeof createOpenAI>;
 
   constructor(config: EmbeddingConfig) {
     this.config = {
@@ -50,12 +52,9 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     const requestsPerMinute = 3000;
     this.minRequestInterval = 60000 / requestsPerMinute;
 
-    this.embeddings = new OpenAIEmbeddings({
-      model: this.config.model,
+    this.openai = createOpenAI({
       apiKey: this.config.apiKey,
-      batchSize: this.config.batchSize,
-      timeout: this.config.timeoutMs,
-      configuration: this.config.baseUrl ? { baseURL: this.config.baseUrl } : undefined,
+      baseURL: this.config.baseUrl || undefined,
     });
   }
 
@@ -94,6 +93,15 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   }
 
   /**
+   * Get the AI SDK embedding model instance
+   */
+  private getEmbeddingModel() {
+    return this.openai.embedding(this.config.model, {
+      dimensions: this.config.dimensions,
+    });
+  }
+
+  /**
    * Embed a single query string with retry logic
    */
   async embedQuery(text: string): Promise<number[]> {
@@ -112,8 +120,11 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
         await this.throttle();
 
         try {
-          const result = await this.embeddings.embedQuery(truncatedText);
-          return result;
+          const { embedding } = await embed({
+            model: this.getEmbeddingModel(),
+            value: truncatedText,
+          });
+          return embedding;
         } catch (error) {
           // Check if it's a rate limit error
           if (this.isRateLimitError(error)) {
@@ -170,7 +181,11 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
           await this.throttle();
 
           try {
-            return await this.embeddings.embedDocuments(batch);
+            const { embeddings } = await embedMany({
+              model: this.getEmbeddingModel(),
+              values: batch,
+            });
+            return embeddings;
           } catch (error) {
             if (this.isRateLimitError(error)) {
               throw new RetryableError('Rate limit exceeded', true);

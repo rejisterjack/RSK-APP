@@ -1,5 +1,8 @@
 import Link from 'next/link';
 
+// ISR: documentation rarely changes — revalidate every hour
+export const revalidate = 3600;
+
 const sections = [
   {
     title: 'Getting Started',

@@ -2,6 +2,7 @@
 
 import { AlertCircle, Brain, Database, FileText, RotateCcw, Save } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,6 +59,7 @@ export default function RAGSettingsPage() {
         }
       }
     } catch (_err) {
+      toast.error('Failed to load RAG settings');
     } finally {
       setLoading(false);
     }
@@ -84,6 +86,7 @@ export default function RAGSettingsPage() {
       }
 
       setSaved(true);
+      toast.success('RAG settings saved');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');

@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { checkMemoryRateLimit } from '@/lib/security/rate-limiter';
 
 /**
  * CSP Violation Report Endpoint
@@ -10,6 +11,14 @@ import { NextResponse } from 'next/server';
  * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/report-uri
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // In-memory rate limit (30/min) — CSP reports are high-volume, low-value;
+  // using in-memory avoids burning Redis commands on the free tier.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const cspLimit = checkMemoryRateLimit(`csp:${ip}`, 30, 60_000);
+  if (!cspLimit.allowed) {
+    return new NextResponse(null, { status: 204 });
+  }
+
   try {
     const body = await req.json();
 

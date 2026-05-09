@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 
@@ -76,30 +77,59 @@ export interface UploadDropzoneProps {
 
 const DEFAULT_ACCEPT: Record<string, string[]> = {
   'application/pdf': ['.pdf'],
+  'application/msword': ['.doc'],
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
   'text/plain': ['.txt'],
   'text/markdown': ['.md', '.markdown'],
+  'text/csv': ['.csv'],
+  'application/json': ['.json'],
   'text/html': ['.html', '.htm'],
+  'application/vnd.ms-excel': ['.xls'],
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
 };
 
 const FILE_TYPE_ICONS: Record<string, React.ReactNode> = {
-  'application/pdf': <FileText className="h-8 w-8 text-red-500" />,
+  'application/pdf': <FileText className="h-8 w-8 text-red-400" />,
+  'application/msword': <FileText className="h-8 w-8 text-blue-400" />,
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': (
-    <FileText className="h-8 w-8 text-blue-500" />
+    <FileText className="h-8 w-8 text-blue-400" />
   ),
-  'text/plain': <FileText className="h-8 w-8 text-gray-500" />,
-  'text/markdown': <FileText className="h-8 w-8 text-purple-500" />,
-  'text/html': <Globe className="h-8 w-8 text-orange-500" />,
-  default: <FileIcon className="h-8 w-8 text-gray-400" />,
+  'text/plain': <FileText className="h-8 w-8 text-muted-foreground" />,
+  'text/markdown': <FileText className="h-8 w-8 text-purple-400" />,
+  'text/csv': <FileText className="h-8 w-8 text-green-400" />,
+  'application/json': <FileText className="h-8 w-8 text-yellow-400" />,
+  'text/html': <Globe className="h-8 w-8 text-orange-400" />,
+  'application/vnd.ms-excel': <FileText className="h-8 w-8 text-green-400" />,
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': (
+    <FileText className="h-8 w-8 text-green-400" />
+  ),
+  default: <FileIcon className="h-8 w-8 text-muted-foreground" />,
 };
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   'application/pdf': 'PDF',
+  'application/msword': 'Word',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
   'text/plain': 'Text',
   'text/markdown': 'Markdown',
+  'text/csv': 'CSV',
+  'application/json': 'JSON',
   'text/html': 'HTML',
+  'application/vnd.ms-excel': 'Excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
 };
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
+}
 
 // =============================================================================
 // Component
@@ -123,27 +153,22 @@ export function UploadDropzone({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
-  };
-
   // Get file icon
   const getFileIcon = (type: string): React.ReactNode => {
     return FILE_TYPE_ICONS[type] || FILE_TYPE_ICONS.default;
   };
 
-  // Validate files - defined early for use in callbacks
+  // Validate files with feedback
   const validateFiles = useCallback(
-    (filesToValidate: File[]): File[] => {
-      return filesToValidate.filter((file) => {
+    (filesToValidate: File[]): { valid: File[]; rejected: string[] } => {
+      const valid: File[] = [];
+      const rejected: string[] = [];
+
+      for (const file of filesToValidate) {
         // Check file size
         if (file.size > maxFileSize) {
-          return false;
+          rejected.push(`${file.name}: exceeds ${formatFileSize(maxFileSize)} limit`);
+          continue;
         }
 
         // Check file type
@@ -155,17 +180,19 @@ export function UploadDropzone({
           return file.type === type;
         });
 
-        if (
-          !isAccepted &&
-          !Object.values(accept)
-            .flat()
-            .some((ext) => file.name.toLowerCase().endsWith(ext))
-        ) {
-          return false;
+        const isExtAccepted = Object.values(accept)
+          .flat()
+          .some((ext) => file.name.toLowerCase().endsWith(ext));
+
+        if (!isAccepted && !isExtAccepted) {
+          rejected.push(`${file.name}: unsupported file type`);
+          continue;
         }
 
-        return true;
-      });
+        valid.push(file);
+      }
+
+      return { valid, rejected };
     },
     [maxFileSize, accept]
   );
@@ -197,10 +224,14 @@ export function UploadDropzone({
       if (disabled) return;
 
       const droppedFiles = Array.from(e.dataTransfer.files);
-      const validFiles = validateFiles(droppedFiles);
+      const { valid, rejected } = validateFiles(droppedFiles);
 
-      if (validFiles.length > 0) {
-        onFilesSelected(validFiles);
+      for (const msg of rejected) {
+        toast.error(msg);
+      }
+
+      if (valid.length > 0) {
+        onFilesSelected(valid);
       }
     },
     [disabled, onFilesSelected, validateFiles]
@@ -210,10 +241,14 @@ export function UploadDropzone({
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const selectedFiles = Array.from(e.target.files || []);
-      const validFiles = validateFiles(selectedFiles);
+      const { valid, rejected } = validateFiles(selectedFiles);
 
-      if (validFiles.length > 0) {
-        onFilesSelected(validFiles);
+      for (const msg of rejected) {
+        toast.error(msg);
+      }
+
+      if (valid.length > 0) {
+        onFilesSelected(valid);
       }
 
       // Reset input
@@ -238,13 +273,13 @@ export function UploadDropzone({
   const getStatusIcon = (status: UploadStatus) => {
     switch (status) {
       case 'uploading':
-        return <Loader2 className="h-5 w-5 animate-spin text-blue-500" />;
+        return <Loader2 className="h-5 w-5 animate-spin text-primary" />;
       case 'processing':
-        return <Loader2 className="h-5 w-5 animate-spin text-amber-500" />;
+        return <Loader2 className="h-5 w-5 animate-spin text-amber-400" />;
       case 'completed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return <CheckCircle className="h-5 w-5 text-emerald-400" />;
       case 'error':
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
+        return <AlertCircle className="h-5 w-5 text-red-400" />;
       default:
         return null;
     }
@@ -270,15 +305,17 @@ export function UploadDropzone({
   const getProgressColor = (status: UploadStatus): string => {
     switch (status) {
       case 'error':
-        return 'bg-red-500';
+        return 'bg-red-400';
       case 'completed':
-        return 'bg-green-500';
+        return 'bg-emerald-400';
       case 'processing':
-        return 'bg-amber-500';
+        return 'bg-amber-400';
       default:
-        return 'bg-blue-500';
+        return 'bg-primary';
     }
   };
+
+  const acceptedLabels = [...new Set(Object.values(FILE_TYPE_LABELS))];
 
   return (
     <div className={cn('w-full space-y-4', className)}>
@@ -300,11 +337,10 @@ export function UploadDropzone({
         role="button"
         tabIndex={disabled ? -1 : 0}
         className={cn(
-          'relative cursor-pointer rounded-lg border-2 border-dashed p-8 transition-colors',
-          'hover:border-gray-400 hover:bg-gray-50',
-          isDragOver && 'border-blue-500 bg-blue-50',
-          disabled && 'cursor-not-allowed opacity-50',
-          files.length > 0 && !multiple && 'hidden'
+          'relative cursor-pointer rounded-2xl border-2 border-dashed p-8 transition-all',
+          'border-white/10 hover:border-primary/40 hover:bg-primary/5 hover:shadow-lg hover:shadow-primary/10',
+          isDragOver && 'border-primary/60 bg-primary/10 shadow-lg shadow-primary/15',
+          disabled && 'cursor-not-allowed opacity-50'
         )}
       >
         <input
@@ -320,26 +356,28 @@ export function UploadDropzone({
         />
 
         <div className="flex flex-col items-center justify-center space-y-3 text-center">
-          <div className="rounded-full bg-gray-100 p-3">
-            <Upload className="h-6 w-6 text-gray-600" />
+          <div className="rounded-2xl bg-primary/10 p-3 shadow-md shadow-primary/10">
+            <Upload className="h-6 w-6 text-primary" />
           </div>
 
           <div>
-            <p className="text-sm font-medium text-gray-900">Drop files here or click to upload</p>
-            <p className="mt-1 text-xs text-gray-500">
-              Support for PDF, Word, Markdown, and Text files
+            <p className="text-sm font-semibold text-foreground">
+              Drop files here or click to upload
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="mt-1 text-xs text-muted-foreground">
+              PDF, Word, Excel, CSV, Text, Markdown, JSON, HTML
+            </p>
+            <p className="text-xs text-muted-foreground/60">
               Maximum file size: {formatFileSize(maxFileSize)}
             </p>
           </div>
 
           {/* File type badges */}
           <div className="flex flex-wrap justify-center gap-2 pt-2">
-            {Object.entries(FILE_TYPE_LABELS).map(([mime, label]) => (
+            {acceptedLabels.map((label) => (
               <span
-                key={mime}
-                className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600"
+                key={label}
+                className="inline-flex items-center rounded-full glass-light px-2.5 py-1 text-xs font-medium text-muted-foreground border border-white/10"
               >
                 {label}
               </span>
@@ -357,9 +395,9 @@ export function UploadDropzone({
               onClick={() => setShowUrlInput(true)}
               disabled={disabled}
               className={cn(
-                'flex w-full items-center justify-center gap-2 rounded-lg border border-dashed',
-                'border-gray-300 p-3 text-sm text-gray-600 transition-colors',
-                'hover:border-gray-400 hover:bg-gray-50',
+                'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed',
+                'border-white/10 p-3 text-sm text-muted-foreground transition-all',
+                'hover:border-primary/40 hover:bg-primary/5 hover:text-foreground',
                 disabled && 'cursor-not-allowed opacity-50'
               )}
             >
@@ -374,12 +412,12 @@ export function UploadDropzone({
                 onChange={(e) => setUrlInput(e.target.value)}
                 placeholder="https://example.com/article"
                 disabled={disabled}
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                className="flex-1 rounded-xl border border-white/10 bg-background/50 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-50 transition-colors"
               />
               <button
                 type="submit"
                 disabled={!urlInput.trim() || disabled}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-xl bg-gradient-to-br from-primary to-purple-500 px-4 py-2 text-sm font-medium text-white shadow-md shadow-primary/20 transition-all hover:shadow-primary/40 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
               >
                 Scrape
               </button>
@@ -390,7 +428,7 @@ export function UploadDropzone({
                   setUrlInput('');
                 }}
                 disabled={disabled}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                className="rounded-xl border border-white/10 px-3 py-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 disabled:opacity-50"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -406,14 +444,14 @@ export function UploadDropzone({
             <div
               key={file.id}
               className={cn(
-                'flex items-center gap-3 rounded-lg border p-3 transition-colors',
-                file.status === 'error' && 'border-red-200 bg-red-50',
-                file.status === 'completed' && 'border-green-200 bg-green-50',
-                file.status === 'processing' && 'border-amber-200 bg-amber-50',
+                'flex items-center gap-3 rounded-xl border p-3 transition-colors',
+                file.status === 'error' && 'border-red-400/30 bg-red-400/5',
+                file.status === 'completed' && 'border-emerald-400/30 bg-emerald-400/5',
+                file.status === 'processing' && 'border-amber-400/30 bg-amber-400/5',
                 file.status !== 'error' &&
                   file.status !== 'completed' &&
                   file.status !== 'processing' &&
-                  'border-gray-200 bg-white'
+                  'border-white/10 glass-light'
               )}
             >
               {/* File Icon */}
@@ -421,17 +459,17 @@ export function UploadDropzone({
 
               {/* File Info */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-gray-900">{file.name}</p>
+                <p className="truncate text-sm font-medium text-foreground">{file.name}</p>
                 <p
                   className={cn(
                     'text-xs',
-                    file.status === 'error' && 'text-red-600',
-                    file.status === 'completed' && 'text-green-600',
-                    file.status === 'processing' && 'text-amber-600',
+                    file.status === 'error' && 'text-red-400',
+                    file.status === 'completed' && 'text-emerald-400',
+                    file.status === 'processing' && 'text-amber-400',
                     file.status !== 'error' &&
                       file.status !== 'completed' &&
                       file.status !== 'processing' &&
-                      'text-gray-500'
+                      'text-muted-foreground'
                   )}
                 >
                   {getStatusText(file)}
@@ -439,7 +477,7 @@ export function UploadDropzone({
 
                 {/* Progress Bar */}
                 {(file.status === 'uploading' || file.status === 'processing') && (
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                     <div
                       className={cn(
                         'h-full transition-all duration-300',
@@ -459,7 +497,7 @@ export function UploadDropzone({
                   <button
                     type="button"
                     onClick={() => onRetry(file.id)}
-                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
                     title="Retry upload"
                   >
                     <RefreshCw className="h-4 w-4" />
@@ -471,7 +509,7 @@ export function UploadDropzone({
                     type="button"
                     onClick={() => onFileRemove(file.id)}
                     disabled={file.status === 'uploading' || file.status === 'processing'}
-                    className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
                     title="Remove file"
                   >
                     <X className="h-4 w-4" />
@@ -490,9 +528,9 @@ export function UploadDropzone({
           onClick={() => inputRef.current?.click()}
           disabled={disabled}
           className={cn(
-            'flex w-full items-center justify-center gap-2 rounded-lg border',
-            'border-dashed border-gray-300 p-3 text-sm text-gray-600 transition-colors',
-            'hover:border-gray-400 hover:bg-gray-50',
+            'flex w-full items-center justify-center gap-2 rounded-xl border',
+            'border-dashed border-white/10 p-3 text-sm text-muted-foreground transition-all',
+            'hover:border-primary/40 hover:bg-primary/5 hover:text-foreground',
             disabled && 'cursor-not-allowed opacity-50'
           )}
         >

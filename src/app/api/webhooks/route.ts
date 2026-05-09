@@ -198,12 +198,18 @@ export const POST = withApiAuth(async (req, session) => {
     }
 
     let validatedInput: CreateWebhookInput;
+    const isDev = process.env.NODE_ENV === 'development';
     try {
       validatedInput = validateCreateWebhookInput(body);
     } catch (error) {
       if (error instanceof Error) {
         return NextResponse.json(
-          { error: { code: 'VALIDATION_ERROR', message: error.message } },
+          {
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: isDev ? error.message : 'Validation failed',
+            },
+          },
           { status: 400 }
         );
       }

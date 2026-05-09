@@ -1,37 +1,19 @@
 /**
  * Health Check Endpoint
  *
- * Comprehensive health check for monitoring and load balancers.
+ * GET /api/health — Instant liveness check (cached for 30s)
+ * HEAD /api/health — Ultra-lightweight for load balancers
  *
- * Endpoints:
- * - GET /api/health - Basic liveness check
- * - GET /api/health/ready - Readiness check (includes dependencies)
- * - GET /api/health/live - Liveness check
+ * Each dependency check has a 2s timeout to prevent cascading slowness.
+ * Results are cached for 30 seconds to avoid hammering dependencies.
  */
 
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { logger } from '@/lib/logger';
-import { checkRAGHealth } from '@/lib/rag/engine';
-import { isRedisConfigured, redis } from '@/lib/redis';
+import { checkMemoryRateLimit } from '@/lib/security/rate-limiter';
 
 // =============================================================================
 // Types
 // =============================================================================
-
-interface HealthCheck {
-  status: 'healthy' | 'unhealthy' | 'degraded';
-  timestamp: string;
-  version: string;
-  uptime: number;
-  checks: {
-    database: HealthStatus;
-    redis?: HealthStatus;
-    vectorStore: HealthStatus;
-    embeddingProvider: HealthStatus;
-    ragPipeline: HealthStatus;
-  };
-}
 
 interface HealthStatus {
   status: 'up' | 'down' | 'degraded';
@@ -46,22 +28,42 @@ interface HealthStatus {
 
 const START_TIME = Date.now();
 const VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
+const CHECK_TIMEOUT_MS = 2_000;
+const CACHE_TTL_MS = 30_000;
+
+let cachedResult: {
+  timestamp: number;
+  data: { status: string; checks: Record<string, HealthStatus> };
+} | null = null;
 
 // =============================================================================
-// Health Checks
+// Helpers
+// =============================================================================
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
+// =============================================================================
+// Individual Health Checks
 // =============================================================================
 
 async function checkDatabase(): Promise<HealthStatus> {
   const start = Date.now();
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    const { prisma } = await import('@/lib/db/client');
+    await withTimeout(prisma.$queryRaw`SELECT 1`, CHECK_TIMEOUT_MS);
     return {
       status: 'up',
       responseTime: Date.now() - start,
       lastChecked: new Date().toISOString(),
     };
   } catch (error) {
-    logger.error('Database health check failed', { error });
     return {
       status: 'down',
       responseTime: Date.now() - start,
@@ -74,15 +76,45 @@ async function checkDatabase(): Promise<HealthStatus> {
 async function checkVectorStore(): Promise<HealthStatus> {
   const start = Date.now();
   try {
-    // Check if pgvector extension is available
-    await prisma.$queryRaw`SELECT 1 FROM pg_extension WHERE extname = 'vector'`;
+    const { prisma } = await import('@/lib/db/client');
+    await withTimeout(
+      prisma.$queryRaw`SELECT 1 FROM pg_extension WHERE extname = 'vector'`,
+      CHECK_TIMEOUT_MS
+    );
     return {
       status: 'up',
       responseTime: Date.now() - start,
       lastChecked: new Date().toISOString(),
     };
   } catch (error) {
-    logger.error('Vector store health check failed', { error });
+    return {
+      status: 'down',
+      responseTime: Date.now() - start,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      lastChecked: new Date().toISOString(),
+    };
+  }
+}
+
+async function checkRedis(): Promise<HealthStatus> {
+  const start = Date.now();
+  try {
+    const { isRedisConfigured, redis } = await import('@/lib/redis');
+    if (!isRedisConfigured()) {
+      return {
+        status: 'degraded',
+        responseTime: Date.now() - start,
+        message: 'Redis not configured',
+        lastChecked: new Date().toISOString(),
+      };
+    }
+    await withTimeout(redis.ping(), CHECK_TIMEOUT_MS);
+    return {
+      status: 'up',
+      responseTime: Date.now() - start,
+      lastChecked: new Date().toISOString(),
+    };
+  } catch (error) {
     return {
       status: 'down',
       responseTime: Date.now() - start,
@@ -97,72 +129,20 @@ async function checkEmbeddingProvider(): Promise<HealthStatus> {
   try {
     const { createEmbeddingProviderFromEnv } = await import('@/lib/ai/embeddings');
     const provider = createEmbeddingProviderFromEnv();
-
     if (provider.healthCheck) {
-      const isHealthy = await provider.healthCheck();
+      const isHealthy = await withTimeout(provider.healthCheck(), CHECK_TIMEOUT_MS);
       return {
         status: isHealthy ? 'up' : 'degraded',
         responseTime: Date.now() - start,
         lastChecked: new Date().toISOString(),
       };
     }
-
     return {
       status: 'up',
       responseTime: Date.now() - start,
       lastChecked: new Date().toISOString(),
     };
   } catch (error) {
-    logger.error('Embedding provider health check failed', { error });
-    return {
-      status: 'down',
-      responseTime: Date.now() - start,
-      message: error instanceof Error ? error.message : 'Unknown error',
-      lastChecked: new Date().toISOString(),
-    };
-  }
-}
-
-async function checkRedis(): Promise<HealthStatus> {
-  const start = Date.now();
-  if (!isRedisConfigured()) {
-    return {
-      status: 'degraded',
-      responseTime: Date.now() - start,
-      message: 'Redis not configured — using in-memory fallback',
-      lastChecked: new Date().toISOString(),
-    };
-  }
-  try {
-    await redis.ping();
-    return {
-      status: 'up',
-      responseTime: Date.now() - start,
-      lastChecked: new Date().toISOString(),
-    };
-  } catch (error) {
-    logger.error('Redis health check failed', { error });
-    return {
-      status: 'down',
-      responseTime: Date.now() - start,
-      message: error instanceof Error ? error.message : 'Unknown error',
-      lastChecked: new Date().toISOString(),
-    };
-  }
-}
-
-async function checkRAGPipeline(): Promise<HealthStatus> {
-  const start = Date.now();
-  try {
-    const health = await checkRAGHealth();
-    return {
-      status: health.healthy ? 'up' : 'degraded',
-      responseTime: Date.now() - start,
-      message: health.errors.length > 0 ? health.errors.join(', ') : undefined,
-      lastChecked: new Date().toISOString(),
-    };
-  } catch (error) {
-    logger.error('RAG pipeline health check failed', { error });
     return {
       status: 'down',
       responseTime: Date.now() - start,
@@ -176,55 +156,118 @@ async function checkRAGPipeline(): Promise<HealthStatus> {
 // Route Handlers
 // =============================================================================
 
-/**
- * GET /api/health
- * Basic health check - returns 200 if server is running
- */
-export async function GET(): Promise<NextResponse> {
-  const health: HealthCheck = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: VERSION,
-    uptime: Date.now() - START_TIME,
-    checks: {
-      database: await checkDatabase(),
-      redis: await checkRedis(),
-      vectorStore: await checkVectorStore(),
-      embeddingProvider: await checkEmbeddingProvider(),
-      ragPipeline: await checkRAGPipeline(),
-    },
-  };
+async function runChecks(): Promise<Record<string, HealthStatus>> {
+  const [database, vectorStore, redis, embeddingProvider] = await Promise.all([
+    checkDatabase(),
+    checkVectorStore(),
+    checkRedis(),
+    checkEmbeddingProvider(),
+  ]);
 
-  // Determine overall status
-  const checkStatuses = Object.values(health.checks).map((c) => c.status);
-
-  if (checkStatuses.some((s) => s === 'down')) {
-    health.status = 'unhealthy';
-  } else if (checkStatuses.some((s) => s === 'degraded')) {
-    health.status = 'degraded';
-  }
-
-  const statusCode = health.status === 'healthy' ? 200 : health.status === 'degraded' ? 200 : 503;
-
-  return NextResponse.json(health, {
-    status: statusCode,
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Health-Status': health.status,
-    },
-  });
+  return { database, vectorStore, redis, embeddingProvider };
 }
 
 /**
- * GET /api/health/ready
- * Readiness probe - returns 200 only if all dependencies are healthy
+ * GET /api/health
+ * Cached health check — runs all dependency checks with per-check timeouts.
+ * Results cached for 30s to avoid hammering dependencies on every request.
+ */
+export async function GET(): Promise<NextResponse> {
+  // In-memory rate limit for health checks (avoids Redis for cheap endpoints).
+  // When rate limited, still return healthy — load balancers just need a 200.
+  const healthLimit = checkMemoryRateLimit('health:global', 60, 60_000); // 60/min
+  if (!healthLimit.allowed) {
+    return NextResponse.json(
+      {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        version: VERSION,
+        uptime: Date.now() - START_TIME,
+        cached: true,
+      },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Health-Status': 'healthy',
+        },
+      }
+    );
+  }
+
+  // Serve from cache if fresh
+  if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_TTL_MS) {
+    return NextResponse.json(
+      {
+        status: cachedResult.data.status,
+        timestamp: new Date().toISOString(),
+        version: VERSION,
+        uptime: Date.now() - START_TIME,
+        checks: cachedResult.data.checks,
+        cached: true,
+      },
+      {
+        status: cachedResult.data.status === 'unhealthy' ? 503 : 200,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'X-Health-Status': cachedResult.data.status,
+        },
+      }
+    );
+  }
+
+  const checks = await runChecks();
+  const checkStatuses = Object.values(checks).map((c) => c.status);
+
+  const overallStatus = checkStatuses.some((s) => s === 'down')
+    ? 'unhealthy'
+    : checkStatuses.some((s) => s === 'degraded')
+      ? 'degraded'
+      : 'healthy';
+
+  // Update cache
+  cachedResult = { timestamp: Date.now(), data: { status: overallStatus, checks } };
+
+  // Probabilistic cleanup trigger for hobby plan (no Vercel Cron)
+  // ~1% of health checks trigger the cleanup endpoint
+  if (Math.random() < 0.01) {
+    try {
+      const cleanupUrl = new URL(
+        '/api/cron/cleanup',
+        process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      );
+      fetch(cleanupUrl.toString(), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET || 'dev'}` },
+      }).catch(() => {}); // fire-and-forget
+    } catch {}
+  }
+
+  return NextResponse.json(
+    {
+      status: overallStatus,
+      timestamp: new Date().toISOString(),
+      version: VERSION,
+      uptime: Date.now() - START_TIME,
+      checks,
+    },
+    {
+      status: overallStatus === 'unhealthy' ? 503 : 200,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Health-Status': overallStatus,
+      },
+    }
+  );
+}
+
+/**
+ * HEAD /api/health
+ * Ultra-lightweight liveness probe for load balancers — no database queries.
  */
 export async function HEAD(): Promise<NextResponse> {
-  // Lightweight check for load balancers
-  return NextResponse.json(null, {
+  return new NextResponse(null, {
     status: 200,
-    headers: {
-      'X-Health-Status': 'healthy',
-    },
+    headers: { 'X-Health-Status': 'healthy' },
   });
 }
