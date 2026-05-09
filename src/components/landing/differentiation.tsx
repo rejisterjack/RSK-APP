@@ -39,7 +39,7 @@ const comparisonData = [
 
 export function Differentiation(): React.ReactElement {
   return (
-    <section className="py-24 lg:py-32 relative">
+    <section className="pt-24 lg:pt-32 pb-8 lg:pb-12 relative">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -126,7 +126,7 @@ export function Differentiation(): React.ReactElement {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="mt-6 pb-6 flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <a
               href="/demo"

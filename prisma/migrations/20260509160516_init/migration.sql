@@ -20,6 +20,9 @@ CREATE TYPE "DocumentStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAI
 CREATE TYPE "JobStatus" AS ENUM ('QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED');
 
 -- CreateEnum
+CREATE TYPE "ErrorCategory" AS ENUM ('PARSE_ERROR', 'EMBEDDING_ERROR', 'SIZE_LIMIT', 'OCR_FAILURE', 'PROVIDER_ERROR', 'NETWORK_ERROR', 'UNKNOWN');
+
+-- CreateEnum
 CREATE TYPE "ImageStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
 
 -- CreateEnum
@@ -45,12 +48,6 @@ CREATE TYPE "WebhookStatus" AS ENUM ('ACTIVE', 'PAUSED', 'FAILED');
 
 -- CreateEnum
 CREATE TYPE "DeliveryStatus" AS ENUM ('PENDING', 'DELIVERED', 'FAILED', 'RETRYING');
-
--- CreateEnum
-CREATE TYPE "SubscriptionStatus" AS ENUM ('ACTIVE', 'CANCELED', 'PAST_DUE', 'UNPAID', 'TRIALING');
-
--- CreateEnum
-CREATE TYPE "InvoiceStatus" AS ENUM ('PENDING', 'PAID', 'FAILED', 'REFUNDED');
 
 -- CreateTable
 CREATE TABLE "accounts" (
@@ -91,6 +88,10 @@ CREATE TABLE "users" (
     "role" "UserRole" NOT NULL DEFAULT 'USER',
     "activeWorkspaceId" TEXT,
     "samlId" TEXT,
+    "mfaEnabled" BOOLEAN NOT NULL DEFAULT false,
+    "mfaSecret" TEXT,
+    "mfaBackupCodes" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "mfaVerifiedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -121,6 +122,7 @@ CREATE TABLE "workspaces" (
     "llmProvider" TEXT,
     "llmModel" TEXT,
     "ownerId" TEXT NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -167,6 +169,7 @@ CREATE TABLE "documents" (
     "sourceUrl" TEXT,
     "sourceType" TEXT,
     "metadata" JSONB NOT NULL DEFAULT '{}',
+    "contentHash" TEXT,
     "status" "DocumentStatus" NOT NULL DEFAULT 'PENDING',
     "ocrProcessed" BOOLEAN NOT NULL DEFAULT false,
     "ocrConfidence" DOUBLE PRECISION,
@@ -178,6 +181,7 @@ CREATE TABLE "documents" (
     "ocrError" TEXT,
     "userId" TEXT NOT NULL,
     "workspaceId" TEXT,
+    "version" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -207,6 +211,7 @@ CREATE TABLE "ingestion_jobs" (
     "status" "JobStatus" NOT NULL DEFAULT 'QUEUED',
     "progress" INTEGER NOT NULL DEFAULT 0,
     "error" TEXT,
+    "errorCategory" "ErrorCategory",
     "startedAt" TIMESTAMP(3),
     "completedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -265,6 +270,7 @@ CREATE TABLE "chats" (
     "chunkCount" INTEGER,
     "userId" TEXT NOT NULL,
     "workspaceId" TEXT,
+    "version" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -369,6 +375,8 @@ CREATE TABLE "api_keys" (
     "keyHash" TEXT NOT NULL,
     "keyPreview" TEXT NOT NULL,
     "permissions" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "allowedIps" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "allowedEndpoints" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "status" "ApiKeyStatus" NOT NULL DEFAULT 'ACTIVE',
     "expiresAt" TIMESTAMP(3),
     "lastUsedAt" TIMESTAMP(3),
@@ -411,6 +419,8 @@ CREATE TABLE "audit_logs" (
     "error" TEXT,
     "ipAddress" TEXT,
     "userAgent" TEXT,
+    "recordHash" TEXT,
+    "previousHash" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
@@ -428,6 +438,17 @@ CREATE TABLE "rate_limits" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "rate_limits_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "system_health" (
+    "id" TEXT NOT NULL,
+    "feature" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'healthy',
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "expiresAt" TIMESTAMP(3),
+
+    CONSTRAINT "system_health_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -585,83 +606,18 @@ CREATE TABLE "webhook_deliveries" (
 );
 
 -- CreateTable
-CREATE TABLE "plans" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "displayName" TEXT NOT NULL,
-    "description" TEXT,
-    "priceMonth" INTEGER NOT NULL DEFAULT 0,
-    "priceYear" INTEGER NOT NULL DEFAULT 0,
-    "maxWorkspaces" INTEGER NOT NULL DEFAULT 1,
-    "maxDocuments" INTEGER NOT NULL DEFAULT 10,
-    "maxStorageBytes" BIGINT NOT NULL DEFAULT 1073741824,
-    "maxMessages" INTEGER NOT NULL DEFAULT 100,
-    "maxApiCalls" INTEGER NOT NULL DEFAULT 1000,
-    "features" JSONB NOT NULL DEFAULT '{}',
-    "stripeProductId" TEXT,
-    "stripePriceMonthId" TEXT,
-    "stripePriceYearId" TEXT,
-    "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "sortOrder" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "plans_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "subscriptions" (
+CREATE TABLE "consents" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "planId" TEXT NOT NULL,
-    "workspaceId" TEXT,
-    "stripeCustomerId" TEXT,
-    "stripeSubscriptionId" TEXT,
-    "stripePriceId" TEXT,
-    "currentPeriodStart" TIMESTAMP(3) NOT NULL,
-    "currentPeriodEnd" TIMESTAMP(3) NOT NULL,
-    "status" "SubscriptionStatus" NOT NULL DEFAULT 'ACTIVE',
-    "cancelAtPeriodEnd" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "consentType" TEXT NOT NULL,
+    "granted" BOOLEAN NOT NULL,
+    "grantedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "revokedAt" TIMESTAMP(3),
+    "version" TEXT NOT NULL DEFAULT '1.0',
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
 
-    CONSTRAINT "subscriptions_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "usage_limits" (
-    "id" TEXT NOT NULL,
-    "subscriptionId" TEXT NOT NULL,
-    "workspacesUsed" INTEGER NOT NULL DEFAULT 0,
-    "documentsUsed" INTEGER NOT NULL DEFAULT 0,
-    "storageUsed" BIGINT NOT NULL DEFAULT 0,
-    "messagesUsed" INTEGER NOT NULL DEFAULT 0,
-    "apiCallsUsed" INTEGER NOT NULL DEFAULT 0,
-    "lastResetAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "usage_limits_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "invoices" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "subscriptionId" TEXT,
-    "stripeInvoiceId" TEXT,
-    "stripePaymentIntentId" TEXT,
-    "amount" INTEGER NOT NULL,
-    "currency" TEXT NOT NULL DEFAULT 'usd',
-    "status" "InvoiceStatus" NOT NULL DEFAULT 'PENDING',
-    "paidAt" TIMESTAMP(3),
-    "periodStart" TIMESTAMP(3) NOT NULL,
-    "periodEnd" TIMESTAMP(3) NOT NULL,
-    "pdfUrl" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "invoices_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "consents_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -725,6 +681,9 @@ CREATE INDEX "workspace_invitations_token_idx" ON "workspace_invitations"("token
 CREATE INDEX "workspace_invitations_status_idx" ON "workspace_invitations"("status");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "documents_contentHash_key" ON "documents"("contentHash");
+
+-- CreateIndex
 CREATE INDEX "documents_userId_idx" ON "documents"("userId");
 
 -- CreateIndex
@@ -732,6 +691,9 @@ CREATE INDEX "documents_workspaceId_idx" ON "documents"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "documents_status_idx" ON "documents"("status");
+
+-- CreateIndex
+CREATE INDEX "documents_workspaceId_status_idx" ON "documents"("workspaceId", "status");
 
 -- CreateIndex
 CREATE INDEX "documents_ocrProcessed_idx" ON "documents"("ocrProcessed");
@@ -773,7 +735,13 @@ CREATE INDEX "chats_userId_idx" ON "chats"("userId");
 CREATE INDEX "chats_workspaceId_idx" ON "chats"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "chats_userId_workspaceId_idx" ON "chats"("userId", "workspaceId");
+
+-- CreateIndex
 CREATE INDEX "messages_chatId_idx" ON "messages"("chatId");
+
+-- CreateIndex
+CREATE INDEX "messages_chatId_createdAt_idx" ON "messages"("chatId", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "message_feedback_messageId_idx" ON "message_feedback"("messageId");
@@ -860,6 +828,12 @@ CREATE INDEX "audit_logs_event_idx" ON "audit_logs"("event");
 CREATE INDEX "audit_logs_createdAt_idx" ON "audit_logs"("createdAt");
 
 -- CreateIndex
+CREATE INDEX "audit_logs_workspaceId_createdAt_idx" ON "audit_logs"("workspaceId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "audit_logs_event_createdAt_idx" ON "audit_logs"("event", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "rate_limits_key_idx" ON "rate_limits"("key");
 
 -- CreateIndex
@@ -870,6 +844,9 @@ CREATE INDEX "rate_limits_windowStart_idx" ON "rate_limits"("windowStart");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "rate_limits_key_type_windowStart_key" ON "rate_limits"("key", "type", "windowStart");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "system_health_feature_key" ON "system_health"("feature");
 
 -- CreateIndex
 CREATE INDEX "rag_events_workspaceId_idx" ON "rag_events"("workspaceId");
@@ -935,31 +912,13 @@ CREATE INDEX "webhook_deliveries_status_idx" ON "webhook_deliveries"("status");
 CREATE INDEX "webhook_deliveries_startedAt_idx" ON "webhook_deliveries"("startedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "plans_name_key" ON "plans"("name");
+CREATE INDEX "consents_userId_idx" ON "consents"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "subscriptions_workspaceId_key" ON "subscriptions"("workspaceId");
+CREATE INDEX "consents_consentType_idx" ON "consents"("consentType");
 
 -- CreateIndex
-CREATE INDEX "subscriptions_userId_idx" ON "subscriptions"("userId");
-
--- CreateIndex
-CREATE INDEX "subscriptions_status_idx" ON "subscriptions"("status");
-
--- CreateIndex
-CREATE INDEX "subscriptions_stripeSubscriptionId_idx" ON "subscriptions"("stripeSubscriptionId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "usage_limits_subscriptionId_key" ON "usage_limits"("subscriptionId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "invoices_stripeInvoiceId_key" ON "invoices"("stripeInvoiceId");
-
--- CreateIndex
-CREATE INDEX "invoices_userId_idx" ON "invoices"("userId");
-
--- CreateIndex
-CREATE INDEX "invoices_status_idx" ON "invoices"("status");
+CREATE INDEX "consents_userId_consentType_idx" ON "consents"("userId", "consentType");
 
 -- AddForeignKey
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1067,16 +1026,4 @@ ALTER TABLE "saml_connections" ADD CONSTRAINT "saml_connections_workspaceId_fkey
 ALTER TABLE "webhook_deliveries" ADD CONSTRAINT "webhook_deliveries_webhookId_fkey" FOREIGN KEY ("webhookId") REFERENCES "webhooks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_planId_fkey" FOREIGN KEY ("planId") REFERENCES "plans"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "subscriptions" ADD CONSTRAINT "subscriptions_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "workspaces"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "usage_limits" ADD CONSTRAINT "usage_limits_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "subscriptions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "invoices" ADD CONSTRAINT "invoices_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "consents" ADD CONSTRAINT "consents_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

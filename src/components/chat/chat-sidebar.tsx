@@ -32,7 +32,7 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
           {/* Sliding background pill */}
           <motion.div
             layoutId="sidebar-tab-indicator"
-            className="absolute inset-y-1 rounded-lg bg-background/80 border border-white/10 shadow-sm"
+            className="absolute inset-y-1 rounded-lg bg-primary/20 border border-primary/40 shadow-[0_0_12px_rgba(var(--primary-rgb),0.15)]"
             style={{
               width: 'calc(50% - 4px)',
               left: activeTab === 'knowledge' ? '4px' : 'calc(50%)',
@@ -47,11 +47,13 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
             className={cn(
               'relative z-10 flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-colors',
               activeTab === 'knowledge'
-                ? 'text-foreground'
+                ? 'text-primary'
                 : 'text-muted-foreground hover:text-foreground/80'
             )}
           >
-            <FolderOpen className="h-3.5 w-3.5" />
+            <FolderOpen
+              className={cn('h-3.5 w-3.5', activeTab === 'knowledge' && 'text-primary')}
+            />
             Knowledge Base
           </button>
 
@@ -62,11 +64,11 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
             className={cn(
               'relative z-10 flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-colors',
               activeTab === 'history'
-                ? 'text-foreground'
+                ? 'text-primary'
                 : 'text-muted-foreground hover:text-foreground/80'
             )}
           >
-            <History className="h-3.5 w-3.5" />
+            <History className={cn('h-3.5 w-3.5', activeTab === 'history' && 'text-primary')} />
             Chat History
           </button>
         </div>
