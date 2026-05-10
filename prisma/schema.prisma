@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,25 +7,20 @@ datasource db {
   provider = "postgresql"
 }
 
-// ============================================================================
-// Authentication Models
-// ============================================================================
-
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -47,44 +39,34 @@ model Session {
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  name                String?
-  email               String    @unique
-  emailVerified       DateTime?
-  image               String?
-  password            String?
-  role                UserRole  @default(USER)
-
-  // Active workspace for session
-  activeWorkspaceId   String?
-
-  // SSO fields
-  samlId              String?   @unique
-
-  // MFA fields
-  mfaEnabled          Boolean   @default(false)
-  mfaSecret           String?   // Encrypted TOTP secret
-  mfaBackupCodes      String[]  @default([])
-  mfaVerifiedAt       DateTime?
-
-  accounts      Account[]
-  sessions      Session[]
-
-  // Relations
-  chats             Chat[]
-  documents         Document[]
-  workspaceMembers  WorkspaceMember[]
-  ownedWorkspaces   Workspace[]        @relation("WorkspaceOwner")
+  id                String                @id @default(cuid())
+  name              String?
+  email             String                @unique
+  emailVerified     DateTime?
+  image             String?
+  password          String?
+  role              UserRole              @default(USER)
+  activeWorkspaceId String?
+  samlId            String?               @unique
+  mfaEnabled        Boolean               @default(false)
+  mfaSecret         String?
+  mfaBackupCodes    String[]              @default([])
+  mfaVerifiedAt     DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  accounts          Account[]
   createdApiKeys    ApiKey[]
-  auditLogs         AuditLog[]
-  rateLimits        RateLimit[]
   apiUsage          ApiUsage[]
-  invitationsSent   WorkspaceInvitation[] @relation("InvitationSender")
-  feedback          MessageFeedback[]
+  auditLogs         AuditLog[]
+  chats             Chat[]
   consents          Consent[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  documents         Document[]
+  feedback          MessageFeedback[]
+  rateLimits        RateLimit[]
+  sessions          Session[]
+  invitationsSent   WorkspaceInvitation[] @relation("InvitationSender")
+  workspaceMembers  WorkspaceMember[]
+  ownedWorkspaces   Workspace[]           @relation("WorkspaceOwner")
 
   @@index([samlId])
   @@map("users")
@@ -99,55 +81,35 @@ model VerificationToken {
   @@map("verificationtokens")
 }
 
-enum UserRole {
-  USER
-  ADMIN
-}
-
-// ============================================================================
-// Workspace & Multi-tenancy Models
-// ============================================================================
-
 model Workspace {
-  id          String        @id @default(cuid())
-  name        String
-  slug        String        @unique
-  description String?
-  logoUrl     String?
-
-  // SSO settings
-  ssoEnabled  Boolean       @default(false)
-  ssoDomain   String?
-
-  // Settings stored as JSON
-  settings    Json          @default("{}")
-
-  // Resource limits
-  maxDocuments   Int     @default(100)
-  maxStorageMb   Int     @default(1024)
-  maxChats       Int     @default(1000)
-  maxChatPerDay  Int     @default(50)
-
-  // Per-workspace LLM configuration
-  llmProvider    String? // 'openrouter' | 'openai' | 'anthropic' | 'ollama' | null (inherit from env)
-  llmModel       String? // specific model override
-
-  // Relations
-  ownerId     String
-  owner       User          @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members     WorkspaceMember[]
-  invitations WorkspaceInvitation[]
-  documents   Document[]
-  chats       Chat[]
-  apiKeys     ApiKey[]
-  auditLogs   AuditLog[]
+  id             String                @id @default(cuid())
+  name           String
+  slug           String                @unique
+  description    String?
+  logoUrl        String?
+  ssoEnabled     Boolean               @default(false)
+  ssoDomain      String?
+  settings       Json                  @default("{}")
+  maxDocuments   Int                   @default(100)
+  maxStorageMb   Int                   @default(1024)
+  maxChats       Int                   @default(1000)
+  maxChatPerDay  Int                   @default(50)
+  llmProvider    String?
+  llmModel       String?
+  ownerId        String
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  apiKeys        ApiKey[]
+  auditLogs      AuditLog[]
+  chats          Chat[]
+  collections    DocumentCollection[]
+  tags           DocumentTag[]
+  documents      Document[]
   samlConnection SamlConnection?
-  tags        DocumentTag[]
-  collections DocumentCollection[]
-
-  version     Int           @default(1)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  invitations    WorkspaceInvitation[]
+  members        WorkspaceMember[]
+  owner          User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@index([slug])
   @@index([ownerId])
@@ -155,20 +117,613 @@ model Workspace {
 }
 
 model WorkspaceMember {
-  id          String           @id @default(cuid())
+  id          String        @id @default(cuid())
   workspaceId String
   userId      String
-  role        WorkspaceRole    @default(MEMBER)
-  status      MemberStatus     @default(ACTIVE)
-  joinedAt    DateTime         @default(now())
-
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        WorkspaceRole @default(MEMBER)
+  status      MemberStatus  @default(ACTIVE)
+  joinedAt    DateTime      @default(now())
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, userId])
   @@index([workspaceId])
   @@index([userId])
   @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  email         String
+  role          WorkspaceRole @default(MEMBER)
+  status        InviteStatus  @default(PENDING)
+  token         String        @unique
+  expiresAt     DateTime
+  invitedById   String
+  invitedAt     DateTime      @default(now())
+  acceptedAt    DateTime?
+  cancelledAt   DateTime?
+  cancelledById String?
+  invitedBy     User          @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@index([token])
+  @@index([status])
+  @@map("workspace_invitations")
+}
+
+model Document {
+  id                  String                           @id @default(cuid())
+  name                String
+  contentType         String
+  size                Int
+  content             String?
+  sourceUrl           String?
+  sourceType          String?
+  metadata            Json                             @default("{}")
+  contentHash         String?                          @unique
+  status              DocumentStatus                   @default(PENDING)
+  /// /** Whether OCR was applied to this document
+  ocrProcessed        Boolean                          @default(false)
+  /// * OCR confidence score (0-100)
+  ocrConfidence       Float?
+  /// * OCR language code used (e.g., 'eng', 'deu')
+  ocrLanguage         String?
+  /// * OCR processing time in milliseconds
+  ocrProcessingTimeMs Int?
+  /// * OCR engine mode used
+  ocrEngineMode       String?
+  /// * Page segmentation mode used
+  ocrPSM              String?
+  /// * Whether preprocessing was applied
+  ocrPreprocessing    Boolean                          @default(false)
+  /// * Error message if OCR failed
+  ocrError            String?
+  userId              String
+  workspaceId         String?
+  version             Int                              @default(1)
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
+  storageKey          String?
+  storageUrl          String?
+  chunks              DocumentChunk[]
+  collections         DocumentCollectionsOnDocuments[]
+  images              DocumentImage[]
+  tags                DocumentTagsOnDocuments[]
+  user                User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace           Workspace?                       @relation(fields: [workspaceId], references: [id])
+  ingestionJob        IngestionJob?
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@index([ocrProcessed])
+  @@index([ocrConfidence])
+  @@map("documents")
+}
+
+model DocumentChunk {
+  id         String                 @id @default(cuid())
+  documentId String
+  content    String
+  index      Int
+  start      Int
+  end        Int
+  page       Int?
+  section    String?
+  embedding  Unsupported("vector")?
+  createdAt  DateTime               @default(now())
+  document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  images     DocumentImage[]
+
+  @@index([documentId])
+  @@map("document_chunks")
+}
+
+model IngestionJob {
+  id            String         @id @default(cuid())
+  documentId    String         @unique
+  status        JobStatus      @default(QUEUED)
+  progress      Int            @default(0)
+  error         String?
+  errorCategory ErrorCategory?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  document      Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("ingestion_jobs")
+}
+
+model DocumentImage {
+  id                  String         @id @default(cuid())
+  documentId          String
+  filename            String
+  mimeType            String
+  size                Int
+  width               Int?
+  height              Int?
+  storageKey          String
+  storageUrl          String
+  caption             String?
+  ocrText             String?
+  /// /** OCR confidence score (0-100)
+  ocrConfidence       Float?
+  /// * OCR language code used
+  ocrLanguage         String?
+  /// * OCR processing time in milliseconds
+  ocrProcessingTimeMs Int?
+  /// * Whether OCR preprocessing was applied
+  ocrPreprocessing    Boolean        @default(false)
+  /// * OCR bounding boxes as JSON
+  ocrBoundingBoxes    Json?
+  chunkId             String?
+  pageNumber          Int?
+  status              ImageStatus    @default(PENDING)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  chunk               DocumentChunk? @relation(fields: [chunkId], references: [id])
+  document            Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([chunkId])
+  @@index([status])
+  @@index([ocrConfidence])
+  @@map("document_images")
+}
+
+model ImageEmbedding {
+  id          String                @id @default(cuid())
+  imageId     String?
+  imageUrl    String?
+  contentHash String                @unique
+  embedding   Unsupported("vector")
+  model       String                @default("Xenova/clip-vit-base-patch32")
+  dimensions  Int                   @default(512)
+  createdAt   DateTime              @default(now())
+
+  @@index([imageId])
+  @@index([contentHash])
+  @@map("image_embeddings")
+}
+
+model Chat {
+  id          String     @id @default(cuid())
+  title       String     @default("New Chat")
+  model       String?
+  metadata    Json?      @default("{}")
+  chunkCount  Int?
+  userId      String
+  workspaceId String?
+  version     Int        @default(1)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  share       ChatShare?
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  messages    Message[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([userId, workspaceId])
+  @@map("chats")
+}
+
+model Message {
+  id         String            @id @default(cuid())
+  chatId     String
+  content    String
+  role       MessageRole
+  sources    Json?
+  tokensUsed Json?
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+  feedback   MessageFeedback[]
+  chat       Chat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+  @@index([chatId, createdAt])
+  @@map("messages")
+}
+
+model MessageFeedback {
+  id         String         @id @default(cuid())
+  messageId  String
+  rating     FeedbackRating
+  comment    String?
+  categories String[]       @default([])
+  userId     String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  message    Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user       User?          @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+  @@index([rating])
+  @@index([createdAt])
+  @@map("message_feedback")
+}
+
+model ChatShare {
+  id            String    @id @default(cuid())
+  chatId        String    @unique
+  isPublic      Boolean   @default(false)
+  shareToken    String    @unique @default(cuid())
+  allowComments Boolean   @default(false)
+  expiresAt     DateTime?
+  viewCount     Int       @default(0)
+  lastViewedAt  DateTime?
+  createdBy     String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  chat          Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([shareToken])
+  @@index([isPublic])
+  @@index([expiresAt])
+  @@map("chat_shares")
+}
+
+model DocumentTag {
+  id          String                    @id @default(cuid())
+  name        String
+  color       String                    @default("#6366f1")
+  workspaceId String
+  createdAt   DateTime                  @default(now())
+  workspace   Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documents   DocumentTagsOnDocuments[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("document_tags")
+}
+
+model DocumentTagsOnDocuments {
+  documentId String
+  tagId      String
+  assignedAt DateTime    @default(now())
+  assignedBy String?
+  document   Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tag        DocumentTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, tagId])
+  @@index([tagId])
+  @@map("document_tags_on_documents")
+}
+
+model DocumentCollection {
+  id          String                           @id @default(cuid())
+  name        String
+  description String?
+  workspaceId String
+  createdAt   DateTime                         @default(now())
+  updatedAt   DateTime                         @updatedAt
+  workspace   Workspace                        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documents   DocumentCollectionsOnDocuments[]
+
+  @@index([workspaceId])
+  @@map("document_collections")
+}
+
+model DocumentCollectionsOnDocuments {
+  documentId   String
+  collectionId String
+  addedAt      DateTime           @default(now())
+  addedBy      String?
+  order        Int                @default(0)
+  collection   DocumentCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  document     Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, collectionId])
+  @@index([collectionId])
+  @@map("document_collections_on_documents")
+}
+
+model ApiKey {
+  id               String       @id @default(cuid())
+  name             String
+  keyHash          String       @unique
+  keyPreview       String
+  permissions      String[]     @default([])
+  allowedIps       String[]     @default([])
+  allowedEndpoints String[]     @default([])
+  status           ApiKeyStatus @default(ACTIVE)
+  expiresAt        DateTime?
+  lastUsedAt       DateTime?
+  rateLimit        Int          @default(100)
+  userId           String
+  workspaceId      String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace        Workspace?   @relation(fields: [workspaceId], references: [id])
+  usage            ApiUsage[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+model ApiUsage {
+  id               String   @id @default(cuid())
+  endpoint         String
+  method           String
+  tokensPrompt     Int      @default(0)
+  tokensCompletion Int      @default(0)
+  tokensTotal      Int      @default(0)
+  latencyMs        Int      @default(0)
+  apiKeyId         String?
+  userId           String?
+  workspaceId      String?
+  createdAt        DateTime @default(now())
+  apiKey           ApiKey?  @relation(fields: [apiKeyId], references: [id])
+  user             User?    @relation(fields: [userId], references: [id])
+
+  @@index([apiKeyId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("api_usage")
+}
+
+model AuditLog {
+  id           String        @id @default(cuid())
+  event        AuditEvent
+  severity     AuditSeverity @default(INFO)
+  userId       String?
+  workspaceId  String?
+  metadata     Json?
+  resource     Json?
+  changes      Json?
+  error        String?
+  ipAddress    String?
+  userAgent    String?
+  recordHash   String?
+  previousHash String?
+  createdAt    DateTime      @default(now())
+  user         User?         @relation(fields: [userId], references: [id])
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([event])
+  @@index([createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([event, createdAt])
+  @@map("audit_logs")
+}
+
+model RateLimit {
+  id          String   @id @default(cuid())
+  key         String
+  windowStart DateTime
+  requests    Int      @default(0)
+  type        String   @default("default")
+  userId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([key, type, windowStart])
+  @@index([key])
+  @@index([userId])
+  @@index([windowStart])
+  @@map("rate_limits")
+}
+
+model SystemHealth {
+  id        String    @id @default(cuid())
+  feature   String    @unique
+  status    String    @default("healthy")
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime?
+
+  @@map("system_health")
+}
+
+model RAGEvent {
+  id                  String           @id @default(cuid())
+  query               String
+  conversationId      String?
+  workspaceId         String?
+  userId              String?
+  retrievedChunksData Json?            @map("retrievedChunks")
+  response            String?
+  latencyMs           Int
+  totalTokens         Int              @default(0)
+  model               String           @default("gpt-4o-mini")
+  queryType           String?
+  confidence          Float?
+  reranked            Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  retrievedChunks     RetrievedChunk[]
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("rag_events")
+}
+
+model RetrievedChunk {
+  id         String   @id @default(cuid())
+  eventId    String
+  chunkId    String
+  documentId String
+  similarity Float
+  rank       Int
+  createdAt  DateTime @default(now())
+  event      RAGEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([documentId])
+  @@map("retrieved_chunks")
+}
+
+model Metric {
+  id        String   @id @default(cuid())
+  type      String
+  value     Float
+  labels    Json     @default("{}")
+  timestamp DateTime @default(now())
+
+  @@index([type])
+  @@index([timestamp])
+  @@map("metrics")
+}
+
+model IntegrationAccount {
+  id                String    @id @default(cuid())
+  provider          String
+  providerAccountId String
+  accessToken       String
+  refreshToken      String?
+  expiresAt         DateTime?
+  scope             String?
+  userId            String
+  workspaceId       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("integration_accounts")
+}
+
+model Experiment {
+  id                String           @id @default(cuid())
+  name              String
+  description       String?
+  type              String
+  status            ExperimentStatus @default(DRAFT)
+  variants          Json
+  trafficAllocation Json
+  workspaceId       String
+  createdById       String
+  startDate         DateTime?
+  endDate           DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("experiments")
+}
+
+model ExperimentEvent {
+  id           String   @id @default(cuid())
+  experimentId String
+  variantId    String
+  eventType    String
+  userId       String?
+  sessionId    String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([experimentId])
+  @@index([variantId])
+  @@map("experiment_events")
+}
+
+model SamlConnection {
+  id                String    @id @default(cuid())
+  workspaceId       String    @unique
+  idpMetadata       String?
+  idpEntityId       String?
+  idpSsoUrl         String?
+  idpSloUrl         String?
+  idpCertificate    String?
+  spEntityId        String    @default("rag-starter-kit")
+  spAcsUrl          String?
+  publicCertificate String?
+  privateKey        String?
+  allowIdpInitiated Boolean   @default(false)
+  defaultRole       String    @default("MEMBER")
+  attributeMapping  Json      @default("{}")
+  enabled           Boolean   @default(true)
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([enabled])
+  @@map("saml_connections")
+}
+
+model Webhook {
+  id              String            @id @default(cuid())
+  name            String
+  url             String
+  secret          String
+  events          String[]
+  status          WebhookStatus     @default(ACTIVE)
+  workspaceId     String
+  createdById     String
+  lastTriggeredAt DateTime?
+  failureCount    Int               @default(0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deliveries      WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id          String         @id @default(cuid())
+  webhookId   String
+  event       String
+  payload     Json
+  statusCode  Int?
+  response    String?
+  error       String?
+  startedAt   DateTime       @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+  status      DeliveryStatus @default(PENDING)
+  retryCount  Int            @default(0)
+  webhook     Webhook        @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("webhook_deliveries")
+}
+
+model Consent {
+  id          String    @id @default(cuid())
+  userId      String
+  consentType String
+  granted     Boolean
+  grantedAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  version     String    @default("1.0")
+  ipAddress   String?
+  userAgent   String?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([consentType])
+  @@index([userId, consentType])
+  @@map("consents")
+}
+
+enum UserRole {
+  USER
+  ADMIN
 }
 
 enum WorkspaceRole {
@@ -185,145 +740,11 @@ enum MemberStatus {
   REMOVED
 }
 
-model WorkspaceInvitation {
-  id            String        @id @default(cuid())
-  workspaceId   String
-  email         String
-  role          WorkspaceRole @default(MEMBER)
-  status        InviteStatus  @default(PENDING)
-  token         String        @unique
-  expiresAt     DateTime
-  invitedById   String
-  invitedAt     DateTime      @default(now())
-  acceptedAt    DateTime?
-  cancelledAt   DateTime?
-  cancelledById String?
-
-  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  invitedBy     User          @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
-
-  @@index([workspaceId])
-  @@index([email])
-  @@index([token])
-  @@index([status])
-  @@map("workspace_invitations")
-}
-
 enum InviteStatus {
   PENDING
   ACCEPTED
   EXPIRED
   CANCELLED
-}
-
-// ============================================================================
-// Document Models
-// ============================================================================
-
-model Document {
-  id          String           @id @default(cuid())
-  name        String
-  contentType String
-  size        Int
-  content     String?          @db.Text
-
-  // Metadata
-  sourceUrl   String?
-  sourceType  String?
-  metadata    Json             @default("{}")
-
-  // Content hash for fast duplicate detection (indexed, unlike JSON path queries)
-  contentHash String?          @unique
-
-  // Cloudinary storage reference
-  storageUrl  String?           // Cloudinary secure URL for original file
-  storageKey  String?           // Cloudinary public ID for deletion
-
-  // Processing status
-  status      DocumentStatus   @default(PENDING)
-
-  // OCR-specific fields (for documents processed with OCR)
-  /** Whether OCR was applied to this document */
-  ocrProcessed     Boolean   @default(false)
-  /** OCR confidence score (0-100) */
-  ocrConfidence    Float?
-  /** OCR language code used (e.g., 'eng', 'deu') */
-  ocrLanguage      String?
-  /** OCR processing time in milliseconds */
-  ocrProcessingTimeMs Int?
-  /** OCR engine mode used */
-  ocrEngineMode    String?
-  /** Page segmentation mode used */
-  ocrPSM           String?
-  /** Whether preprocessing was applied */
-  ocrPreprocessing Boolean   @default(false)
-  /** Error message if OCR failed */
-  ocrError         String?
-
-  // Relations
-  userId      String
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspaceId String?
-  workspace   Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  chunks      DocumentChunk[]
-  images      DocumentImage[]
-  ingestionJob IngestionJob?
-  tags        DocumentTagsOnDocuments[]
-  collections DocumentCollectionsOnDocuments[]
-
-  version     Int              @default(1)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  @@index([userId])
-  @@index([workspaceId])
-  @@index([status])
-  @@index([workspaceId, status])
-  @@index([workspaceId, createdAt])
-  @@index([ocrProcessed])
-  @@index([ocrConfidence])
-  @@map("documents")
-}
-
-model DocumentChunk {
-  id          String     @id @default(cuid())
-  documentId  String
-  content     String     @db.Text
-  index       Int
-  start       Int
-  end         Int
-  page        Int?
-  section     String?
-
-  // Vector embedding (using pgvector extension)
-  // Dimensions: 768 for Google Gemini, 1536 for OpenAI, 384 for local
-  embedding   Unsupported("vector(768)")?
-
-  document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  images      DocumentImage[]
-
-  createdAt   DateTime   @default(now())
-
-  @@index([documentId])
-  @@map("document_chunks")
-}
-
-model IngestionJob {
-  id            String        @id @default(cuid())
-  documentId    String        @unique
-  status        JobStatus     @default(QUEUED)
-  progress      Int           @default(0)
-  error         String?
-  errorCategory ErrorCategory?
-  startedAt     DateTime?
-  completedAt   DateTime?
-
-  document      Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  @@map("ingestion_jobs")
 }
 
 enum DocumentStatus {
@@ -350,147 +771,11 @@ enum ErrorCategory {
   UNKNOWN
 }
 
-// ============================================================================
-// Image Models (Multi-modal Support)
-// ============================================================================
-
-model DocumentImage {
-  id          String     @id @default(cuid())
-  documentId  String
-  document    Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-
-  // Image metadata
-  filename    String
-  mimeType    String
-  size        Int
-  width       Int?
-  height      Int?
-
-  // Storage
-  storageKey  String     // Cloudinary public ID
-  storageUrl  String     // Public URL
-
-  // OCR / Caption
-  caption     String?    @db.Text
-  ocrText     String?    @db.Text
-
-  // OCR-specific metadata
-  /** OCR confidence score (0-100) */
-  ocrConfidence    Float?
-  /** OCR language code used */
-  ocrLanguage      String?
-  /** OCR processing time in milliseconds */
-  ocrProcessingTimeMs Int?
-  /** Whether OCR preprocessing was applied */
-  ocrPreprocessing Boolean @default(false)
-  /** OCR bounding boxes as JSON */
-  ocrBoundingBoxes Json?
-
-  // Relations
-  chunkId     String?
-  chunk       DocumentChunk? @relation(fields: [chunkId], references: [id], onDelete: SetNull)
-  pageNumber  Int?
-
-  // Processing status
-  status      ImageStatus @default(PENDING)
-
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([documentId])
-  @@index([chunkId])
-  @@index([status])
-  @@index([ocrConfidence])
-  @@map("document_images")
-}
-
-model ImageEmbedding {
-  id          String     @id @default(cuid())
-
-  // Reference to the image
-  imageId     String?
-  imageUrl    String?    // For external images
-  contentHash String     @unique // For caching
-
-  // 512-dimensional CLIP embedding
-  embedding   Unsupported("vector(512)")
-
-  // Model info
-  model       String     @default("Xenova/clip-vit-base-patch32")
-  dimensions  Int        @default(512)
-
-  createdAt   DateTime   @default(now())
-
-  @@index([imageId])
-  @@index([contentHash])
-  @@map("image_embeddings")
-}
-
 enum ImageStatus {
   PENDING
   PROCESSING
   COMPLETED
   FAILED
-}
-
-// ============================================================================
-// Chat Models
-// ============================================================================
-
-model Chat {
-  id          String     @id @default(cuid())
-  title       String     @default("New Chat")
-
-  // AI model used for this chat (e.g., "deepseek/deepseek-chat:free")
-  model       String?
-
-  // Optional metadata for features like branching
-  metadata    Json?      @default("{}")
-
-  // Document processing tracking
-  chunkCount  Int?
-
-  // Relations
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspaceId String?
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  messages    Message[]
-  share       ChatShare?
-
-  version     Int        @default(1)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([userId])
-  @@index([workspaceId])
-  @@index([userId, workspaceId])
-  @@map("chats")
-}
-
-model Message {
-  id          String    @id @default(cuid())
-  chatId      String
-  content     String    @db.Text
-  role        MessageRole
-
-  // Source citations
-  sources     Json?
-
-  // Token usage
-  tokensUsed  Json?
-
-  // Message metadata for features like editing
-  metadata    Json?
-
-  chat        Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  feedback    MessageFeedback[]
-
-  createdAt   DateTime  @default(now())
-
-  @@index([chatId])
-  @@index([chatId, createdAt])
-  @@map("messages")
 }
 
 enum MessageRole {
@@ -499,215 +784,9 @@ enum MessageRole {
   ASSISTANT
 }
 
-// ============================================================================
-// Message Feedback
-// ============================================================================
-
-model MessageFeedback {
-  id          String    @id @default(cuid())
-  messageId   String
-  message     Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  // Feedback data
-  rating      FeedbackRating
-  comment     String?   @db.Text
-
-  // Optional categorization
-  categories  String[]  @default([])
-
-  // User who gave feedback (may be anonymous)
-  userId      String?
-  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  // Metadata
-  ipAddress   String?
-  userAgent   String?
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@unique([messageId, userId])
-  @@index([messageId])
-  @@index([userId])
-  @@index([rating])
-  @@index([createdAt])
-  @@map("message_feedback")
-}
-
 enum FeedbackRating {
   UP
   DOWN
-}
-
-// ============================================================================
-// Chat Sharing
-// ============================================================================
-
-model ChatShare {
-  id          String    @id @default(cuid())
-  chatId      String    @unique
-  chat        Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
-
-  // Share configuration
-  isPublic    Boolean   @default(false)
-  shareToken  String    @unique @default(cuid())
-
-  // Access control
-  allowComments Boolean @default(false)
-  expiresAt   DateTime?
-
-  // Tracking
-  viewCount   Int       @default(0)
-  lastViewedAt DateTime?
-
-  // Creator
-  createdBy   String
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([shareToken])
-  @@index([isPublic])
-  @@index([expiresAt])
-  @@map("chat_shares")
-}
-
-// ============================================================================
-// Document Organization (Tags & Collections)
-// ============================================================================
-
-model DocumentTag {
-  id          String    @id @default(cuid())
-  name        String
-  color       String    @default("#6366f1")
-
-  // Relations
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  documents   DocumentTagsOnDocuments[]
-
-  createdAt   DateTime  @default(now())
-
-  @@unique([workspaceId, name])
-  @@index([workspaceId])
-  @@map("document_tags")
-}
-
-model DocumentTagsOnDocuments {
-  documentId  String
-  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  tagId       String
-  tag         DocumentTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  assignedAt  DateTime  @default(now())
-  assignedBy  String?
-
-  @@id([documentId, tagId])
-  @@index([tagId])
-  @@map("document_tags_on_documents")
-}
-
-model DocumentCollection {
-  id          String    @id @default(cuid())
-  name        String
-  description String?   @db.Text
-
-  // Relations
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  documents   DocumentCollectionsOnDocuments[]
-
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([workspaceId])
-  @@map("document_collections")
-}
-
-model DocumentCollectionsOnDocuments {
-  documentId   String
-  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  collectionId String
-  collection   DocumentCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-
-  addedAt      DateTime  @default(now())
-  addedBy      String?
-  order        Int       @default(0)
-
-  @@id([documentId, collectionId])
-  @@index([collectionId])
-  @@map("document_collections_on_documents")
-}
-
-// ============================================================================
-// API Key Models
-// ============================================================================
-
-model ApiKey {
-  id          String     @id @default(cuid())
-  name        String
-  keyHash     String     @unique
-  keyPreview  String
-
-  // Permissions
-  permissions String[]   @default([])
-
-  // Access restrictions
-  allowedIps       String[]   @default([])
-  allowedEndpoints String[]   @default([])
-
-  // Status
-  status      ApiKeyStatus @default(ACTIVE)
-  expiresAt   DateTime?
-  lastUsedAt  DateTime?
-
-  // Rate limiting
-  rateLimit   Int        @default(100)
-
-  // Relations
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspaceId String?
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  usage       ApiUsage[]
-
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([userId])
-  @@index([workspaceId])
-  @@index([keyHash])
-  @@map("api_keys")
-}
-
-model ApiUsage {
-  id                String   @id @default(cuid())
-
-  // Request details
-  endpoint          String
-  method            String
-
-  // Usage metrics
-  tokensPrompt      Int      @default(0)
-  tokensCompletion  Int      @default(0)
-  tokensTotal       Int      @default(0)
-  latencyMs         Int      @default(0)
-
-  // Relations
-  apiKeyId          String?
-  apiKey            ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
-  userId            String?
-  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  workspaceId       String?
-
-  createdAt         DateTime @default(now())
-
-  @@index([apiKeyId])
-  @@index([userId])
-  @@index([workspaceId])
-  @@index([createdAt])
-  @@index([workspaceId, createdAt]) // Composite index for analytics time-series queries
-  @@map("api_usage")
 }
 
 enum ApiKeyStatus {
@@ -716,106 +795,41 @@ enum ApiKeyStatus {
   EXPIRED
 }
 
-// ============================================================================
-// Audit & Security Models
-// ============================================================================
-
-model AuditLog {
-  id          String       @id @default(cuid())
-  event       AuditEvent
-  severity    AuditSeverity @default(INFO)
-
-  // Actor
-  userId      String?
-  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  // Resource
-  workspaceId String?
-  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  // Event data
-  metadata    Json?
-  resource    Json?
-  changes     Json?
-  error       String?
-
-  // Request context
-  ipAddress   String?
-  userAgent   String?
-
-  // Integrity chain (SHA-256 hash chain for tamper detection)
-  recordHash   String?
-  previousHash String?
-
-  createdAt   DateTime     @default(now())
-
-  @@index([userId])
-  @@index([workspaceId])
-  @@index([event])
-  @@index([createdAt])
-  @@index([workspaceId, createdAt])
-  @@index([event, createdAt])
-  @@map("audit_logs")
-}
-
 enum AuditEvent {
-  // Authentication
   USER_LOGIN
   USER_LOGOUT
   USER_REGISTERED
   PASSWORD_CHANGED
   PASSWORD_RESET_REQUESTED
-
-  // Workspace
   WORKSPACE_CREATED
   WORKSPACE_UPDATED
   WORKSPACE_DELETED
   WORKSPACE_SETTINGS_CHANGED
-
-  // Members
   MEMBER_INVITED
   MEMBER_JOINED
   MEMBER_REMOVED
   MEMBER_ROLE_CHANGED
-
-  // Documents
   DOCUMENT_UPLOADED
   DOCUMENT_DELETED
   DOCUMENT_UPDATED
   DOCUMENT_PROCESSED
   DOCUMENT_PROCESSING_FAILED
-
-  // Chat
   CHAT_CREATED
   CHAT_UPDATED
   CHAT_DELETED
   CHAT_MESSAGE_SENT
-
-  // API Keys
   API_KEY_CREATED
   API_KEY_REVOKED
   API_KEY_USED
-
-  // Rate Limiting
   RATE_LIMIT_HIT
-
-  // Security
   SUSPICIOUS_ACTIVITY
   PERMISSION_DENIED
-
-  // Agentic Features
   AGENT_QUERY_CLASSIFIED
   AGENT_TOOL_CALLED
   MULTI_STEP_REASONING_STARTED
   CONVERSATION_BRANCHED
-
-  // Voice
   VOICE_TRANSCRIPTION
-
-  // Analytics
   READ_API_USAGE
-
-  // Encryption
   ENCRYPTION_OPERATION
 }
 
@@ -826,293 +840,11 @@ enum AuditSeverity {
   CRITICAL
 }
 
-// ============================================================================
-// Rate Limiting Models
-// ============================================================================
-
-model RateLimit {
-  id        String   @id @default(cuid())
-
-  // Identifier (IP, userId, or apiKey)
-  key       String
-
-  // Window tracking
-  windowStart DateTime
-  requests    Int      @default(0)
-
-  // Type of limit
-  type      String     @default("default")
-
-  // Relations
-  userId    String?
-  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  @@unique([key, type, windowStart])
-  @@index([key])
-  @@index([userId])
-  @@index([windowStart])
-  @@map("rate_limits")
-}
-
-// ============================================================================
-// System Health / Feature Degradation
-// ============================================================================
-
-model SystemHealth {
-  id        String   @id @default(cuid())
-
-  // Which feature is tracked (e.g. "llm_generation", "vector_search")
-  feature   String
-
-  // "healthy" | "degraded"
-  status    String   @default("healthy")
-
-  // When the status was last updated
-  updatedAt DateTime @updatedAt
-
-  // Auto-recovery: feature returns to healthy after this time
-  expiresAt DateTime?
-
-  @@unique([feature])
-  @@map("system_health")
-}
-
-// ============================================================================
-// Analytics Models
-// ============================================================================
-
-model RAGEvent {
-  id              String   @id @default(cuid())
-
-  // Query info
-  query           String   @db.Text
-  conversationId  String?
-
-  // Context
-  workspaceId     String?
-  userId          String?
-
-  // Retrieval info
-  retrievedChunksData Json? @map("retrievedChunks")
-
-  // Relations
-  retrievedChunks RetrievedChunk[]
-
-  // Response
-  response        String?  @db.Text
-
-  // Metrics
-  latencyMs       Int
-  totalTokens     Int      @default(0)
-  model           String   @default("gpt-4o-mini")
-
-  // Classification
-  queryType       String?
-  confidence      Float?
-  reranked        Boolean  @default(false)
-
-  createdAt       DateTime @default(now())
-
-  @@index([workspaceId])
-  @@index([userId])
-  @@index([createdAt])
-  @@map("rag_events")
-}
-
-model RetrievedChunk {
-  id          String   @id @default(cuid())
-
-  eventId     String
-  event       RAGEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  chunkId     String
-  documentId  String
-  similarity  Float
-  rank        Int
-
-  createdAt   DateTime @default(now())
-
-  @@index([eventId])
-  @@index([documentId])
-  @@map("retrieved_chunks")
-}
-
-model Metric {
-  id        String   @id @default(cuid())
-  type      String
-  value     Float
-  labels    Json     @default("{}")
-  timestamp DateTime @default(now())
-
-  @@index([type])
-  @@index([timestamp])
-  @@map("metrics")
-}
-
-// ============================================================================
-// Integration Models
-// ============================================================================
-
-model IntegrationAccount {
-  id                String   @id @default(cuid())
-
-  // Provider info
-  provider          String   // 'slack', 'notion', 'github', etc.
-  providerAccountId String
-
-  // OAuth tokens
-  accessToken       String   @db.Text
-  refreshToken      String?  @db.Text
-  expiresAt         DateTime?
-
-  // Scopes/permissions
-  scope             String?
-
-  // Relations
-  userId            String
-  workspaceId       String?
-
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-  @@map("integration_accounts")
-}
-
-// ============================================================================
-// Experiment Models (A/B Testing)
-// ============================================================================
-
-model Experiment {
-  id            String          @id @default(cuid())
-  name          String
-  description   String?
-  type          String          // 'prompt', 'model', 'retrieval', 'ui'
-  status        ExperimentStatus @default(DRAFT)
-
-  // Configuration
-  variants      Json            // Array of variant configs
-  trafficAllocation Json        // Percentage per variant
-
-  // Relations
-  workspaceId   String
-  createdById   String
-
-  startDate     DateTime?
-  endDate       DateTime?
-
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-
-  @@index([workspaceId])
-  @@index([status])
-  @@map("experiments")
-}
-
 enum ExperimentStatus {
   DRAFT
   RUNNING
   PAUSED
   COMPLETED
-}
-
-model ExperimentEvent {
-  id            String   @id @default(cuid())
-
-  experimentId  String
-  variantId     String
-
-  // Event type
-  eventType     String   // 'impression', 'conversion', 'custom'
-
-  // User info
-  userId        String?
-  sessionId     String
-
-  // Event data
-  metadata      Json?
-
-  createdAt     DateTime @default(now())
-
-  @@index([experimentId])
-  @@index([variantId])
-  @@map("experiment_events")
-}
-
-// ============================================================================
-// SAML SSO Models
-// ============================================================================
-
-model SamlConnection {
-  id                String   @id @default(cuid())
-
-  // Workspace relation
-  workspaceId       String   @unique
-  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  // IdP Configuration
-  idpMetadata       String?  // Raw SAML metadata XML
-  idpEntityId       String?
-  idpSsoUrl         String?
-  idpSloUrl         String?  // Single Logout URL
-  idpCertificate    String?
-
-  // SP Configuration
-  spEntityId        String   @default("rag-starter-kit")
-  spAcsUrl          String?
-
-  // Security - privateKey is encrypted at rest using AES-256-GCM
-  publicCertificate String?  // Our public cert for signing
-  privateKey        String?  // Our private key (encrypted with ENCRYPTION_MASTER_KEY)
-
-  // Settings
-  allowIdpInitiated Boolean  @default(false)
-  defaultRole       String   @default("MEMBER") // Default role for SAML users
-  attributeMapping  Json     @default("{}") // Attribute mapping configuration
-
-  // State
-  enabled           Boolean  @default(true)
-  lastLoginAt       DateTime?
-
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@index([workspaceId])
-  @@index([enabled])
-  @@map("saml_connections")
-}
-
-// ============================================================================
-// Webhook Models
-// ============================================================================
-
-model Webhook {
-  id          String        @id @default(cuid())
-  name        String
-  url         String
-  secret      String        // For HMAC signature (encrypted with ENCRYPTION_MASTER_KEY)
-  events      String[]      // Events to subscribe to
-  status      WebhookStatus @default(ACTIVE)
-
-  // Relations
-  workspaceId String
-  createdById String
-  deliveries  WebhookDelivery[]
-
-  // Stats
-  lastTriggeredAt DateTime?
-  failureCount    Int       @default(0)
-
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  @@index([workspaceId])
-  @@index([status])
-  @@map("webhooks")
 }
 
 enum WebhookStatus {
@@ -1121,61 +853,9 @@ enum WebhookStatus {
   FAILED
 }
 
-model WebhookDelivery {
-  id          String            @id @default(cuid())
-  webhookId   String
-  webhook     Webhook           @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-
-  // Request details
-  event       String
-  payload     Json
-
-  // Response details
-  statusCode  Int?
-  response    String?           @db.Text
-  error       String?
-
-  // Timing
-  startedAt   DateTime          @default(now())
-  completedAt DateTime?
-  durationMs  Int?
-
-  // Delivery status
-  status      DeliveryStatus    @default(PENDING)
-  retryCount  Int               @default(0)
-
-  @@index([webhookId])
-  @@index([status])
-  @@index([startedAt])
-  @@map("webhook_deliveries")
-}
-
 enum DeliveryStatus {
   PENDING
   DELIVERED
   FAILED
   RETRYING
-}
-
-// =============================================================================
-// GDPR Consent
-// =============================================================================
-
-model Consent {
-  id          String   @id @default(cuid())
-  userId      String
-  consentType String   // analytics, marketing, data_processing, data_export, data_erasure
-  granted     Boolean
-  grantedAt   DateTime @default(now())
-  revokedAt   DateTime?
-  version     String   @default("1.0")
-  ipAddress   String?
-  userAgent   String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([consentType])
-  @@index([userId, consentType])
-  @@map("consents")
 }
