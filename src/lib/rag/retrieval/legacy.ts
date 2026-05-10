@@ -66,7 +66,7 @@ export async function searchSimilarChunks(
   >`
     SELECT 
       dc.id,
-      dc.document_id as "documentId",
+      dc."documentId" as "documentId",
       dc.content,
       dc.index,
       dc.page,
@@ -74,8 +74,8 @@ export async function searchSimilarChunks(
       d.name as "documentName",
       1 - (dc.embedding <=> ${queryEmbedding}::vector) as similarity
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = ${userId}
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = ${userId}
       AND d.status = 'COMPLETED'
       AND 1 - (dc.embedding <=> ${queryEmbedding}::vector) > ${threshold}
     ORDER BY dc.embedding <=> ${queryEmbedding}::vector

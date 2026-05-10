@@ -152,8 +152,8 @@ async function insertBatch(
     const id = chunk.id ?? crypto.randomUUID();
     await client.$executeRaw`
       INSERT INTO document_chunks (
-        id, document_id, content, embedding, "index",
-        start, "end", page, section, created_at
+        id, "documentId", content, embedding, "index",
+        start, "end", page, section, "createdAt"
       )
       VALUES (
         ${id},

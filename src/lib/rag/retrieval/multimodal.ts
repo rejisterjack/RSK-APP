@@ -86,12 +86,12 @@ export async function searchByImage(
     const results = await prisma.$queryRaw<
       Array<{
         id: string;
-        document_id: string;
+        documentId: string;
         document_name: string;
-        storage_url: string;
+        storageUrl: string;
         caption: string | null;
-        ocr_text: string | null;
-        page_number: number | null;
+        ocrText: string | null;
+        pageNumber: number | null;
         width: number | null;
         height: number | null;
         mime_type: string;
@@ -100,20 +100,20 @@ export async function searchByImage(
     >`
       SELECT 
         di.id,
-        di.document_id,
+        di."documentId",
         d.name as document_name,
-        di.storage_url,
+        di."storageUrl",
         di.caption,
-        di.ocr_text,
-        di.page_number,
+        di."ocrText",
+        di."pageNumber",
         di.width,
         di.height,
         di.mime_type,
         1 - (ie.embedding <=> ${queryEmbedding}::vector) as similarity
       FROM image_embeddings ie
-      JOIN document_images di ON ie.image_id = di.id
-      JOIN documents d ON di.document_id = d.id
-      WHERE d.user_id = ${workspaceId}
+      JOIN document_images di ON ie."imageId" = di.id
+      JOIN documents d ON di."documentId" = d.id
+      WHERE d."userId" = ${workspaceId}
         AND d.status = 'COMPLETED'
         AND ie.embedding IS NOT NULL
         AND 1 - (ie.embedding <=> ${queryEmbedding}::vector) > ${minScore}
@@ -123,12 +123,12 @@ export async function searchByImage(
 
     const images: ImageSearchResult[] = results.map((r) => ({
       id: r.id,
-      documentId: r.document_id,
+      documentId: r.documentId,
       documentName: r.document_name,
-      storageUrl: r.storage_url,
+      storageUrl: r.storageUrl,
       caption: r.caption || undefined,
-      ocrText: r.ocr_text || undefined,
-      pageNumber: r.page_number || undefined,
+      ocrText: r.ocrText || undefined,
+      pageNumber: r.pageNumber || undefined,
       similarity: Number(r.similarity),
       metadata: {
         width: r.width || undefined,
@@ -146,7 +146,7 @@ export async function searchByImage(
       const chunkResults = await prisma.$queryRaw<
         Array<{
           id: string;
-          document_id: string;
+          documentId: string;
           content: string;
           index: number;
           page: number | null;
@@ -156,16 +156,16 @@ export async function searchByImage(
       >`
         SELECT 
           dc.id,
-          dc.document_id,
+          dc."documentId",
           dc.content,
           dc.index,
           dc.page,
           dc.section,
           d.name as document_name
         FROM document_chunks dc
-        JOIN documents d ON dc.document_id = d.id
-        WHERE dc.document_id = ANY(${documentIds}::text[])
-          AND d.user_id = ${workspaceId}
+        JOIN documents d ON dc."documentId" = d.id
+        WHERE dc."documentId" = ANY(${documentIds}::text[])
+          AND d."userId" = ${workspaceId}
         ORDER BY dc.index
         LIMIT ${topK * 2}
       `;
@@ -175,7 +175,7 @@ export async function searchByImage(
         content: c.content,
         score: 0.5, // Default score for associated chunks
         metadata: {
-          documentId: c.document_id,
+          documentId: c.documentId,
           documentName: c.document_name,
           documentType: 'PDF',
           page: c.page || undefined,
@@ -226,12 +226,12 @@ export async function searchImagesByText(
     const results = await prisma.$queryRaw<
       Array<{
         id: string;
-        document_id: string;
+        documentId: string;
         document_name: string;
-        storage_url: string;
+        storageUrl: string;
         caption: string | null;
-        ocr_text: string | null;
-        page_number: number | null;
+        ocrText: string | null;
+        pageNumber: number | null;
         width: number | null;
         height: number | null;
         mime_type: string;
@@ -240,20 +240,20 @@ export async function searchImagesByText(
     >`
       SELECT 
         di.id,
-        di.document_id,
+        di."documentId",
         d.name as document_name,
-        di.storage_url,
+        di."storageUrl",
         di.caption,
-        di.ocr_text,
-        di.page_number,
+        di."ocrText",
+        di."pageNumber",
         di.width,
         di.height,
         di.mime_type,
         1 - (ie.embedding <=> ${textEmbedding}::vector) as similarity
       FROM image_embeddings ie
-      JOIN document_images di ON ie.image_id = di.id
-      JOIN documents d ON di.document_id = d.id
-      WHERE d.user_id = ${workspaceId}
+      JOIN document_images di ON ie."imageId" = di.id
+      JOIN documents d ON di."documentId" = d.id
+      WHERE d."userId" = ${workspaceId}
         AND d.status = 'COMPLETED'
         AND ie.embedding IS NOT NULL
         AND 1 - (ie.embedding <=> ${textEmbedding}::vector) > ${minScore}
@@ -263,12 +263,12 @@ export async function searchImagesByText(
 
     const images: ImageSearchResult[] = results.map((r) => ({
       id: r.id,
-      documentId: r.document_id,
+      documentId: r.documentId,
       documentName: r.document_name,
-      storageUrl: r.storage_url,
+      storageUrl: r.storageUrl,
       caption: r.caption || undefined,
-      ocrText: r.ocr_text || undefined,
-      pageNumber: r.page_number || undefined,
+      ocrText: r.ocrText || undefined,
+      pageNumber: r.pageNumber || undefined,
       similarity: Number(r.similarity),
       metadata: {
         width: r.width || undefined,
@@ -285,7 +285,7 @@ export async function searchImagesByText(
       const chunkResults = await prisma.$queryRaw<
         Array<{
           id: string;
-          document_id: string;
+          documentId: string;
           content: string;
           index: number;
           page: number | null;
@@ -295,16 +295,16 @@ export async function searchImagesByText(
       >`
         SELECT 
           dc.id,
-          dc.document_id,
+          dc."documentId",
           dc.content,
           dc.index,
           dc.page,
           dc.section,
           d.name as document_name
         FROM document_chunks dc
-        JOIN documents d ON dc.document_id = d.id
-        WHERE dc.document_id = ANY(${documentIds}::text[])
-          AND d.user_id = ${workspaceId}
+        JOIN documents d ON dc."documentId" = d.id
+        WHERE dc."documentId" = ANY(${documentIds}::text[])
+          AND d."userId" = ${workspaceId}
         ORDER BY dc.index
         LIMIT ${topK * 2}
       `;
@@ -314,7 +314,7 @@ export async function searchImagesByText(
         content: c.content,
         score: 0.5,
         metadata: {
-          documentId: c.document_id,
+          documentId: c.documentId,
           documentName: c.document_name,
           documentType: 'PDF',
           page: c.page || undefined,
@@ -385,7 +385,7 @@ export async function searchMultiModal(
       const chunkResults = await prisma.$queryRaw<
         Array<{
           id: string;
-          document_id: string;
+          documentId: string;
           content: string;
           index: number;
           page: number | null;
@@ -395,16 +395,16 @@ export async function searchMultiModal(
       >`
         SELECT 
           dc.id,
-          dc.document_id,
+          dc."documentId",
           dc.content,
           dc.index,
           dc.page,
           dc.section,
           d.name as document_name
         FROM document_chunks dc
-        JOIN documents d ON dc.document_id = d.id
-        WHERE dc.document_id = ANY(${documentIds}::text[])
-          AND d.user_id = ${workspaceId}
+        JOIN documents d ON dc."documentId" = d.id
+        WHERE dc."documentId" = ANY(${documentIds}::text[])
+          AND d."userId" = ${workspaceId}
         ORDER BY dc.index
         LIMIT ${(options.topK ?? 5) * 2}
       `;
@@ -414,7 +414,7 @@ export async function searchMultiModal(
         content: c.content,
         score: 0.5,
         metadata: {
-          documentId: c.document_id,
+          documentId: c.documentId,
           documentName: c.document_name,
           documentType: 'PDF',
           page: c.page || undefined,

@@ -334,14 +334,14 @@ export async function searchSimilarChunks(
   const result = await prisma.$queryRaw<DocumentChunk[]>`
     SELECT 
       dc.id,
-      dc.document_id as "documentId",
+      dc."documentId" as "documentId",
       dc.content,
       dc.index,
       dc.start,
       dc.end,
       dc.page,
       dc.section,
-      dc.created_at as "createdAt",
+      dc."createdAt" as "createdAt",
       1 - (dc.embedding <=> ${embedding}::vector) as similarity
     FROM document_chunks dc
     WHERE 1 - (dc.embedding <=> ${embedding}::vector) > ${threshold}

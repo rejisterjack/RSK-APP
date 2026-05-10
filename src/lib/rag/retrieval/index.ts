@@ -149,7 +149,11 @@ export async function retrieveSources(
     let queryEmbedding: number[];
     try {
       queryEmbedding = await generateQueryEmbedding(query);
-    } catch {
+    } catch (error) {
+      console.warn(
+        '[RAG] Query embedding generation failed:',
+        error instanceof Error ? error.message : String(error)
+      );
       return [];
     }
 
@@ -163,7 +167,11 @@ export async function retrieveSources(
     let results: VectorSearchResult[];
     try {
       results = await searchSimilarChunks(queryEmbedding, userId, config);
-    } catch {
+    } catch (error) {
+      console.warn(
+        '[RAG] Vector search failed:',
+        error instanceof Error ? error.message : String(error)
+      );
       return [];
     }
 

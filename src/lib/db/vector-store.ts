@@ -434,7 +434,7 @@ export class VectorStore {
         COUNT(CASE WHEN embedding IS NULL THEN 1 END) as chunks_without_embeddings,
         AVG(LENGTH(content)) as avg_content_length
       FROM document_chunks
-      WHERE document_id = ${documentId}
+      WHERE "documentId" = ${documentId}
     `;
 
     const stats = result[0];

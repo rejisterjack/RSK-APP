@@ -84,7 +84,7 @@ async function getCachedEmbedding(cacheKey: string): Promise<number[] | null> {
       SELECT embedding::float[] as embedding
       FROM image_embeddings
       WHERE content_hash = ${cacheKey}
-      AND created_at > NOW() - INTERVAL '7 days'
+      AND "createdAt" > NOW() - INTERVAL '7 days'
       LIMIT 1
     `;
 

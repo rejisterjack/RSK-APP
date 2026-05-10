@@ -315,29 +315,29 @@ export async function getVectorStats(prisma: PrismaClient, userId: string): Prom
       ) as index_size,
       pg_size_pretty(pg_total_relation_size('document_chunks')) as table_size
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = ${userId}
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = ${userId}
   `;
 
   // Get per-document statistics
   const documentStats = await prisma.$queryRaw<
     Array<{
-      document_id: string;
-      document_name: string;
+      documentId: string;
+      documentName: string;
       chunk_count: bigint;
       has_embeddings: boolean;
     }>
   >`
     SELECT 
-      d.id as document_id,
-      d.name as document_name,
+      d.id as "documentId",
+      d.name as "documentName",
       COUNT(dc.id) as chunk_count,
       bool_and(dc.embedding IS NOT NULL) as has_embeddings
     FROM documents d
-    LEFT JOIN document_chunks dc ON d.id = dc.document_id
-    WHERE d.user_id = ${userId}
+    LEFT JOIN document_chunks dc ON d.id = dc."documentId"
+    WHERE d."userId" = ${userId}
     GROUP BY d.id, d.name
-    ORDER BY d.created_at DESC
+    ORDER BY d."createdAt" DESC
   `;
 
   const stat = stats[0];
@@ -347,8 +347,8 @@ export async function getVectorStats(prisma: PrismaClient, userId: string): Prom
     indexSize: stat?.index_size ?? '0 bytes',
     tableSize: stat?.table_size ?? '0 bytes',
     documentStats: documentStats.map((d) => ({
-      documentId: d.document_id,
-      documentName: d.document_name,
+      documentId: d.documentId,
+      documentName: d.documentName,
       chunkCount: Number(d.chunk_count),
       hasEmbeddings: d.has_embeddings ?? false,
     })),
@@ -386,7 +386,7 @@ export async function getGlobalVectorStats(prisma: PrismaClient): Promise<{
         COUNT(dc.id) as chunk_count,
         COUNT(CASE WHEN dc.embedding IS NOT NULL THEN 1 END) as embedded_chunks
       FROM documents d
-      LEFT JOIN document_chunks dc ON d.id = dc.document_id
+      LEFT JOIN document_chunks dc ON d.id = dc."documentId"
       GROUP BY d.id
     )
     SELECT 
@@ -442,7 +442,7 @@ export async function findDuplicateVectors(
     ids: string[];
   }>
 > {
-  const whereClause = documentId ? Prisma.sql`WHERE document_id = ${documentId}` : Prisma.sql``;
+  const whereClause = documentId ? Prisma.sql`WHERE "documentId" = ${documentId}` : Prisma.sql``;
 
   return prisma.$queryRaw`
     SELECT 
@@ -466,7 +466,7 @@ export async function removeOrphanedVectors(
 ): Promise<number> {
   const result = await prisma.$queryRaw<[{ count: bigint }]>`
     DELETE FROM document_chunks
-    WHERE document_id = ${documentId}
+    WHERE "documentId" = ${documentId}
       AND embedding IS NULL
     RETURNING COUNT(*) as count
   `;

@@ -95,7 +95,7 @@ function buildFilters(
   let idx = paramIndex;
 
   // Workspace/workspace filter (required)
-  filters.push(`d.user_id = $${idx++}`);
+  filters.push(`d."userId" = $${idx++}`);
   params.push(options.workspaceId);
 
   // Document status filter
@@ -103,19 +103,19 @@ function buildFilters(
 
   // Document ID filter
   if (options.filters?.documentIds?.length) {
-    filters.push(`dc.document_id = ANY($${idx++}::text[])`);
+    filters.push(`dc."documentId" = ANY($${idx++}::text[])`);
     params.push(options.filters.documentIds);
   }
 
   // Document type filter
   if (options.filters?.documentTypes?.length) {
-    filters.push(`d.content_type = ANY($${idx++}::text[])`);
+    filters.push(`d."contentType" = ANY($${idx++}::text[])`);
     params.push(options.filters.documentTypes);
   }
 
   // Date range filter
   if (options.filters?.dateRange) {
-    filters.push(`d.created_at >= $${idx++} AND d.created_at <= $${idx++}`);
+    filters.push(`d."createdAt" >= $${idx++} AND d."createdAt" <= $${idx++}`);
     params.push(options.filters.dateRange.from);
     params.push(options.filters.dateRange.to);
   }
@@ -179,17 +179,17 @@ export class VectorRetriever {
     const sqlQuery = `
       SELECT
         dc.id,
-        dc.document_id as "documentId",
+        dc."documentId" as "documentId",
         dc.content,
         dc.index,
         dc.page,
         dc.section,
         dc.headings,
         d.name as "documentName",
-        d.content_type as "documentType",
+        d."contentType" as "documentType",
         ${similarityCalc} as score
       FROM document_chunks dc
-      JOIN documents d ON dc.document_id = d.id
+      JOIN documents d ON dc."documentId" = d.id
       ${whereClause}
         AND dc.embedding IS NOT NULL
         AND ${similarityCalc} > ${thresholdParam}
@@ -316,8 +316,8 @@ export async function getVectorCount(workspaceId: string): Promise<number> {
   const result = await prisma.$queryRaw<[{ count: bigint }]>`
     SELECT COUNT(*) as count
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = ${workspaceId}
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = ${workspaceId}
       AND d.status = 'COMPLETED'
       AND dc.embedding IS NOT NULL
   `;
@@ -331,7 +331,7 @@ export async function hasVectors(documentId: string): Promise<boolean> {
   const result = await prisma.$queryRaw<[{ count: bigint }]>`
     SELECT COUNT(*) as count
     FROM document_chunks
-    WHERE document_id = ${documentId}
+    WHERE "documentId" = ${documentId}
       AND embedding IS NOT NULL
   `;
   return Number(result[0].count) > 0;
