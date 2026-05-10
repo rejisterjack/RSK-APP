@@ -116,6 +116,7 @@ function isPrivateIP(ip: string): boolean {
 export interface SSRFValidationResult {
   safe: boolean;
   reason?: string;
+  resolvedIP?: string;
 }
 
 /**
@@ -187,7 +188,7 @@ export async function validateUrlSafety(
     if (isPrivateIP(hostname)) {
       return { safe: false, reason: 'Private/internal IP addresses are not allowed' };
     }
-    return { safe: true };
+    return { safe: true, resolvedIP: hostname };
   }
 
   // DNS resolution check — resolve the hostname and verify it doesn't point to private IPs
@@ -207,6 +208,9 @@ export async function validateUrlSafety(
         return { safe: false, reason: 'Hostname resolves to a private/internal IP address' };
       }
     }
+
+    // Return the resolved IP so callers can pin it for the actual request (DNS rebinding protection)
+    return { safe: true, resolvedIP: addresses[0] };
   } catch (error) {
     logger.warn('DNS resolution failed for SSRF check', {
       hostname,
@@ -214,8 +218,6 @@ export async function validateUrlSafety(
     });
     return { safe: false, reason: 'Could not verify hostname safety (DNS resolution failed)' };
   }
-
-  return { safe: true };
 }
 
 /**

@@ -6,7 +6,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import { assertSafeUrl, SSRFError } from '@/lib/security/ssrf-protection';
+import { validateUrlSafety } from '@/lib/security/ssrf-protection';
 import type { ParsedHTML } from './html';
 import { parseHTML as parseHTMLContent } from './html';
 
@@ -116,18 +116,23 @@ export async function scrapeURL(url: string, options: URLScrapeOptions = {}): Pr
     throw new URLScraperError(`Invalid URL: ${url}`);
   }
 
-  // SSRF Protection - validate URL before fetching
+  // SSRF Protection - validate URL before fetching and get resolved IP for pinning
+  let resolvedIP: string | undefined;
   try {
-    await assertSafeUrl(url);
-  } catch (error) {
-    if (error instanceof SSRFError) {
+    const ssrfResult = await validateUrlSafety(url);
+    if (!ssrfResult.safe) {
       logger.warn('SSRF protection blocked URL scrape', {
         url,
-        reason: error.message,
+        reason: ssrfResult.reason,
       });
-      throw new URLScraperError(`URL blocked for security reasons: ${error.message}`);
+      throw new URLScraperError(`URL blocked for security reasons: ${ssrfResult.reason}`);
     }
-    throw error;
+    resolvedIP = ssrfResult.resolvedIP;
+  } catch (error) {
+    if (error instanceof URLScraperError) throw error;
+    throw new URLScraperError(
+      `URL blocked for security reasons: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 
   // Check robots.txt
@@ -148,7 +153,7 @@ export async function scrapeURL(url: string, options: URLScrapeOptions = {}): Pr
   if (pw) {
     return scrapeWithPlaywright(url, options, pw);
   } else {
-    return scrapeWithFetch(url, options);
+    return scrapeWithFetch(url, options, resolvedIP);
   }
 }
 
@@ -217,18 +222,28 @@ async function scrapeWithPlaywright(
 }
 
 /**
- * Scrape using fetch as fallback
+ * Scrape using fetch as fallback.
+ * When resolvedIP is provided, pins the connection to that IP (DNS rebinding protection).
  */
-async function scrapeWithFetch(url: string, options: URLScrapeOptions): Promise<ScrapedPage> {
+async function scrapeWithFetch(
+  url: string,
+  options: URLScrapeOptions,
+  resolvedIP?: string
+): Promise<ScrapedPage> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeout || 30000);
 
   try {
-    const response = await fetch(url, {
+    // Pin to resolved IP to prevent DNS rebinding attacks
+    const fetchUrl = resolvedIP ? pinIP(url, resolvedIP) : url;
+    const hostHeader = new URL(url).hostname;
+
+    const response = await fetch(fetchUrl, {
       headers: {
         'User-Agent': options.userAgent || getDefaultUserAgent(),
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
+        ...(resolvedIP ? { Host: hostHeader } : {}),
       },
       signal: controller.signal,
     });
@@ -346,17 +361,20 @@ export async function checkRobotsTxt(origin: string): Promise<RobotsTxt> {
 
     // SSRF Protection for robots.txt URL
     try {
-      await assertSafeUrl(robotsUrl);
-    } catch (error) {
-      if (error instanceof SSRFError) {
+      const robotsSsrfResult = await validateUrlSafety(robotsUrl);
+      if (!robotsSsrfResult.safe) {
         logger.warn('SSRF protection blocked robots.txt check', {
           url: robotsUrl,
-          reason: error.message,
+          reason: robotsSsrfResult.reason,
         });
-        // Return allowed=true but log the issue
         return { allowed: true };
       }
-      throw error;
+    } catch (error) {
+      logger.warn('SSRF check failed for robots.txt', {
+        url: robotsUrl,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return { allowed: true };
     }
 
     const response = await fetch(robotsUrl, {
@@ -470,6 +488,17 @@ function getDefaultUserAgent(): string {
     ' (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.0' +
     ' RAGBot/1.0 (+https://example.com/bot)'
   );
+}
+
+/**
+ * Replace the hostname in a URL with a pinned IP address for DNS rebinding protection.
+ */
+function pinIP(originalUrl: string, ip: string): string {
+  const parsed = new URL(originalUrl);
+  // For IPv6, wrap in brackets
+  const ipHost = ip.includes(':') ? `[${ip}]` : ip;
+  parsed.hostname = ipHost;
+  return parsed.toString();
 }
 
 /**

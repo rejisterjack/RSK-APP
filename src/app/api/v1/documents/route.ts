@@ -48,6 +48,8 @@ import {
   validatePaginationParams,
 } from '@/lib/db/cursor-pagination';
 
+const STALE_PROCESSING_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * GET /api/v1/documents
  * List documents with cursor-based pagination and filtering
@@ -67,6 +69,45 @@ export async function GET(request: NextRequest) {
       { error: { code: 'WORKSPACE_NOT_FOUND', message: 'Workspace not found' } },
       { status: 404 }
     );
+  }
+
+  // Clean up stale PROCESSING documents — mark as FAILED if stuck >5 minutes
+  try {
+    const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MS);
+    const staleDocs = await prisma.document.findMany({
+      where: {
+        workspaceId: workspace.id,
+        status: 'PROCESSING',
+        updatedAt: { lt: staleCutoff },
+      },
+      select: { id: true },
+    });
+    if (staleDocs.length > 0) {
+      const staleIds = staleDocs.map((d) => d.id);
+      await prisma.documentChunk
+        .deleteMany({ where: { documentId: { in: staleIds } } })
+        .catch(() => {});
+      await prisma.ingestionJob
+        .updateMany({
+          where: { documentId: { in: staleIds } },
+          data: { status: 'FAILED', error: 'Processing timed out', completedAt: new Date() },
+        })
+        .catch(() => {});
+      const errorMeta = JSON.stringify({
+        error: 'Processing timed out',
+        failedAt: new Date().toISOString(),
+      });
+      for (const id of staleIds) {
+        await prisma.$executeRaw`
+          UPDATE documents SET status = 'FAILED',
+            metadata = COALESCE(metadata, '{}'::jsonb) || ${errorMeta}::jsonb,
+            updated_at = NOW()
+          WHERE id = ${id}
+        `.catch(() => {});
+      }
+    }
+  } catch {
+    // Non-blocking — don't fail the list request if cleanup has issues
   }
 
   const { searchParams } = new URL(request.url);

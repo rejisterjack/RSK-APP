@@ -18,7 +18,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { withApiAuth } from '@/lib/auth';
 import { prisma, prismaRead } from '@/lib/db';
-import { inngest } from '@/lib/inngest/client';
 import { logger } from '@/lib/logger';
 import {
   parseAudio,
@@ -31,6 +30,7 @@ import {
   parseXLSXBuffer,
 } from '@/lib/rag/ingestion';
 import { isYouTubeUrl } from '@/lib/rag/ingestion/parsers/youtube';
+import { processDocumentDirect } from '@/lib/rag/ingestion/process-document';
 import { isFeatureDegraded } from '@/lib/resilience/degradation';
 import { validateFile, validateFileBytes } from '@/lib/security/input-validator';
 import {
@@ -116,6 +116,18 @@ export const POST = withApiAuth(async (req: NextRequest, session) => {
 
     if (contentTypeHeader.includes('application/json')) {
       // JSON body support for URL-based ingestion: { "url": "..." }
+      // Check content-length header before parsing to prevent oversized payloads
+      const contentLength = parseInt(req.headers.get('content-length') || '0', 10);
+      if (contentLength > MAX_FILE_SIZE) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds 50MB limit' },
+          },
+          { status: 413 }
+        );
+      }
+
       let jsonBody: Record<string, unknown>;
       try {
         jsonBody = (await req.json()) as Record<string, unknown>;
@@ -133,6 +145,16 @@ export const POST = withApiAuth(async (req: NextRequest, session) => {
       const jsonContent = jsonBody.content as string | undefined;
       const jsonTitle = jsonBody.title as string | undefined;
       const jsonWorkspaceId = (jsonBody.workspaceId as string) || session.user.workspaceId;
+
+      if (jsonWorkspaceId && !isValidCUID(jsonWorkspaceId)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: { code: 'INVALID_WORKSPACE_ID', message: 'Invalid workspace ID format' },
+          },
+          { status: 400 }
+        );
+      }
 
       if (jsonUrl) {
         // Validate workspace access
@@ -209,6 +231,16 @@ export const POST = withApiAuth(async (req: NextRequest, session) => {
     const url = formData.get('url') as string | null;
     let workspaceId = (formData.get('workspaceId') as string) || session.user.workspaceId;
 
+    if (workspaceId && !isValidCUID(workspaceId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: 'INVALID_WORKSPACE_ID', message: 'Invalid workspace ID format' },
+        },
+        { status: 400 }
+      );
+    }
+
     // Step 5: Validate workspace access and permissions
     if (workspaceId) {
       const hasAccess = await checkPermission(userId, workspaceId, Permission.WRITE_DOCUMENTS);
@@ -219,7 +251,7 @@ export const POST = withApiAuth(async (req: NextRequest, session) => {
           const personalWorkspace = await prisma.workspace.create({
             data: {
               name: 'My Workspace',
-              slug: `ws-${userId.slice(0, 8)}`,
+              slug: `ws-${userId.slice(0, 8)}-${Date.now().toString(36)}`,
               ownerId: userId,
               members: {
                 create: {
@@ -231,11 +263,37 @@ export const POST = withApiAuth(async (req: NextRequest, session) => {
             },
           });
           workspaceId = personalWorkspace.id;
-        } catch {
-          return NextResponse.json(
-            { success: false, error: { code: 'FORBIDDEN', message: 'Access denied to workspace' } },
-            { status: 403 }
-          );
+        } catch (createError) {
+          // Handle unique constraint violation — workspace may already exist from a concurrent request
+          if (
+            createError instanceof Error &&
+            (createError.message.includes('Unique constraint') ||
+              createError.message.includes('unique'))
+          ) {
+            const existing = await prisma.workspace.findFirst({
+              where: { ownerId: userId },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (existing) {
+              workspaceId = existing.id;
+            } else {
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: { code: 'FORBIDDEN', message: 'Access denied to workspace' },
+                },
+                { status: 403 }
+              );
+            }
+          } else {
+            return NextResponse.json(
+              {
+                success: false,
+                error: { code: 'FORBIDDEN', message: 'Access denied to workspace' },
+              },
+              { status: 403 }
+            );
+          }
         }
       }
 
@@ -343,9 +401,29 @@ async function handleFileIngestion(
     );
   }
 
-  // Step 3: Virus scan (ClamAV integration)
+  // Step 3: Read file into buffer once (used for virus scan, magic bytes, and parsing)
+  const bytes = await file.arrayBuffer();
+
+  // Validate file bytes using magic byte detection
+  const magicBytesValidation = validateFileBytes(bytes, file.type);
+  if (!magicBytesValidation.valid) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'INVALID_FILE_CONTENT',
+          message: magicBytesValidation.error ?? 'File content does not match expected type',
+        },
+      },
+      { status: 400 }
+    );
+  }
+
+  const buffer = Buffer.from(bytes);
+
+  // Step 4: Virus scan (ClamAV integration) — uses the same buffer, no double read
   if (ENABLE_VIRUS_SCAN) {
-    const scanResult = await scanFileForViruses(file);
+    const scanResult = await scanFileForVirusesBuffer(buffer, file.name);
     if (!scanResult.clean) {
       await logAuditEvent({
         event: AuditEvent.SUSPICIOUS_ACTIVITY,
@@ -371,26 +449,6 @@ async function handleFileIngestion(
       );
     }
   }
-
-  // Step 5: Convert to buffer and validate magic bytes
-  const bytes = await file.arrayBuffer();
-
-  // Validate file bytes using magic byte detection (Fix #8)
-  const magicBytesValidation = validateFileBytes(bytes, file.type);
-  if (!magicBytesValidation.valid) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'INVALID_FILE_CONTENT',
-          message: magicBytesValidation.error ?? 'File content does not match expected type',
-        },
-      },
-      { status: 400 }
-    );
-  }
-
-  const buffer = Buffer.from(bytes);
 
   let content: string;
   let metadata: Record<string, unknown> = {};
@@ -474,8 +532,8 @@ async function handleFileIngestion(
     );
   }
 
-  // Step 6: Check for duplicate content (simple hash check)
-  const contentHash = await hashContent(content.slice(0, 1000));
+  // Step 6: Check for duplicate content (hash full content)
+  const contentHash = await hashContent(content);
   const duplicateWhere = workspaceId ? { workspaceId } : { userId, workspaceId: null };
   const existingDoc = await prisma.document.findFirst({
     where: {
@@ -522,13 +580,24 @@ async function handleFileIngestion(
     },
   });
 
-  // Step 8: Queue for background processing
-  await inngest.send({
-    name: 'document/ingest',
-    data: {
-      documentId: document.id,
-      userId,
-    },
+  // Step 8: Process document directly (no Inngest dependency for local dev)
+  // Fire-and-forget — the client polls GET /api/ingest for status
+  const docId = document.id;
+  void processDocumentDirect(docId, userId).catch(async (err) => {
+    const errMsg = err instanceof Error ? err.message : 'Unknown';
+    logger.error('Document processing failed', { documentId: docId, error: errMsg });
+    // Safety net: mark as FAILED without destroying existing metadata
+    await prisma.$executeRaw`
+      UPDATE documents SET status = 'FAILED',
+        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ error: errMsg })}::jsonb
+      WHERE id = ${docId}
+    `.catch(() => {});
+    await prisma.ingestionJob
+      .updateMany({
+        where: { documentId: docId },
+        data: { status: 'FAILED', error: errMsg, completedAt: new Date() },
+      })
+      .catch(() => {});
   });
 
   // Step 9: Log document upload
@@ -685,14 +754,22 @@ async function handleURLIngestion(
     },
   });
 
-  // Queue for background processing
-  await inngest.send({
-    name: 'document/ingest',
-    data: {
-      documentId: document.id,
-      userId,
-      url,
-    },
+  // Process document directly
+  const urlDocId = document.id;
+  void processDocumentDirect(urlDocId, userId).catch(async (err) => {
+    const errMsg = err instanceof Error ? err.message : 'Unknown';
+    logger.error('URL document processing failed', { documentId: urlDocId, error: errMsg });
+    await prisma.$executeRaw`
+      UPDATE documents SET status = 'FAILED',
+        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ error: errMsg })}::jsonb
+      WHERE id = ${urlDocId}
+    `.catch(() => {});
+    await prisma.ingestionJob
+      .updateMany({
+        where: { documentId: urlDocId },
+        data: { status: 'FAILED', error: errMsg, completedAt: new Date() },
+      })
+      .catch(() => {});
   });
 
   // Log document upload
@@ -781,6 +858,67 @@ export const GET = withApiAuth(async (req: NextRequest, session) => {
     // Get job details
     const job = document.ingestionJob;
     const metadata = (document.metadata as Record<string, unknown>) || {};
+
+    // Detect stale processing — if a job has been PROCESSING for >5 minutes,
+    // the function was likely killed. Mark it as FAILED so the UI updates.
+    const STALE_THRESHOLD_MS = 5 * 60 * 1000;
+    const isStale =
+      document.status === 'PROCESSING' &&
+      (!job ||
+        (job.status === 'PROCESSING' &&
+          job.startedAt &&
+          Date.now() - job.startedAt.getTime() > STALE_THRESHOLD_MS));
+
+    if (isStale) {
+      logger.warn('Detected stale processing during status poll', { documentId });
+      // Clean up partial chunks
+      await prisma.documentChunk.deleteMany({ where: { documentId } }).catch(() => {});
+      // Mark job as failed
+      if (job) {
+        await prisma.ingestionJob
+          .update({
+            where: { id: job.id },
+            data: {
+              status: 'FAILED',
+              error: 'Processing timed out (function was likely killed)',
+              completedAt: new Date(),
+            },
+          })
+          .catch(() => {});
+      }
+      // Mark document as failed
+      await prisma.document
+        .update({
+          where: { id: documentId },
+          data: {
+            status: 'FAILED',
+            metadata: {
+              ...metadata,
+              error: 'Processing timed out',
+              failedAt: new Date().toISOString(),
+            },
+          },
+        })
+        .catch(() => {});
+
+      // Return failed status
+      const status = {
+        documentId: document.id,
+        name: document.name,
+        type: document.contentType,
+        status: 'failed',
+        progress: 0,
+        chunkCount: 0,
+        error:
+          'Processing timed out — the document may be too large or the embedding service was unavailable',
+        metadata: {
+          size: document.size,
+          createdAt: document.createdAt.toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      return NextResponse.json({ success: true, data: status });
+    }
 
     // Calculate progress
     let progress = 0;
@@ -914,6 +1052,11 @@ export const DELETE = withApiAuth(async (req: NextRequest, session) => {
 
     // Can only cancel pending or processing documents
     if (document.status !== 'PENDING' && document.status !== 'PROCESSING') {
+      // Explicitly delete chunks before document for safety
+      const chunkResult = await prisma.documentChunk.deleteMany({
+        where: { documentId },
+      });
+
       // Delete the document record
       await prisma.document.delete({
         where: { id: documentId },
@@ -924,7 +1067,8 @@ export const DELETE = withApiAuth(async (req: NextRequest, session) => {
         data: {
           documentId,
           status: 'deleted',
-          message: 'Document deleted successfully',
+          chunksRemoved: chunkResult.count,
+          message: 'Document and associated data deleted successfully',
         },
       });
     }
@@ -983,6 +1127,13 @@ export const DELETE = withApiAuth(async (req: NextRequest, session) => {
 // Helper Functions
 // =============================================================================
 
+function isValidCUID(id: string): boolean {
+  // CUID: starts with 'c', 25 chars, lowercase + digits
+  // CUID2: starts with a letter, 24+ chars, lowercase + digits
+  // Also accept Prisma default CUIDs
+  return /^[a-z][a-z0-9]{19,31}$/i.test(id);
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -992,10 +1143,20 @@ function formatBytes(bytes: number): string {
 }
 
 async function hashContent(content: string): Promise<string> {
-  // Use SubtleCrypto for hashing if available, otherwise use simple hash
   if (typeof crypto !== 'undefined' && crypto.subtle) {
+    // For very large documents (>20MB), sample head + tail + length to avoid
+    // encoding the entire content into a single buffer
+    const MAX_HASH_INPUT = 20 * 1024 * 1024; // 20MB
+    const SAMPLE = 5 * 1024 * 1024; // 5MB from each end
+    const input =
+      content.length > MAX_HASH_INPUT
+        ? content.slice(0, SAMPLE) +
+          content.slice(content.length - SAMPLE) +
+          content.length.toString()
+        : content;
+
     const encoder = new TextEncoder();
-    const data = encoder.encode(content);
+    const data = encoder.encode(input);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -1017,21 +1178,21 @@ interface VirusScanResult {
 }
 
 /**
- * Scan file for viruses using ClamAV or similar service
+ * Scan file buffer for viruses using ClamAV or similar service
  */
-async function scanFileForViruses(file: File): Promise<VirusScanResult> {
+async function scanFileForVirusesBuffer(
+  buffer: Buffer,
+  filename: string
+): Promise<VirusScanResult> {
   // Check file extension as first line of defense
   const dangerousExtensions = ['.exe', '.dll', '.bat', '.cmd', '.sh', '.php', '.jsp'];
-  const hasDangerousExt = dangerousExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
+  const hasDangerousExt = dangerousExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
 
   if (hasDangerousExt) {
     return { clean: false, threat: 'Executable file detected' };
   }
 
-  // Scan with ClamAV if enabled
-  const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  const scanResult = await virusScanner.scanFile(buffer, file.name);
+  const scanResult = await virusScanner.scanFile(buffer, filename);
 
   if (!scanResult.clean) {
     return {
@@ -1092,7 +1253,7 @@ async function handleRawContentIngestion(
   }
 
   // Check for duplicate content
-  const contentHash = await hashContent(content.slice(0, 1000));
+  const contentHash = await hashContent(content);
   const duplicateWhere = workspaceId ? { workspaceId } : { userId, workspaceId: null };
   const existingDoc = await prisma.document.findFirst({
     where: {
@@ -1134,13 +1295,22 @@ async function handleRawContentIngestion(
     },
   });
 
-  // Queue for background processing
-  await inngest.send({
-    name: 'document/ingest',
-    data: {
-      documentId: document.id,
-      userId,
-    },
+  // Process document directly
+  const rawDocId = document.id;
+  void processDocumentDirect(rawDocId, userId).catch(async (err) => {
+    const errMsg = err instanceof Error ? err.message : 'Unknown';
+    logger.error('Raw content document processing failed', { documentId: rawDocId, error: errMsg });
+    await prisma.$executeRaw`
+      UPDATE documents SET status = 'FAILED',
+        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ error: errMsg })}::jsonb
+      WHERE id = ${rawDocId}
+    `.catch(() => {});
+    await prisma.ingestionJob
+      .updateMany({
+        where: { documentId: rawDocId },
+        data: { status: 'FAILED', error: errMsg, completedAt: new Date() },
+      })
+      .catch(() => {});
   });
 
   // Audit log

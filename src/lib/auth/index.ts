@@ -58,6 +58,7 @@ import {
 } from '@/lib/security/account-lockout';
 import { isSessionRevoked, trackSession } from '@/lib/security/session-store';
 import { createDefaultWorkspace, getAppUrl, getUserWorkspaces } from '@/lib/workspace/workspace';
+import { authConfig } from './auth.config';
 
 // =============================================================================
 // Type Extensions
@@ -91,6 +92,33 @@ declare module 'next-auth' {
 // JWT types are handled via type assertions
 
 // =============================================================================
+// Session Revocation Cache (avoids Redis round-trip on every request)
+// =============================================================================
+
+const revocationCache = new Map<string, { revoked: boolean; expiry: number }>();
+
+async function isSessionRevokedCached(jti: string): Promise<boolean> {
+  const cached = revocationCache.get(jti);
+  if (cached && cached.expiry > Date.now()) return cached.revoked;
+
+  const revoked = await isSessionRevoked(jti).catch(() => false);
+
+  // If revoked, cache for the full session TTL; if not, cache for 5 seconds
+  const ttl = revoked ? 7 * 24 * 60 * 60 * 1000 : 5000;
+  revocationCache.set(jti, { revoked, expiry: Date.now() + ttl });
+
+  // Prevent memory leak: prune expired entries when cache grows large
+  if (revocationCache.size > 10000) {
+    const now = Date.now();
+    for (const [key, val] of revocationCache) {
+      if (val.expiry <= now) revocationCache.delete(key);
+    }
+  }
+
+  return revoked;
+}
+
+// =============================================================================
 // NextAuth Configuration
 // =============================================================================
 
@@ -100,50 +128,55 @@ export const {
   signIn,
   signOut,
 } = NextAuth({
-  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
-  trustHost: true,
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: 'jwt',
     maxAge: 7 * 24 * 60 * 60, // 7 days - reduced from 30 for security
     updateAge: 24 * 60 * 60, // 24 hours
   },
-  pages: {
-    signIn: '/login',
-    signOut: '/login',
-    error: '/login',
-    newUser: '/register',
-  },
   providers: [
     // GitHub OAuth Provider
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID as string,
       clientSecret: process.env.AUTH_GITHUB_SECRET as string,
-      // Fetch private emails from GitHub /user/emails endpoint
+      authorization: {
+        params: {
+          scope: 'read:user user:email',
+        },
+      },
       userinfo: {
         url: 'https://api.github.com/user',
         async request({ tokens }: { tokens: { access_token: string } }) {
-          const profileRes = await fetch('https://api.github.com/user', {
-            headers: { Authorization: `Bearer ${tokens.access_token}` },
-          });
+          const headers = { Authorization: `Bearer ${tokens.access_token}` };
+
+          const profileRes = await fetch('https://api.github.com/user', { headers });
           const profile = await profileRes.json();
 
+          // Fetch emails if profile doesn't have a public one
           if (!profile.email) {
-            const emailsRes = await fetch('https://api.github.com/user/emails', {
-              headers: { Authorization: `Bearer ${tokens.access_token}` },
-            });
-            const emails = await emailsRes.json();
-            const primary = emails.find(
-              (e: { primary: boolean; verified: boolean }) => e.primary && e.verified
-            );
-            if (primary) profile.email = primary.email;
+            try {
+              const emailsRes = await fetch('https://api.github.com/user/emails', { headers });
+              const emails = await emailsRes.json();
+              if (Array.isArray(emails)) {
+                const primary = emails.find(
+                  (e: { primary: boolean; verified: boolean }) => e.primary && e.verified
+                );
+                if (primary) profile.email = primary.email;
+              }
+            } catch {
+              // Email endpoint unavailable — will be caught by missing email check below
+            }
+          }
+
+          // Last resort: use login@users.noreply.github.com if email still missing
+          if (!profile.email && profile.login) {
+            profile.email = `${profile.login}@users.noreply.github.com`;
           }
 
           return profile;
         },
       },
-      // allowDangerousEmailAccountLinking is intentionally NOT enabled
-      // to prevent OAuth account takeover attacks
     }),
 
     // Google OAuth Provider
@@ -190,8 +223,16 @@ export const {
             severity: 'WARNING',
           });
 
-          // Return null with a specific error that will be handled
-          throw new Error(`ACCOUNT_LOCKED:${lockoutStatus.lockedUntil?.getTime() || 0}`);
+          throw new Error(
+            JSON.stringify({
+              code: 'ACCOUNT_LOCKED',
+              lockedUntil: lockoutStatus.lockedUntil?.toISOString(),
+              retryAfterSeconds: Math.max(
+                0,
+                Math.ceil(((lockoutStatus.lockedUntil?.getTime() ?? 0) - Date.now()) / 1000)
+              ),
+            })
+          );
         }
 
         // Find user by email
@@ -302,10 +343,10 @@ export const {
     // Session Callback - Attach user data to session and check revocation
     async session({ session, token }) {
       if (token && session.user) {
-        // Check if session has been revoked
+        // Check if session has been revoked (with caching to avoid Redis on every request)
         const jti = typeof token.jti === 'string' ? token.jti : null;
         if (jti) {
-          const revoked = await isSessionRevoked(jti).catch(() => false);
+          const revoked = await isSessionRevokedCached(jti);
           if (revoked) {
             // Return an empty session to force re-authentication
             return {} as typeof session;
