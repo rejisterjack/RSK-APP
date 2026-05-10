@@ -75,6 +75,7 @@ export async function searchSimilarChunks(
 
   const searchOptions: SearchOptions = {
     userId,
+    workspaceId: config.workspaceId,
     topK: config.topK ?? 5,
     minScore: config.similarityThreshold ?? 0.7,
     searchType: 'cosine',
@@ -112,6 +113,7 @@ export async function searchSimilarChunksByDocuments(
 
   const searchOptions: SearchOptions = {
     userId,
+    workspaceId: config.workspaceId,
     topK: config.topK ?? 5,
     minScore: config.similarityThreshold ?? 0.7,
     searchType: 'cosine',

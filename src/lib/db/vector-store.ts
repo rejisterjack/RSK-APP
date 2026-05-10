@@ -28,8 +28,10 @@ type PrismaTransactionClient = Pick<
 // ============================================================================
 
 export interface SearchOptions {
-  /** Workspace/user ID for isolation */
+  /** User ID for isolation */
   userId: string;
+  /** Workspace ID — search documents in this workspace in addition to user's own */
+  workspaceId?: string;
   /** Number of results to return (default: 5) */
   topK?: number;
   /** Minimum similarity score threshold (default: 0.7) */
@@ -159,7 +161,14 @@ export class VectorStore {
     queryEmbedding: number[],
     options: SearchOptions
   ): Promise<SearchResult[]> {
-    const { userId, topK = 5, minScore = 0.7, filter, searchType = 'cosine' } = options;
+    const {
+      userId,
+      workspaceId,
+      topK = 5,
+      minScore = 0.7,
+      filter,
+      searchType = 'cosine',
+    } = options;
 
     // Build the distance expression based on search type
     const distanceExpr = this.getDistanceExpression(searchType);
@@ -179,7 +188,14 @@ export class VectorStore {
     let paramIndex = 2;
 
     // Build WHERE conditions using parameterized queries
-    let whereConditions = `d."userId" = $${paramIndex++}`;
+    // Search by userId (own documents) AND/OR workspaceId (workspace documents)
+    let whereConditions = workspaceId
+      ? `(d."userId" = $${paramIndex++} OR d."workspaceId" = $${paramIndex++})`
+      : `d."userId" = $${paramIndex++}`;
+
+    if (workspaceId) {
+      params.push(userId, workspaceId);
+    }
 
     if (filter?.documentIds && filter.documentIds.length > 0) {
       // Use parameterized array for document IDs

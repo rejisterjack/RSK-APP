@@ -294,7 +294,7 @@ export async function POST(req: Request) {
         const { withSpan } = await tracing();
         sources = await withSpan('chat.retrieve_sources', async (span) => {
           span.setAttribute('chat.query_length', userMessage.length);
-          const result = await retrieveSources(userMessage, userId, config);
+          const result = await retrieveSources(userMessage, userId, { ...config, workspaceId });
           span.setAttribute('chat.sources_count', result.length);
           return result;
         });

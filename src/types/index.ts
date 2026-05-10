@@ -138,6 +138,8 @@ export interface RAGConfig {
   maxContextLength?: number;
   /** Custom system instructions */
   systemInstructions?: string;
+  /** Workspace ID — search documents in this workspace */
+  workspaceId?: string;
 }
 
 export interface RAGQuery {
