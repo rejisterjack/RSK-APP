@@ -270,22 +270,20 @@ export async function processImage(
 
       // Create ImageEmbedding record
       const contentHash = createHash('sha256').update(image.buffer).digest('hex');
-      const imageEmbedding = await tx.$executeRaw`
-        INSERT INTO image_embeddings (
-          id, image_id, content_hash, embedding, model, dimensions, created_at
-        ) VALUES (
-          ${crypto.randomUUID()},
-          ${docImage.id},
-          ${contentHash},
-          ${embedding}::vector,
-          'Xenova/clip-vit-base-patch32',
-          512,
-          NOW()
-        )
-        RETURNING id
-      `;
+      const vectorStr = `[${embedding.join(',')}]`;
+      await tx.$executeRawUnsafe(
+        `INSERT INTO image_embeddings (
+          id, "imageId", contentHash, embedding, model, dimensions, "createdAt"
+        ) VALUES ($1, $2, $3, $4::vector, $5, $6, NOW())`,
+        crypto.randomUUID(),
+        docImage.id,
+        contentHash,
+        vectorStr,
+        'Xenova/clip-vit-base-patch32',
+        512
+      );
 
-      return { docImage, imageEmbedding, contentHash };
+      return { docImage, imageEmbedding: undefined as unknown as undefined, contentHash };
     });
 
     // Step 5: Update with caption (if available)
@@ -405,44 +403,48 @@ export async function searchSimilarImages(
   try {
     // Generate query embedding
     const queryEmbedding = await generateImageEmbedding(queryImage);
+    const vectorStr = `[${queryEmbedding.join(',')}]`;
 
     // Search for similar images using pgvector
-    const results = await prisma.$queryRaw<
+    const results = await prisma.$queryRawUnsafe<
       Array<{
         id: string;
-        document_id: string;
-        storage_url: string;
+        documentId: string;
+        storageUrl: string;
         caption: string | null;
-        ocr_text: string | null;
-        page_number: number | null;
+        ocrText: string | null;
+        pageNumber: number | null;
         similarity: number;
       }>
-    >`
-      SELECT 
+    >(
+      `SELECT
         di.id,
-        di.document_id,
-        di.storage_url,
+        di."documentId",
+        di."storageUrl",
         di.caption,
-        di.ocr_text,
-        di.page_number,
-        1 - (ie.embedding <=> ${queryEmbedding}::vector) as similarity
+        di."ocrText",
+        di."pageNumber",
+        1 - (ie.embedding <=> $1::vector) as similarity
       FROM image_embeddings ie
-      JOIN document_images di ON ie.image_id = di.id
-      JOIN documents d ON di.document_id = d.id
-      WHERE d.user_id = ${workspaceId}
+      JOIN document_images di ON ie."imageId" = di.id
+      JOIN documents d ON di."documentId" = d.id
+      WHERE d."userId" = $2
         AND d.status = 'COMPLETED'
         AND ie.embedding IS NOT NULL
-      ORDER BY ie.embedding <=> ${queryEmbedding}::vector
-      LIMIT ${topK}
-    `;
+      ORDER BY ie.embedding <=> $1::vector
+      LIMIT $3`,
+      vectorStr,
+      workspaceId,
+      topK
+    );
 
     return results.map((r) => ({
       id: r.id,
-      documentId: r.document_id,
-      storageUrl: r.storage_url,
+      documentId: r.documentId,
+      storageUrl: r.storageUrl,
       caption: r.caption || undefined,
-      ocrText: r.ocr_text || undefined,
-      pageNumber: r.page_number || undefined,
+      ocrText: r.ocrText || undefined,
+      pageNumber: r.pageNumber || undefined,
       similarity: Number(r.similarity),
     }));
   } catch (error) {
@@ -474,44 +476,48 @@ export async function searchImagesByText(
 
     // Generate text embedding
     const textEmbedding = await generateTextEmbeddingForImageSearch(query);
+    const vectorStr = `[${textEmbedding.join(',')}]`;
 
     // Search for similar images
-    const results = await prisma.$queryRaw<
+    const results = await prisma.$queryRawUnsafe<
       Array<{
         id: string;
-        document_id: string;
-        storage_url: string;
+        documentId: string;
+        storageUrl: string;
         caption: string | null;
-        ocr_text: string | null;
-        page_number: number | null;
+        ocrText: string | null;
+        pageNumber: number | null;
         similarity: number;
       }>
-    >`
-      SELECT 
+    >(
+      `SELECT
         di.id,
-        di.document_id,
-        di.storage_url,
+        di."documentId",
+        di."storageUrl",
         di.caption,
-        di.ocr_text,
-        di.page_number,
-        1 - (ie.embedding <=> ${textEmbedding}::vector) as similarity
+        di."ocrText",
+        di."pageNumber",
+        1 - (ie.embedding <=> $1::vector) as similarity
       FROM image_embeddings ie
-      JOIN document_images di ON ie.image_id = di.id
-      JOIN documents d ON di.document_id = d.id
-      WHERE d.user_id = ${workspaceId}
+      JOIN document_images di ON ie."imageId" = di.id
+      JOIN documents d ON di."documentId" = d.id
+      WHERE d."userId" = $2
         AND d.status = 'COMPLETED'
         AND ie.embedding IS NOT NULL
-      ORDER BY ie.embedding <=> ${textEmbedding}::vector
-      LIMIT ${topK}
-    `;
+      ORDER BY ie.embedding <=> $1::vector
+      LIMIT $3`,
+      vectorStr,
+      workspaceId,
+      topK
+    );
 
     return results.map((r) => ({
       id: r.id,
-      documentId: r.document_id,
-      storageUrl: r.storage_url,
+      documentId: r.documentId,
+      storageUrl: r.storageUrl,
       caption: r.caption || undefined,
-      ocrText: r.ocr_text || undefined,
-      pageNumber: r.page_number || undefined,
+      ocrText: r.ocrText || undefined,
+      pageNumber: r.pageNumber || undefined,
       similarity: Number(r.similarity),
     }));
   } catch (error) {

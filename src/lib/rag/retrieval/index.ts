@@ -424,7 +424,7 @@ export async function hybridSearch(
   >`
     SELECT
       dc.id,
-      dc.document_id as "documentId",
+      dc."documentId" as "documentId",
       dc.content,
       dc.index,
       dc.page,
@@ -435,8 +435,8 @@ export async function hybridSearch(
         plainto_tsquery('english', ${query})
       ) as "textScore"
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = ${userId}
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = ${userId}
       AND d.status = 'COMPLETED'
       AND to_tsvector('english', dc.content) @@ plainto_tsquery('english', ${query})
     ORDER BY "textScore" DESC

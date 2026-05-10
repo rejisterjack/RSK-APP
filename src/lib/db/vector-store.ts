@@ -15,7 +15,12 @@ import type { DocumentChunk, PrismaClient } from '@/generated/prisma/client';
 // Type for transaction client
 type PrismaTransactionClient = Pick<
   PrismaClient,
-  '$executeRaw' | '$queryRaw' | '$queryRawUnsafe' | 'documentChunk' | 'document'
+  | '$executeRaw'
+  | '$executeRawUnsafe'
+  | '$queryRaw'
+  | '$queryRawUnsafe'
+  | 'documentChunk'
+  | 'document'
 >;
 
 // ============================================================================
@@ -123,24 +128,22 @@ export class VectorStore {
 
       // Insert new chunks with embeddings using raw query
       for (const chunk of chunks) {
-        await tx.$executeRaw`
-          INSERT INTO document_chunks (
-            id, document_id, content, embedding, "index", 
-            start, "end", page, section, created_at
-          )
-          VALUES (
-            ${crypto.randomUUID()},
-            ${chunk.documentId},
-            ${chunk.content},
-            ${chunk.embedding}::vector,
-            ${chunk.index},
-            ${chunk.start ?? 0},
-            ${chunk.end ?? chunk.content.length},
-            ${chunk.page ?? null},
-            ${chunk.section ?? null},
-            NOW()
-          )
-        `;
+        const vectorStr = `[${chunk.embedding.join(',')}]`;
+        await tx.$executeRawUnsafe(
+          `INSERT INTO document_chunks (
+            id, "documentId", content, embedding, "index",
+            start, "end", page, section, "createdAt"
+          ) VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, NOW())`,
+          crypto.randomUUID(),
+          chunk.documentId,
+          chunk.content,
+          vectorStr,
+          chunk.index,
+          chunk.start ?? 0,
+          chunk.end ?? chunk.content.length,
+          chunk.page ?? null,
+          chunk.section ?? null
+        );
       }
     });
   }
@@ -176,7 +179,7 @@ export class VectorStore {
     let paramIndex = 2;
 
     // Build WHERE conditions using parameterized queries
-    let whereConditions = `d.user_id = $${paramIndex++}`;
+    let whereConditions = `d."userId" = $${paramIndex++}`;
 
     if (filter?.documentIds && filter.documentIds.length > 0) {
       // Use parameterized array for document IDs
@@ -189,13 +192,13 @@ export class VectorStore {
       // Use parameterized array for document types
       params.push(...filter.documentTypes);
       const typePlaceholders = filter.documentTypes.map(() => `$${paramIndex++}`).join(', ');
-      whereConditions += ` AND d.content_type IN (${typePlaceholders})`;
+      whereConditions += ` AND d."contentType" IN (${typePlaceholders})`;
     }
 
     if (filter?.dateRange) {
       // Use parameterized dates
       params.push(filter.dateRange.from, filter.dateRange.to);
-      whereConditions += ` AND d.created_at >= $${paramIndex++} AND d.created_at <= $${paramIndex++}`;
+      whereConditions += ` AND d."createdAt" >= $${paramIndex++} AND d."createdAt" <= $${paramIndex++}`;
     }
 
     // Add limit parameter (must be last)
@@ -220,25 +223,25 @@ export class VectorStore {
       }>
     >(
       `
-        SELECT 
+        SELECT
           dc.id as "chunkId",
           dc.content,
           ${scoreExpr} as score,
           d.id as "documentId",
           d.name as "documentName",
-          d.content_type as "documentType",
+          d."contentType" as "documentType",
           dc.page,
           dc.section,
           dc.index
         FROM document_chunks dc
-        JOIN documents d ON dc.document_id = d.id
+        JOIN documents d ON dc."documentId" = d.id
         WHERE ${whereConditions}
           AND d.status = 'COMPLETED'
           AND dc.embedding IS NOT NULL
         ORDER BY ${distanceExpr} $1::vector
         LIMIT $${paramIndex}
       `,
-      queryEmbedding, // $1 - the query embedding
+      `[${queryEmbedding.join(',')}]`, // $1 - query embedding as pgvector string
       ...params.slice(1) // remaining parameters (userId, docIds, types, dates, limit)
     );
 
@@ -330,24 +333,22 @@ export class VectorStore {
 
       await this.prisma.$transaction(async (tx) => {
         for (const chunk of batch) {
-          await tx.$executeRaw`
-            INSERT INTO document_chunks (
-              id, document_id, content, embedding, "index", 
-              start, "end", page, section, created_at
-            )
-            VALUES (
-              ${crypto.randomUUID()},
-              ${chunk.documentId},
-              ${chunk.content},
-              ${chunk.embedding}::vector,
-              ${chunk.index},
-              ${chunk.start ?? 0},
-              ${chunk.end ?? chunk.content.length},
-              ${chunk.page ?? null},
-              ${chunk.section ?? null},
-              NOW()
-            )
-          `;
+          const vectorStr = `[${chunk.embedding.join(',')}]`;
+          await tx.$executeRawUnsafe(
+            `INSERT INTO document_chunks (
+              id, "documentId", content, embedding, "index",
+              start, "end", page, section, "createdAt"
+            ) VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8, $9, NOW())`,
+            crypto.randomUUID(),
+            chunk.documentId,
+            chunk.content,
+            vectorStr,
+            chunk.index,
+            chunk.start ?? 0,
+            chunk.end ?? chunk.content.length,
+            chunk.page ?? null,
+            chunk.section ?? null
+          );
         }
       });
 
@@ -368,7 +369,7 @@ export class VectorStore {
     return this.prisma.$queryRaw`
       SELECT id, content, index
       FROM document_chunks
-      WHERE document_id = ${documentId}
+      WHERE "documentId" = ${documentId}
         AND embedding IS NULL
       ORDER BY index
       LIMIT ${limit}
@@ -382,7 +383,7 @@ export class VectorStore {
     const result = await this.prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*) as count
       FROM document_chunks
-      WHERE document_id = ${documentId}
+      WHERE "documentId" = ${documentId}
         AND embedding IS NULL
     `;
     return Number(result[0]?.count ?? 0);

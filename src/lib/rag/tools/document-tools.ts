@@ -310,45 +310,50 @@ Returns semantically similar chunks ranked by relevance.`,
 
       // Generate embedding for the query
       const queryEmbedding = await generateQueryEmbedding(query);
+      const vectorStr = `[${queryEmbedding.join(',')}]`;
 
       // Perform semantic search using raw SQL
-      const results = await prisma.$queryRaw<
+      const results = await prisma.$queryRawUnsafe<
         Array<{
           id: string;
-          document_id: string;
+          documentId: string;
           content: string;
           index: number;
           page: number | null;
           section: string | null;
-          document_name: string;
+          documentName: string;
           similarity: number;
         }>
-      >`
-        SELECT 
+      >(
+        `SELECT
           dc.id,
-          dc.document_id,
+          dc."documentId",
           dc.content,
           dc.index,
           dc.page,
           dc.section,
-          d.name as document_name,
-          1 - (dc.embedding <=> ${queryEmbedding}::vector) as similarity
+          d.name as "documentName",
+          1 - (dc.embedding <=> $1::vector) as similarity
         FROM document_chunks dc
-        JOIN documents d ON dc.document_id = d.id
-        WHERE d.user_id = ${workspaceId}
+        JOIN documents d ON dc."documentId" = d.id
+        WHERE d."userId" = $2
           AND d.status = 'COMPLETED'
-          AND 1 - (dc.embedding <=> ${queryEmbedding}::vector) > ${threshold}
-        ORDER BY dc.embedding <=> ${queryEmbedding}::vector
-        LIMIT ${topK}
-      `;
+          AND 1 - (dc.embedding <=> $1::vector) > $3
+        ORDER BY dc.embedding <=> $1::vector
+        LIMIT $4`,
+        vectorStr,
+        workspaceId,
+        threshold,
+        topK
+      );
 
       const sources: Source[] = results.map((r) => ({
         id: r.id,
         content: r.content,
         similarity: r.similarity,
         metadata: {
-          documentId: r.document_id,
-          documentName: r.document_name,
+          documentId: r.documentId,
+          documentName: r.documentName,
           page: r.page ?? undefined,
           chunkIndex: r.index,
           totalChunks: 0,
@@ -362,8 +367,8 @@ Returns semantically similar chunks ranked by relevance.`,
           threshold,
           results: results.map((r) => ({
             content: r.content,
-            documentName: r.document_name,
-            documentId: r.document_id,
+            documentName: r.documentName,
+            documentId: r.documentId,
             page: r.page,
             similarity: r.similarity,
           })),
