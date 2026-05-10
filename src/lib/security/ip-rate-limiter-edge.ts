@@ -101,14 +101,27 @@ function getEdgeRedis(): RateLimitRedis {
 // =============================================================================
 
 function extractClientIP(req: Request): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  const realIP = req.headers.get('x-real-ip');
-  if (realIP) return realIP;
+  // Check most trustworthy headers first
+  // Cloudflare provides this header — most reliable when behind CF
   const cfIP = req.headers.get('cf-connecting-ip');
-  if (cfIP) return cfIP;
+  if (cfIP) return cfIP.trim();
+
   const trueIP = req.headers.get('true-client-ip');
-  if (trueIP) return trueIP;
+  if (trueIP) return trueIP.trim();
+
+  // x-forwarded-for: use the LAST entry (set by the trusted proxy), not the first (client-settable)
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const ips = forwarded
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ips.length > 0) return ips[ips.length - 1] ?? 'unknown';
+  }
+
+  const realIP = req.headers.get('x-real-ip');
+  if (realIP) return realIP.trim();
+
   return 'unknown';
 }
 

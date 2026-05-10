@@ -440,35 +440,44 @@ async function handleFileIngestion(
     }
   }
 
-  // Step 5: Upload to Cloudinary
-  let storageUrl: string;
-  let storageKey: string;
-  try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
-    storageKey = `documents/${crypto.randomUUID()}.${fileExt}`;
-    const uploadResult = await uploadFile(storageKey, buffer, {
-      contentType: file.type || 'application/octet-stream',
-    });
-    storageUrl = uploadResult.url;
-  } catch (error) {
-    const isDev = process.env.NODE_ENV === 'development';
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'UPLOAD_FAILED',
-          message: isDev
-            ? error instanceof Error
-              ? error.message
-              : 'Failed to upload file to storage'
-            : 'Failed to upload file',
+  // Step 5: Parse text files inline (fast), upload binary files to Cloudinary
+  const TEXT_TYPES = ['TXT', 'MD', 'HTML'];
+  const isTextFile = TEXT_TYPES.includes(fileValidation.type ?? '');
+  let storageUrl: string | null = null;
+  let storageKey: string | null = null;
+  let content: string | null = null;
+
+  if (isTextFile) {
+    // Parse text files directly — no Cloudinary round-trip
+    content = buffer.toString('utf-8');
+  } else {
+    try {
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+      storageKey = `documents/${crypto.randomUUID()}.${fileExt}`;
+      const uploadResult = await uploadFile(storageKey, buffer, {
+        contentType: file.type || 'application/octet-stream',
+      });
+      storageUrl = uploadResult.url;
+    } catch (error) {
+      const isDev = process.env.NODE_ENV === 'development';
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'UPLOAD_FAILED',
+            message: isDev
+              ? error instanceof Error
+                ? error.message
+                : 'Failed to upload file to storage'
+              : 'Failed to upload file',
+          },
         },
-      },
-      { status: 500 }
-    );
+        { status: 500 }
+      );
+    }
   }
 
-  // Step 6: Create document record (no content — Inngest will parse and fill it)
+  // Step 6: Create document record
   const document = await prisma.document.create({
     data: {
       name: file.name,
@@ -477,8 +486,9 @@ async function handleFileIngestion(
       status: 'PENDING',
       userId,
       workspaceId: workspaceId || null,
-      storageUrl,
-      storageKey,
+      ...(storageUrl && { storageUrl }),
+      ...(storageKey && { storageKey }),
+      ...(content && { content }),
       metadata: {
         originalName: file.name,
         mimeType: file.type,
@@ -735,67 +745,6 @@ export const GET = withApiAuth(async (req: NextRequest, session) => {
     // Get job details
     const job = document.ingestionJob;
     const metadata = (document.metadata as Record<string, unknown>) || {};
-
-    // Detect stale processing — if a job has been PROCESSING for >5 minutes,
-    // the function was likely killed. Mark it as FAILED so the UI updates.
-    const STALE_THRESHOLD_MS = 5 * 60 * 1000;
-    const isStale =
-      document.status === 'PROCESSING' &&
-      (!job ||
-        (job.status === 'PROCESSING' &&
-          job.startedAt &&
-          Date.now() - job.startedAt.getTime() > STALE_THRESHOLD_MS));
-
-    if (isStale) {
-      logger.warn('Detected stale processing during status poll', { documentId });
-      // Clean up partial chunks
-      await prisma.documentChunk.deleteMany({ where: { documentId } }).catch(() => {});
-      // Mark job as failed
-      if (job) {
-        await prisma.ingestionJob
-          .update({
-            where: { id: job.id },
-            data: {
-              status: 'FAILED',
-              error: 'Processing timed out (function was likely killed)',
-              completedAt: new Date(),
-            },
-          })
-          .catch(() => {});
-      }
-      // Mark document as failed
-      await prisma.document
-        .update({
-          where: { id: documentId },
-          data: {
-            status: 'FAILED',
-            metadata: {
-              ...metadata,
-              error: 'Processing timed out',
-              failedAt: new Date().toISOString(),
-            },
-          },
-        })
-        .catch(() => {});
-
-      // Return failed status
-      const status = {
-        documentId: document.id,
-        name: document.name,
-        type: document.contentType,
-        status: 'failed',
-        progress: 0,
-        chunkCount: 0,
-        error:
-          'Processing timed out — the document may be too large or the embedding service was unavailable',
-        metadata: {
-          size: document.size,
-          createdAt: document.createdAt.toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      };
-      return NextResponse.json({ success: true, data: status });
-    }
 
     // Calculate progress
     let progress = 0;

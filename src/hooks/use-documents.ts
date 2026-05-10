@@ -57,13 +57,13 @@ export function useDocuments() {
       if (!data.success) throw new Error('Failed to fetch documents');
       return data.data.documents.map(formatDocument);
     },
-    // Auto-poll every 3s while any doc is processing/pending, otherwise every 10s
+    // Only poll while docs are processing — no idle polling
     refetchInterval: (query) => {
       const docs = query.state.data;
       if (docs?.some((d) => d.status === 'processing' || d.status === 'pending')) {
         return 3000;
       }
-      return 10000;
+      return false;
     },
   });
 

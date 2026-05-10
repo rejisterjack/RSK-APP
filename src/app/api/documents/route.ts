@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
     const documents = await prisma.document.findMany({
       where,
       include: {
-        chunks: { select: { id: true } },
+        _count: { select: { chunks: true } },
         ingestionJob: { select: { progress: true, error: true, errorCategory: true } },
       },
       orderBy: { createdAt: sortOrder },
@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
         size: doc.size,
         status: STATUS_MAP[doc.status] || 'pending',
         progress: doc.ingestionJob?.progress,
-        chunkCount: doc.chunks.length,
+        chunkCount: doc._count.chunks,
         createdAt: doc.createdAt.toISOString(),
         errorMessage: doc.ingestionJob?.error || (metadata.error as string) || undefined,
         errorCategory: doc.ingestionJob?.errorCategory ?? undefined,

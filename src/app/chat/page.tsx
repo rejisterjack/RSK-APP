@@ -56,9 +56,7 @@ export default function ChatPage(): React.ReactElement {
   const uploadState = useUpload({
     onUploadComplete: () => {
       documentsQuery.refetch();
-      // Refetch again after processing has time to complete
-      setTimeout(() => documentsQuery.refetch(), 5000);
-      setTimeout(() => documentsQuery.refetch(), 15000);
+      setTimeout(() => documentsQuery.refetch(), 8000);
     },
   });
 

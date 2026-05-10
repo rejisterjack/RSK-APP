@@ -279,6 +279,7 @@ model Document {
   @@index([workspaceId])
   @@index([status])
   @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
   @@index([ocrProcessed])
   @@index([ocrConfidence])
   @@map("documents")

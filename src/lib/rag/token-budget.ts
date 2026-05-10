@@ -3,6 +3,8 @@
  * Allocates and manages token budgets for context, history, and responses
  */
 
+// @ts-expect-error -- js-tiktoken ESM/CJS export names differ
+import { getEncoding } from 'js-tiktoken';
 import type { RetrievedChunk } from './chain';
 import type { Message } from './memory';
 
@@ -343,25 +345,32 @@ export class TokenBudgetManager {
 // Utility Functions
 // =============================================================================
 
+// Lazy-initialized tiktoken encoder (cl100k_base used by GPT-4, GPT-3.5, and most models)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _encoder: any = null;
+
+function getEncoder() {
+  if (!_encoder) {
+    _encoder = getEncoding('cl100k_base');
+  }
+  return _encoder;
+}
+
 /**
- * Estimate token count for text
- * Uses a rough approximation: ~4 characters per token for English text
+ * Count tokens for text using tiktoken (cl100k_base encoding).
+ * Accurate for GPT-4, GPT-3.5-turbo, and similar models.
+ * Falls back to heuristic estimation if tiktoken fails.
  */
 export function estimateTokens(text: string): number {
   if (!text) return 0;
 
-  // Count words and characters for better estimation
-  const wordCount = text.trim().split(/\s+/).length;
-  const charCount = text.length;
-
-  // Different models have different tokenization, but roughly:
-  // - 1 token ≈ 4 characters
-  // - 1 token ≈ 0.75 words (for English)
-  const estimateFromChars = Math.ceil(charCount / 4);
-  const estimateFromWords = Math.ceil(wordCount / 0.75);
-
-  // Use the more conservative estimate
-  return Math.max(estimateFromChars, estimateFromWords);
+  try {
+    const encoder = getEncoder();
+    return encoder.encode(text).length;
+  } catch {
+    // Fallback heuristic: ~4 chars per token
+    return Math.ceil(text.length / 4);
+  }
 }
 
 /**
@@ -381,26 +390,32 @@ export function estimateMessageTokens(messages: Array<{ role: string; content: s
 }
 
 /**
- * Truncate text to fit within token limit
+ * Truncate text to fit within token limit using tiktoken.
+ * Falls back to character-based estimation if tiktoken fails.
  */
 export function truncateToTokens(text: string, maxTokens: number): string {
-  const estimated = estimateTokens(text);
-
-  if (estimated <= maxTokens) {
+  if (estimateTokens(text) <= maxTokens) {
     return text;
   }
 
-  // Rough conversion: tokens * 4 = characters
-  const maxChars = maxTokens * 4;
-  const truncated = text.slice(0, maxChars);
+  try {
+    const encoder = getEncoder();
+    const tokens = encoder.encode(text);
+    if (tokens.length <= maxTokens) return text;
 
-  // Try to end at a word boundary
-  const lastSpace = truncated.lastIndexOf(' ');
-  if (lastSpace > maxChars * 0.8) {
-    return `${truncated.slice(0, lastSpace)}...`;
+    // Decode the truncated tokens back to text
+    const truncated = new TextDecoder().decode(encoder.decode(tokens.slice(0, maxTokens)));
+    return `${truncated}...`;
+  } catch {
+    // Fallback: character-based truncation
+    const maxChars = maxTokens * 4;
+    const truncated = text.slice(0, maxChars);
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace > maxChars * 0.8) {
+      return `${truncated.slice(0, lastSpace)}...`;
+    }
+    return `${truncated}...`;
   }
-
-  return `${truncated}...`;
 }
 
 /**

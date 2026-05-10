@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+import NextAuth from 'next-auth';
+import { authConfig } from '@/lib/auth/auth.config';
 
 // =============================================================================
 // Edge-Safe Env Access
@@ -47,21 +48,24 @@ const ADMIN_ROUTES = ['/admin', '/api/admin'];
 // CORS Helpers
 // =============================================================================
 
-function computeCorsOrigin(req: NextRequest): string {
+function computeCorsOrigin(req: NextRequest): string | null {
   const origin = req.headers.get('origin') ?? '';
   const allowedOrigins = (env.ALLOWED_ORIGINS ?? env.NEXTAUTH_URL).split(',').map((s) => s.trim());
-  return allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  return allowedOrigins.includes(origin) ? origin : null;
 }
 
 function getCorsHeaders(req: NextRequest) {
   const corsOrigin = computeCorsOrigin(req);
-  return {
-    'Access-Control-Allow-Origin': corsOrigin,
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key, X-Request-ID',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
   };
+  if (corsOrigin) {
+    headers['Access-Control-Allow-Origin'] = corsOrigin;
+  }
+  return headers;
 }
 
 // =============================================================================
@@ -77,7 +81,10 @@ function withRequestId(response: NextResponse, requestId: string): NextResponse 
 // Middleware
 // =============================================================================
 
-export async function middleware(req: NextRequest) {
+// Edge-compatible auth instance for JWT decoding in middleware
+const { auth } = NextAuth(authConfig);
+
+export default auth(async function middleware(req) {
   const { nextUrl } = req;
   const { pathname } = nextUrl;
 
@@ -89,11 +96,12 @@ export async function middleware(req: NextRequest) {
     crypto.getRandomValues(nonceBytes);
     const cspNonce = btoa(String.fromCharCode(...nonceBytes));
 
-    // Get JWT session token
-    const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-    const token = await getToken({ req, secret: authSecret });
-    const isLoggedIn = !!token;
-    const user = token ? { id: token.sub, role: token.role, workspaceId: token.workspaceId } : null;
+    // Auth state from the auth() wrapper
+    const isLoggedIn = !!req.auth;
+    const authUser = req.auth?.user;
+    const user = authUser
+      ? { id: authUser.id, role: authUser.role, workspaceId: authUser.workspaceId }
+      : null;
 
     // CORS preflight
     if (req.method === 'OPTIONS') {
@@ -123,35 +131,12 @@ export async function middleware(req: NextRequest) {
       return withRequestId(response, requestId);
     }
 
-    // API key authentication
-    const apiKey = req.headers.get('X-API-Key');
-    if (apiKey && pathname.startsWith('/api/')) {
-      if (apiKey.length < 20 || apiKey.length > 200) {
-        const response = NextResponse.json(
-          { error: 'Invalid API key format', code: 'INVALID_API_KEY' },
-          { status: 401, headers: getCorsHeaders(req) }
-        );
-        return withRequestId(response, requestId);
-      }
-
-      const headers = new Headers(req.headers);
-      headers.set('x-request-id', requestId);
-      headers.set('x-nonce', cspNonce);
-
-      const response = NextResponse.next({ request: { headers } });
-      addSecurityHeaders(response, requestId, cspNonce);
-      for (const [k, v] of Object.entries(getCorsHeaders(req))) {
-        response.headers.set(k, v);
-      }
-      return withRequestId(response, requestId);
-    }
-
     // Check if route requires auth
     const requiresAuth =
       PROTECTED_API_ROUTES.some((route) => pathname.startsWith(route)) ||
       pathname.startsWith('/chat');
 
-    // Rate limiting for unauthenticated API requests
+    // Rate limiting for ALL unauthenticated API requests (including API key requests)
     if (!isLoggedIn && pathname.startsWith('/api/')) {
       const { checkIPRateLimit } = await import('@/lib/security/ip-rate-limiter-edge');
       const ipResult = await checkIPRateLimit(req);
@@ -175,6 +160,30 @@ export async function middleware(req: NextRequest) {
         );
         return withRequestId(response, requestId);
       }
+    }
+
+    // API key header: validate format, then forward for downstream key verification
+    // Rate limiting has already been applied above
+    const apiKey = req.headers.get('X-API-Key');
+    if (apiKey && pathname.startsWith('/api/')) {
+      if (apiKey.length < 20 || apiKey.length > 200) {
+        const response = NextResponse.json(
+          { error: 'Invalid API key format', code: 'INVALID_API_KEY' },
+          { status: 401, headers: getCorsHeaders(req) }
+        );
+        return withRequestId(response, requestId);
+      }
+
+      const headers = new Headers(req.headers);
+      headers.set('x-request-id', requestId);
+      headers.set('x-nonce', cspNonce);
+
+      const response = NextResponse.next({ request: { headers } });
+      addSecurityHeaders(response, requestId, cspNonce);
+      for (const [k, v] of Object.entries(getCorsHeaders(req))) {
+        response.headers.set(k, v);
+      }
+      return withRequestId(response, requestId);
     }
 
     // Redirect unauthenticated users
@@ -229,10 +238,22 @@ export async function middleware(req: NextRequest) {
     }
 
     return withRequestId(response, requestId);
-  } catch (_error) {
-    return NextResponse.next();
+  } catch (error) {
+    // Do NOT silently pass requests through on middleware failure
+    if (env.NODE_ENV === 'development') {
+      console.error('[Middleware Error]', error instanceof Error ? error.message : 'Unknown');
+    }
+
+    if (pathname?.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: { code: 'MIDDLEWARE_ERROR', message: 'Request could not be processed' } },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.redirect(new URL('/login', req.nextUrl));
   }
-}
+});
 
 // =============================================================================
 // Security Headers
