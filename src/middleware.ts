@@ -239,7 +239,11 @@ export default auth(async function middleware(req) {
 
     return withRequestId(response, requestId);
   } catch (error) {
-    // Do NOT silently pass requests through on middleware failure
+    // Let auth routes pass through on middleware failure — the auth handler will deal with it
+    if (pathname?.startsWith('/api/auth/')) {
+      return NextResponse.next();
+    }
+
     if (env.NODE_ENV === 'development') {
       console.error('[Middleware Error]', error instanceof Error ? error.message : 'Unknown');
     }
