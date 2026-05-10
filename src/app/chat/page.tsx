@@ -56,6 +56,9 @@ export default function ChatPage(): React.ReactElement {
   const uploadState = useUpload({
     onUploadComplete: () => {
       documentsQuery.refetch();
+      // Refetch again after processing has time to complete
+      setTimeout(() => documentsQuery.refetch(), 5000);
+      setTimeout(() => documentsQuery.refetch(), 15000);
     },
   });
 
@@ -114,7 +117,7 @@ export default function ChatPage(): React.ReactElement {
         for (const f of uploadState.files) {
           uploadState.removeFile(f.id);
         }
-      }, 2000);
+      }, 800);
       return () => clearTimeout(timer);
     }
     return undefined;

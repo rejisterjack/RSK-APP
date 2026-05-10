@@ -19,18 +19,8 @@ import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { withApiAuth } from '@/lib/auth';
 import { prisma, prismaRead } from '@/lib/db';
 import { logger } from '@/lib/logger';
-import {
-  parseAudio,
-  parseDOCX,
-  parseHTML,
-  parsePDF,
-  parsePPTXBuffer,
-  parseText,
-  parseVideo,
-  parseXLSXBuffer,
-} from '@/lib/rag/ingestion';
+import { processDocumentInline } from '@/lib/rag/ingestion/inline-processor';
 import { isYouTubeUrl } from '@/lib/rag/ingestion/parsers/youtube';
-import { processDocumentDirect } from '@/lib/rag/ingestion/process-document';
 import { isFeatureDegraded } from '@/lib/resilience/degradation';
 import { validateFile, validateFileBytes } from '@/lib/security/input-validator';
 import {
@@ -40,7 +30,7 @@ import {
 } from '@/lib/security/rate-limiter';
 import { validateUrlSafety } from '@/lib/security/ssrf-protection';
 import { virusScanner } from '@/lib/security/virus-scanner';
-import { withSpan } from '@/lib/tracing';
+import { uploadFile } from '@/lib/storage/cloudinary-storage';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 import {
   checkDocumentLimit,
@@ -48,7 +38,7 @@ import {
   checkUserStorageLimit,
 } from '@/lib/workspace/resource-limits';
 
-// Vercel maxDuration: ingestion (parsing, virus scan) can take up to 60s
+// Vercel maxDuration: upload + fire-and-forget processing
 export const maxDuration = 60;
 
 // Maximum file size: 50MB
@@ -450,127 +440,46 @@ async function handleFileIngestion(
     }
   }
 
-  let content: string;
-  let metadata: Record<string, unknown> = {};
-
+  // Step 5: Upload to Cloudinary
+  let storageUrl: string;
+  let storageKey: string;
   try {
-    content = await withSpan('ingest.parse_document', async (span) => {
-      span.setAttribute('ingest.file_type', fileValidation.type ?? 'unknown');
-      span.setAttribute('ingest.file_size', file.size);
-      let parsed: string;
-      switch (fileValidation.type) {
-        case 'PDF': {
-          parsed = await parsePDF(buffer);
-          metadata = { source: 'pdf' };
-          break;
-        }
-
-        case 'DOCX': {
-          parsed = await parseDOCX(buffer);
-          metadata = { source: 'docx' };
-          break;
-        }
-
-        case 'XLSX': {
-          parsed = await parseXLSXBuffer(buffer);
-          metadata = { source: 'xlsx' };
-          break;
-        }
-
-        case 'PPTX': {
-          parsed = await parsePPTXBuffer(buffer);
-          metadata = { source: 'pptx' };
-          break;
-        }
-
-        case 'TXT':
-        case 'MD': {
-          parsed = parseText(buffer);
-          metadata = { source: 'text' };
-          break;
-        }
-
-        case 'HTML': {
-          parsed = await parseHTML(buffer);
-          metadata = { source: 'html' };
-          break;
-        }
-
-        case 'AUDIO': {
-          parsed = await parseAudio(buffer, file.type, file.name);
-          metadata = { source: 'audio', mimeType: file.type };
-          break;
-        }
-
-        case 'VIDEO': {
-          parsed = await parseVideo(buffer, file.type, file.name);
-          metadata = { source: 'video', mimeType: file.type };
-          break;
-        }
-
-        default:
-          throw new Error(`Document type '${fileValidation.type}' is not supported`);
-      }
-      span.setAttribute('ingest.content_length', parsed.length);
-      return parsed;
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    storageKey = `documents/${crypto.randomUUID()}.${fileExt}`;
+    const uploadResult = await uploadFile(storageKey, buffer, {
+      contentType: file.type || 'application/octet-stream',
     });
+    storageUrl = uploadResult.url;
   } catch (error) {
     const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
       {
         success: false,
         error: {
-          code: 'PARSE_ERROR',
+          code: 'UPLOAD_FAILED',
           message: isDev
             ? error instanceof Error
               ? error.message
-              : 'Failed to parse document'
-            : 'Failed to parse document',
+              : 'Failed to upload file to storage'
+            : 'Failed to upload file',
         },
       },
-      { status: 422 }
+      { status: 500 }
     );
   }
 
-  // Step 6: Check for duplicate content (hash full content)
-  const contentHash = await hashContent(content);
-  const duplicateWhere = workspaceId ? { workspaceId } : { userId, workspaceId: null };
-  const existingDoc = await prisma.document.findFirst({
-    where: {
-      ...duplicateWhere,
-      contentHash,
-    },
-  });
-
-  if (existingDoc) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: 'DUPLICATE_CONTENT',
-          message: 'A document with similar content already exists',
-          details: { existingDocumentId: existingDoc.id },
-        },
-      },
-      { status: 409 }
-    );
-  }
-
-  // Step 7: Create document record
-  // FIXED: userId should always be the actual user who uploaded the document
-  // workspaceId is the optional workspace context for the document
+  // Step 6: Create document record (no content — Inngest will parse and fill it)
   const document = await prisma.document.create({
     data: {
       name: file.name,
       contentType: fileValidation.type ?? 'UNKNOWN',
       size: file.size,
       status: 'PENDING',
-      userId: userId, // Always use the actual user's ID
+      userId,
       workspaceId: workspaceId || null,
-      content,
-      contentHash,
+      storageUrl,
+      storageKey,
       metadata: {
-        ...metadata,
         originalName: file.name,
         mimeType: file.type,
         uploadedBy: userId,
@@ -580,27 +489,10 @@ async function handleFileIngestion(
     },
   });
 
-  // Step 8: Process document directly (no Inngest dependency for local dev)
-  // Fire-and-forget — the client polls GET /api/ingest for status
-  const docId = document.id;
-  void processDocumentDirect(docId, userId).catch(async (err) => {
-    const errMsg = err instanceof Error ? err.message : 'Unknown';
-    logger.error('Document processing failed', { documentId: docId, error: errMsg });
-    // Safety net: mark as FAILED without destroying existing metadata
-    await prisma.$executeRaw`
-      UPDATE documents SET status = 'FAILED',
-        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ error: errMsg })}::jsonb
-      WHERE id = ${docId}
-    `.catch(() => {});
-    await prisma.ingestionJob
-      .updateMany({
-        where: { documentId: docId },
-        data: { status: 'FAILED', error: errMsg, completedAt: new Date() },
-      })
-      .catch(() => {});
-  });
+  // Step 7: Dispatch Inngest event (falls back to direct processing if Inngest is down)
+  dispatchOrProcessDirect(document.id, userId);
 
-  // Step 9: Log document upload
+  // Step 8: Log document upload
   await logAuditEvent({
     event: AuditEvent.DOCUMENT_UPLOADED,
     userId,
@@ -613,7 +505,7 @@ async function handleFileIngestion(
     },
   });
 
-  // Step 10: Return response with rate limit headers
+  // Step 9: Return response with rate limit headers
   const response = NextResponse.json(
     {
       success: true,
@@ -754,23 +646,8 @@ async function handleURLIngestion(
     },
   });
 
-  // Process document directly
-  const urlDocId = document.id;
-  void processDocumentDirect(urlDocId, userId).catch(async (err) => {
-    const errMsg = err instanceof Error ? err.message : 'Unknown';
-    logger.error('URL document processing failed', { documentId: urlDocId, error: errMsg });
-    await prisma.$executeRaw`
-      UPDATE documents SET status = 'FAILED',
-        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ error: errMsg })}::jsonb
-      WHERE id = ${urlDocId}
-    `.catch(() => {});
-    await prisma.ingestionJob
-      .updateMany({
-        where: { documentId: urlDocId },
-        data: { status: 'FAILED', error: errMsg, completedAt: new Date() },
-      })
-      .catch(() => {});
-  });
+  // Dispatch Inngest event (falls back to direct processing if Inngest is down)
+  dispatchOrProcessDirect(document.id, userId);
 
   // Log document upload
   await logAuditEvent({
@@ -1205,6 +1082,30 @@ async function scanFileForVirusesBuffer(
 }
 
 /**
+ * Process document — always runs inline, also notifies Inngest if available.
+ */
+function dispatchOrProcessDirect(documentId: string, userId: string) {
+  logger.info('dispatchOrProcessDirect called', { documentId });
+  // Fire-and-forget inline processing
+  void processDocumentInline(documentId, userId).catch(async (err) => {
+    const errMsg = err instanceof Error ? err.message : 'Unknown';
+    logger.error('Direct processing failed', { documentId, error: errMsg });
+    await prisma.document
+      .update({
+        where: { id: documentId },
+        data: { status: 'FAILED', metadata: { error: errMsg, failedAt: new Date().toISOString() } },
+      })
+      .catch(() => {});
+    await prisma.ingestionJob
+      .updateMany({
+        where: { documentId },
+        data: { status: 'FAILED', error: errMsg, completedAt: new Date() },
+      })
+      .catch(() => {});
+  });
+}
+
+/**
  * Handle raw text content ingestion (via JSON body)
  */
 async function handleRawContentIngestion(
@@ -1295,23 +1196,9 @@ async function handleRawContentIngestion(
     },
   });
 
-  // Process document directly
-  const rawDocId = document.id;
-  void processDocumentDirect(rawDocId, userId).catch(async (err) => {
-    const errMsg = err instanceof Error ? err.message : 'Unknown';
-    logger.error('Raw content document processing failed', { documentId: rawDocId, error: errMsg });
-    await prisma.$executeRaw`
-      UPDATE documents SET status = 'FAILED',
-        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ error: errMsg })}::jsonb
-      WHERE id = ${rawDocId}
-    `.catch(() => {});
-    await prisma.ingestionJob
-      .updateMany({
-        where: { documentId: rawDocId },
-        data: { status: 'FAILED', error: errMsg, completedAt: new Date() },
-      })
-      .catch(() => {});
-  });
+  // Dispatch Inngest event for background processing
+  // Dispatch Inngest event (falls back to direct processing if Inngest is down)
+  dispatchOrProcessDirect(document.id, userId);
 
   // Audit log
   await logAuditEvent({

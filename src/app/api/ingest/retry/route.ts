@@ -16,7 +16,6 @@ import { withApiAuth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { inngest } from '@/lib/inngest/client';
 import { logger } from '@/lib/logger';
-import { processDocumentDirect } from '@/lib/rag/ingestion/process-document';
 import {
   addRateLimitHeaders,
   checkApiRateLimit,
@@ -151,23 +150,19 @@ export const POST = withApiAuth(async (req, session) => {
       where: { documentId },
     });
 
-    // Step 9: Trigger new ingestion via Inngest (with direct fallback)
+    // Step 9: Trigger new ingestion via Inngest
     try {
       await inngest.send({
         name: 'document/ingest',
         data: { documentId, userId },
       });
     } catch {
-      // Inngest not available — process directly
-      logger.info('Inngest unavailable, processing document directly on retry', { documentId });
-      void processDocumentDirect(documentId, userId).catch(async (err) => {
+      // Inngest unavailable — process directly
+      logger.info('Inngest unavailable on retry, processing directly', { documentId });
+      const { processDocumentInline } = await import('@/lib/rag/ingestion/inline-processor');
+      void processDocumentInline(documentId, userId).catch(async (err) => {
         const errMsg = err instanceof Error ? err.message : 'Unknown';
         logger.error('Retry processing failed', { documentId, error: errMsg });
-        await prisma.$executeRaw`
-          UPDATE documents SET status = 'FAILED',
-            metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ error: errMsg })}::jsonb
-          WHERE id = ${documentId}
-        `.catch(() => {});
       });
     }
 

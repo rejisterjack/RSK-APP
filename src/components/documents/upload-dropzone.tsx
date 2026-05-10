@@ -561,51 +561,6 @@ export function useUpload(options: UseUploadOptions = {}) {
   const { endpoint = '/api/ingest', workspaceId, onUploadComplete, onUploadError } = options;
   const [files, setFiles] = useState<UploadFile[]>([]);
 
-  // Poll for processing status - defined before uploadFile to avoid TDZ
-  const pollStatus = useCallback(
-    async (fileId: string, documentId: string) => {
-      const poll = async () => {
-        try {
-          const response = await fetch(`${endpoint}?id=${documentId}`);
-          if (!response.ok) throw new Error('Failed to fetch status');
-
-          const data = await response.json();
-          const status = data.data?.status;
-          const progress = data.data?.progress || 0;
-
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === fileId
-                ? {
-                    ...f,
-                    status:
-                      status === 'completed'
-                        ? 'completed'
-                        : status === 'failed'
-                          ? 'error'
-                          : 'processing',
-                    progress: status === 'completed' ? 100 : 50 + progress / 2,
-                    error: data.data?.error,
-                  }
-                : f
-            )
-          );
-
-          // Continue polling if still processing
-          if (status === 'processing' || status === 'pending') {
-            setTimeout(poll, 2000);
-          }
-        } catch (_error: unknown) {
-          // Retry on error
-          setTimeout(poll, 5000);
-        }
-      };
-
-      poll();
-    },
-    [endpoint]
-  );
-
   // Upload a file - defined before addFiles to avoid TDZ
   const uploadFileFn = useCallback(
     async (fileToUpload: UploadFile) => {
@@ -632,13 +587,15 @@ export function useUpload(options: UseUploadOptions = {}) {
 
         const data = await response.json();
 
+        // Upload is done — mark as completed immediately.
+        // Processing happens in the background (Inngest or direct) and shows in the sidebar.
         setFiles((prev) =>
           prev.map((f) =>
             f.id === fileToUpload.id
               ? {
                   ...f,
-                  status: 'processing',
-                  progress: 0,
+                  status: 'completed',
+                  progress: 100,
                   documentId: data.data?.document?.id,
                 }
               : f
@@ -646,11 +603,6 @@ export function useUpload(options: UseUploadOptions = {}) {
         );
 
         onUploadComplete?.(fileToUpload, data);
-
-        // Start polling for status
-        if (data.data?.document?.id) {
-          pollStatus(fileToUpload.id, data.data.document.id);
-        }
       } catch (err) {
         setFiles((prev) =>
           prev.map((f) =>
@@ -667,7 +619,7 @@ export function useUpload(options: UseUploadOptions = {}) {
         onUploadError?.(fileToUpload, err instanceof Error ? err : new Error('Upload failed'));
       }
     },
-    [endpoint, workspaceId, onUploadComplete, onUploadError, pollStatus]
+    [endpoint, workspaceId, onUploadComplete, onUploadError]
   );
 
   // Add files to upload queue - defined last to use uploadFileFn
@@ -748,23 +700,20 @@ export function useUpload(options: UseUploadOptions = {}) {
 
         const data = await response.json();
 
+        // URL queued — mark as completed immediately.
+        // Processing happens in the background and shows in the sidebar.
         setFiles((prev) =>
           prev.map((f) =>
             f.id === newUploadFile.id
               ? {
                   ...f,
-                  status: 'processing',
-                  progress: 0,
+                  status: 'completed',
+                  progress: 100,
                   documentId: data.data?.document?.id,
                 }
               : f
           )
         );
-
-        // Start polling for status
-        if (data.data?.document?.id) {
-          pollStatus(newUploadFile.id, data.data.document.id);
-        }
       } catch (err) {
         setFiles((prev) =>
           prev.map((f) =>
@@ -779,7 +728,7 @@ export function useUpload(options: UseUploadOptions = {}) {
         );
       }
     },
-    [endpoint, workspaceId, pollStatus]
+    [endpoint, workspaceId]
   );
 
   return {

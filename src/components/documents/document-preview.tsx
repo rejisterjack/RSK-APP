@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Highlighter, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileText, Highlighter, Loader2, X } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,9 @@ export function DocumentPreview({
 
   if (!document) return null;
 
+  const isProcessing = document.status === 'processing' || document.status === 'pending';
+  const hasChunks = chunks && chunks.length > 0;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl h-[80vh] flex flex-col p-0">
@@ -45,15 +48,22 @@ export function DocumentPreview({
             <div>
               <DialogTitle className="text-lg font-semibold flex items-center gap-2">
                 {document.name}
+                {isProcessing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
               </DialogTitle>
               <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                 <span>{(document.size / 1024).toFixed(1)} KB</span>
                 <span>·</span>
                 <span>{document.type}</span>
-                {chunks && (
+                {hasChunks && (
                   <>
                     <span>·</span>
                     <span>{chunks.length} chunks</span>
+                  </>
+                )}
+                {isProcessing && (
+                  <>
+                    <span>·</span>
+                    <span className="text-amber-400">Processing...</span>
                   </>
                 )}
               </div>
@@ -65,7 +75,7 @@ export function DocumentPreview({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden border-t">
-          {chunks ? (
+          {hasChunks ? (
             <ScrollArea className="h-full">
               <div className="p-6 space-y-4">
                 {chunks.map((chunk) => (
@@ -106,6 +116,22 @@ export function DocumentPreview({
                 ))}
               </div>
             </ScrollArea>
+          ) : isProcessing ? (
+            <div className="flex flex-col h-full items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <p className="text-sm">Document is being processed...</p>
+              <p className="text-xs text-muted-foreground/60">
+                Preview will appear once processing completes
+              </p>
+            </div>
+          ) : document.status === 'error' ? (
+            <div className="flex flex-col h-full items-center justify-center gap-3 text-muted-foreground">
+              <FileText className="h-8 w-8 text-red-400" />
+              <p className="text-sm text-red-400">Processing failed</p>
+              <p className="text-xs text-muted-foreground/60">
+                This document could not be processed
+              </p>
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <p>Document preview not available</p>
@@ -114,7 +140,7 @@ export function DocumentPreview({
         </div>
 
         {/* Footer with pagination if needed */}
-        {chunks && chunks.length > 0 && (
+        {hasChunks && (
           <div className="border-t p-4 flex items-center justify-between">
             <Button
               variant="outline"

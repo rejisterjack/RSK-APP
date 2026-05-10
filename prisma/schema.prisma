@@ -235,6 +235,10 @@ model Document {
   // Content hash for fast duplicate detection (indexed, unlike JSON path queries)
   contentHash String?          @unique
 
+  // Cloudinary storage reference
+  storageUrl  String?           // Cloudinary secure URL for original file
+  storageKey  String?           // Cloudinary public ID for deletion
+
   // Processing status
   status      DocumentStatus   @default(PENDING)
 

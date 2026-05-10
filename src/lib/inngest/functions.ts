@@ -15,8 +15,19 @@ import { dispatchAlert } from '@/lib/monitoring/alerting';
 import { detectAnomalies } from '@/lib/monitoring/anomaly-detector';
 import { ChunkingEngine } from '@/lib/rag/chunking';
 import { createEmbeddings } from '@/lib/rag/engine';
+import {
+  parseAudio,
+  parseDOCX,
+  parseHTML,
+  parsePDF,
+  parsePPTXBuffer,
+  parseText,
+  parseVideo,
+  parseXLSXBuffer,
+} from '@/lib/rag/ingestion';
 import { scrapeURL } from '@/lib/rag/ingestion/parsers/url';
 import { isYouTubeUrl, parseYouTube } from '@/lib/rag/ingestion/parsers/youtube';
+import { deleteDocumentFiles, getFile } from '@/lib/storage/cloudinary-storage';
 import { checkDocumentLimit } from '@/lib/workspace/resource-limits';
 import { inngest } from './client';
 
@@ -151,10 +162,26 @@ export const processDocumentJob = inngest.createFunction(
 
     // Parse document based on type
     const parsedContent = await step.run('parse-document', async () => {
-      if (!document.content) {
-        const metadata = (document.metadata as Record<string, unknown>) || {};
+      const metadata = (document.metadata as Record<string, unknown>) || {};
 
-        // YouTube URL — extract transcript
+      // Case 1: File uploaded to Cloudinary — download and parse
+      if (!document.content && document.storageUrl) {
+        const storageKey = document.storageKey || `documents/${documentId}`;
+        const buffer = await getFile(storageKey);
+
+        const parsed = await parseBuffer(buffer, document.contentType);
+        await prisma.document.update({
+          where: { id: documentId },
+          data: { content: parsed },
+        });
+        return {
+          text: parsed,
+          metadata: { ...metadata, source: 'file', parsedFrom: 'cloudinary' },
+        };
+      }
+
+      // Case 2: YouTube URL — extract transcript
+      if (!document.content) {
         if (
           (document.contentType === 'VIDEO' || metadata.isYouTube) &&
           metadata.sourceUrl &&
@@ -178,7 +205,7 @@ export const processDocumentJob = inngest.createFunction(
           };
         }
 
-        // HTML URL — scrape content
+        // Case 3: HTML URL — scrape content
         if (
           document.contentType === 'HTML' &&
           metadata.sourceUrl &&
@@ -189,19 +216,14 @@ export const processDocumentJob = inngest.createFunction(
             where: { id: documentId },
             data: { content: scraped.text },
           });
-          return {
-            text: scraped.text,
-            metadata: scraped.metadata,
-          };
+          return { text: scraped.text, metadata: scraped.metadata };
         }
 
-        throw new Error('Document has no content');
+        throw new Error('Document has no content and no storageUrl');
       }
 
-      return {
-        text: document.content,
-        metadata: (document.metadata as Record<string, unknown>) || {},
-      };
+      // Case 4: Content already populated (raw text ingestion)
+      return { text: document.content, metadata };
     });
 
     await step.run('emit-progress-parsed', async () =>
@@ -302,16 +324,16 @@ export const processDocumentJob = inngest.createFunction(
 
         for (let j = 0; j < batch.length; j++) {
           const chunk = batch[j];
-          const vector = embeddingVectors[j];
+          const vectorStr = `[${embeddingVectors[j].join(',')}]`;
 
           await prisma.$executeRaw`
-            INSERT INTO document_chunks (
-              id, document_id, content, embedding, index, start, "end", page, section, created_at
+            INSERT INTO "document_chunks" (
+              "id", "documentId", "content", "embedding", "index", "start", "end", "page", "section", "createdAt"
             ) VALUES (
               ${crypto.randomUUID()},
               ${documentId},
               ${chunk.content},
-              ${vector}::vector,
+              ${vectorStr}::vector,
               ${chunk.metadata.index},
               ${chunk.metadata.start},
               ${chunk.metadata.end},
@@ -556,7 +578,7 @@ export const cleanupStaleJobs = inngest.createFunction(
           },
         });
 
-        await prisma.document.update({
+        const doc = await prisma.document.update({
           where: { id: job.documentId },
           data: {
             status: 'FAILED',
@@ -564,7 +586,17 @@ export const cleanupStaleJobs = inngest.createFunction(
               error: 'Processing timeout',
             },
           },
+          select: { storageKey: true },
         });
+
+        // Clean up Cloudinary files for failed documents
+        if (doc.storageKey) {
+          await deleteDocumentFiles(job.documentId).catch(() => {});
+        }
+
+        await prisma.documentChunk
+          .deleteMany({ where: { documentId: job.documentId } })
+          .catch(() => {});
       });
     }
 
@@ -675,6 +707,30 @@ export const partitionMaintenanceJob = inngest.createFunction(
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+async function parseBuffer(buffer: Buffer, contentType: string): Promise<string> {
+  switch (contentType) {
+    case 'PDF':
+      return parsePDF(buffer);
+    case 'DOCX':
+      return parseDOCX(buffer);
+    case 'XLSX':
+      return parseXLSXBuffer(buffer);
+    case 'PPTX':
+      return parsePPTXBuffer(buffer);
+    case 'TXT':
+    case 'MD':
+      return parseText(buffer);
+    case 'HTML':
+      return parseHTML(buffer);
+    case 'AUDIO':
+      return parseAudio(buffer, 'audio/mpeg', 'upload.mp3');
+    case 'VIDEO':
+      return parseVideo(buffer, 'video/mp4', 'upload.mp4');
+    default:
+      throw new Error(`Unsupported document type: ${contentType}`);
+  }
+}
 
 async function updateJobStatus(
   jobId: string,
