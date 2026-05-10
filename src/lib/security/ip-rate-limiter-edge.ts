@@ -80,20 +80,26 @@ const mockRedis: RateLimitRedis = {
   },
 };
 
+let _cachedRedis: RateLimitRedis | null = null;
+
 function getEdgeRedis(): RateLimitRedis {
+  if (_cachedRedis) return _cachedRedis;
+
   if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
     try {
-      // Upstash Redis is Edge-compatible (uses REST API)
       const { Redis } = require(/* webpackIgnore: true */ '@upstash/redis');
-      return new Redis({
+      _cachedRedis = new Redis({
         url: process.env.UPSTASH_REDIS_REST_URL,
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       }) as unknown as RateLimitRedis;
+      return _cachedRedis;
     } catch {
-      return mockRedis;
+      _cachedRedis = mockRedis;
+      return _cachedRedis;
     }
   }
-  return mockRedis;
+  _cachedRedis = mockRedis;
+  return _cachedRedis;
 }
 
 // =============================================================================

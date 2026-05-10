@@ -75,7 +75,7 @@ const nextConfig: NextConfig = {
 			level: 'error',
 		};
 		if (config.cache && typeof config.cache === 'object' && 'type' in config.cache && config.cache.type === 'filesystem') {
-			config.cache.compression = 'gzip';
+			config.cache.compression = process.env.NODE_ENV === 'production' ? 'gzip' : false;
 		}
 
 		// Exclude playwright from client-side bundle
@@ -207,7 +207,8 @@ const nextConfig: NextConfig = {
 	},
 };
 
-export default process.env.SENTRY_DSN
+const isDev = process.env.NODE_ENV === 'development';
+export default !isDev && process.env.SENTRY_DSN
   ? withSentryConfig(withBundleAnalyzer(withMDX(nextConfig)), {
       silent: true,
     })

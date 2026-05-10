@@ -14,11 +14,14 @@ export async function register() {
       }
     }
 
-    try {
-      const { initTracing } = await import('./src/lib/tracing');
-      initTracing();
-    } catch (error) {
-      console.error('Instrumentation failed:', error instanceof Error ? error.message : String(error));
+    // Only initialize tracing in production — OTEL SDK is heavy and slows dev startup
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        const { initTracing } = await import('./src/lib/tracing');
+        initTracing();
+      } catch (error) {
+        console.error('Instrumentation failed:', error instanceof Error ? error.message : String(error));
+      }
     }
 
     // Validate that the configured embedding model dimensions match the database schema
