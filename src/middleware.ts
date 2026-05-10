@@ -8,7 +8,7 @@ import { authConfig } from '@/lib/auth/auth.config';
 // =============================================================================
 
 const env = {
-  NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ?? '',
+  NEXTAUTH_SECRET: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? '',
   NEXTAUTH_URL: process.env.NEXTAUTH_URL ?? '',
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS ?? '',
   NODE_ENV: process.env.NODE_ENV ?? 'development',
@@ -220,7 +220,7 @@ export default auth(async function middleware(req) {
     requestHeaders.set('x-request-id', requestId);
     requestHeaders.set('x-nonce', cspNonce);
 
-    if (isLoggedIn && user) {
+    if (isLoggedIn && user?.id) {
       requestHeaders.set('x-user-id', user.id as string);
       requestHeaders.set('x-user-role', (user.role as string) ?? 'USER');
       if (user.workspaceId) {

@@ -72,6 +72,12 @@ function validateLanguage(lang: string): SupportedLanguage {
   return 'english';
 }
 
+function validateIdentifier(value: string, name: string): void {
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(value)) {
+    throw new Error(`Invalid ${name}: must be alphanumeric with hyphens/underscores, max 64 chars`);
+  }
+}
+
 /**
  * Build WHERE clause filters for keyword search
  */
@@ -159,7 +165,6 @@ export class KeywordRetriever {
         dc.index,
         dc.page,
         dc.section,
-        dc.headings,
         d.name as "documentName",
         d."contentType" as "documentType",
         ts_rank_cd(
@@ -220,6 +225,7 @@ export class KeywordRetriever {
    */
   async getSuggestions(partialQuery: string, workspaceId: string, limit = 5): Promise<string[]> {
     validateLanguage(this.config.language ?? 'english');
+    validateIdentifier(workspaceId, 'workspaceId');
 
     const results = await prisma.$queryRaw<Array<{ word: string }>>`
       SELECT DISTINCT word
@@ -244,6 +250,7 @@ export class KeywordRetriever {
     limit = 100
   ): Promise<Array<{ term: string; frequency: number }>> {
     const language = validateLanguage(this.config.language ?? 'english');
+    validateIdentifier(workspaceId, 'workspaceId');
 
     const results = await prisma.$queryRaw<Array<{ word: string; nentry: bigint; ndoc: bigint }>>`
       SELECT word, nentry, ndoc

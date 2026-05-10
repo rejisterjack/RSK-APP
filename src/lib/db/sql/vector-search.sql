@@ -1,8 +1,10 @@
 -- ============================================================================
 -- Vector Search SQL Templates
--- 
+--
 -- Raw SQL templates for complex vector operations that can't be expressed
 -- easily through Prisma's query builder.
+--
+-- IMPORTANT: Column names are camelCase (quoted) to match Prisma schema.
 -- ============================================================================
 
 -- ============================================================================
@@ -11,7 +13,7 @@
 
 -- Basic cosine similarity search for a user's documents
 -- Parameters: query_embedding (vector), user_id (text), top_k (int), min_score (float)
-SELECT 
+SELECT
     dc.id as chunk_id,
     dc.content,
     dc.index as chunk_index,
@@ -19,11 +21,11 @@ SELECT
     dc.section,
     d.id as document_id,
     d.name as document_name,
-    d.content_type as document_type,
+    d."contentType" as document_type,
     1 - (dc.embedding <=> $1::vector) as similarity_score
 FROM document_chunks dc
-JOIN documents d ON dc.document_id = d.id
-WHERE d.user_id = $2
+JOIN documents d ON dc."documentId" = d.id
+WHERE d."userId" = $2
     AND d.status = 'COMPLETED'
     AND dc.embedding IS NOT NULL
     AND 1 - (dc.embedding <=> $1::vector) > $4
@@ -37,30 +39,30 @@ LIMIT $3;
 -- Combine vector similarity with text search for better results
 -- Parameters: query_embedding, user_id, search_query, top_k, vector_weight, text_weight
 WITH vector_scores AS (
-    SELECT 
+    SELECT
         dc.id,
         1 - (dc.embedding <=> $1::vector) as vector_score
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = $2
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = $2
         AND d.status = 'COMPLETED'
         AND dc.embedding IS NOT NULL
 ),
 text_scores AS (
-    SELECT 
+    SELECT
         dc.id,
         ts_rank_cd(
             to_tsvector('english', dc.content),
             plainto_tsquery('english', $3)
         ) as text_score
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = $2
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = $2
         AND d.status = 'COMPLETED'
         AND to_tsvector('english', dc.content) @@ plainto_tsquery('english', $3)
 ),
 combined_scores AS (
-    SELECT 
+    SELECT
         COALESCE(v.id, t.id) as id,
         COALESCE(v.vector_score, 0) * $5 as weighted_vector_score,
         COALESCE(t.text_score, 0) * $6 as weighted_text_score,
@@ -68,7 +70,7 @@ combined_scores AS (
     FROM vector_scores v
     FULL OUTER JOIN text_scores t ON v.id = t.id
 )
-SELECT 
+SELECT
     dc.id as chunk_id,
     dc.content,
     dc.index as chunk_index,
@@ -81,7 +83,7 @@ SELECT
     cs.combined_score
 FROM combined_scores cs
 JOIN document_chunks dc ON cs.id = dc.id
-JOIN documents d ON dc.document_id = d.id
+JOIN documents d ON dc."documentId" = d.id
 WHERE cs.combined_score > 0.1
 ORDER BY cs.combined_score DESC
 LIMIT $4;
@@ -93,7 +95,7 @@ LIMIT $4;
 -- Get top chunks per document (useful for grouping results)
 -- Parameters: query_embedding, user_id, chunks_per_document, min_score
 WITH ranked_chunks AS (
-    SELECT 
+    SELECT
         dc.id as chunk_id,
         dc.content,
         dc.index,
@@ -102,12 +104,12 @@ WITH ranked_chunks AS (
         d.name as document_name,
         1 - (dc.embedding <=> $1::vector) as similarity,
         ROW_NUMBER() OVER (
-            PARTITION BY d.id 
+            PARTITION BY d.id
             ORDER BY dc.embedding <=> $1::vector
         ) as rank_in_document
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = $2
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = $2
         AND d.status = 'COMPLETED'
         AND dc.embedding IS NOT NULL
         AND 1 - (dc.embedding <=> $1::vector) > $4
@@ -123,15 +125,15 @@ ORDER BY similarity DESC;
 
 -- Find similar chunks within a document (for deduplication)
 -- Parameters: document_id, similarity_threshold
-SELECT 
+SELECT
     a.id as chunk_a_id,
     b.id as chunk_b_id,
     a.index as chunk_a_index,
     b.index as chunk_b_index,
     1 - (a.embedding <=> b.embedding) as similarity
 FROM document_chunks a
-JOIN document_chunks b ON a.document_id = b.document_id AND a.id < b.id
-WHERE a.document_id = $1
+JOIN document_chunks b ON a."documentId" = b."documentId" AND a.id < b.id
+WHERE a."documentId" = $1
     AND a.embedding IS NOT NULL
     AND b.embedding IS NOT NULL
     AND 1 - (a.embedding <=> b.embedding) > $2
@@ -143,19 +145,19 @@ ORDER BY similarity DESC;
 
 -- Search with recency boost (more recent documents rank higher)
 -- Parameters: query_embedding, user_id, top_k, decay_factor
-SELECT 
+SELECT
     dc.id as chunk_id,
     dc.content,
     dc.index,
     d.id as document_id,
     d.name as document_name,
-    d.created_at,
+    d."createdAt",
     1 - (dc.embedding <=> $1::vector) as base_similarity,
-    (1 - (dc.embedding <=> $1::vector)) * 
-        EXP(-$4 * EXTRACT(EPOCH FROM (NOW() - d.created_at)) / 86400) as time_weighted_score
+    (1 - (dc.embedding <=> $1::vector)) *
+        EXP(-$4 * EXTRACT(EPOCH FROM (NOW() - d."createdAt")) / 86400) as time_weighted_score
 FROM document_chunks dc
-JOIN documents d ON dc.document_id = d.id
-WHERE d.user_id = $2
+JOIN documents d ON dc."documentId" = d.id
+WHERE d."userId" = $2
     AND d.status = 'COMPLETED'
     AND dc.embedding IS NOT NULL
 ORDER BY time_weighted_score DESC
@@ -168,20 +170,20 @@ LIMIT $3;
 -- Combine results from multiple query embeddings (e.g., query expansion)
 -- Parameters: query_embeddings (array of vectors), user_id, top_k
 WITH query_scores AS (
-    SELECT 
+    SELECT
         dc.id,
-        dc.document_id,
+        dc."documentId",
         MAX(1 - (dc.embedding <=> q.embedding)) as max_similarity,
         AVG(1 - (dc.embedding <=> q.embedding)) as avg_similarity
     FROM document_chunks dc
     CROSS JOIN UNNEST($1::vector[]) as q(embedding)
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = $2
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = $2
         AND d.status = 'COMPLETED'
         AND dc.embedding IS NOT NULL
-    GROUP BY dc.id, dc.document_id
+    GROUP BY dc.id, dc."documentId"
 )
-SELECT 
+SELECT
     dc.id as chunk_id,
     dc.content,
     dc.index,
@@ -192,7 +194,7 @@ SELECT
     (qs.max_similarity + qs.avg_similarity) / 2 as fused_score
 FROM query_scores qs
 JOIN document_chunks dc ON qs.id = dc.id
-JOIN documents d ON qs.document_id = d.id
+JOIN documents d ON qs."documentId" = d.id
 ORDER BY fused_score DESC
 LIMIT $3;
 
@@ -202,7 +204,7 @@ LIMIT $3;
 
 -- Get vector distribution statistics
 -- Parameters: user_id
-SELECT 
+SELECT
     d.id as document_id,
     d.name as document_name,
     COUNT(dc.id) as total_chunks,
@@ -210,21 +212,21 @@ SELECT
     AVG(embedding_norm(dc.embedding)) as avg_vector_norm,
     STDDEV(embedding_norm(dc.embedding)) as stddev_vector_norm
 FROM documents d
-LEFT JOIN document_chunks dc ON d.id = dc.document_id
-WHERE d.user_id = $1
+LEFT JOIN document_chunks dc ON d.id = dc."documentId"
+WHERE d."userId" = $1
 GROUP BY d.id, d.name;
 
 -- Find documents with missing embeddings
 -- Parameters: user_id
-SELECT 
+SELECT
     d.id as document_id,
     d.name as document_name,
     d.status,
     COUNT(dc.id) as total_chunks,
     COUNT(CASE WHEN dc.embedding IS NULL THEN 1 END) as missing_embeddings
 FROM documents d
-LEFT JOIN document_chunks dc ON d.id = dc.document_id
-WHERE d.user_id = $1
+LEFT JOIN document_chunks dc ON d.id = dc."documentId"
+WHERE d."userId" = $1
 GROUP BY d.id, d.name, d.status
 HAVING COUNT(CASE WHEN dc.embedding IS NULL THEN 1 END) > 0;
 
@@ -233,7 +235,7 @@ HAVING COUNT(CASE WHEN dc.embedding IS NULL THEN 1 END) > 0;
 -- ============================================================================
 
 -- Get index usage statistics
-SELECT 
+SELECT
     schemaname,
     tablename,
     indexname,
@@ -246,7 +248,7 @@ WHERE indexname LIKE '%hnsw%' OR indexname LIKE '%ivfflat%'
 ORDER BY idx_scan DESC;
 
 -- Check for duplicate or redundant indexes
-SELECT 
+SELECT
     t.tablename,
     array_agg(i.indexname) as indexes
 FROM pg_indexes t
@@ -262,18 +264,18 @@ HAVING COUNT(*) > 1;
 -- Find and remove exact duplicate embeddings
 -- (Use with caution - verify results first!)
 WITH duplicates AS (
-    SELECT 
-        document_id,
+    SELECT
+        "documentId",
         embedding,
-        array_agg(id ORDER BY created_at DESC) as ids,
+        array_agg(id ORDER BY "createdAt" DESC) as ids,
         COUNT(*) as count
     FROM document_chunks
     WHERE embedding IS NOT NULL
-    GROUP BY document_id, embedding
+    GROUP BY "documentId", embedding
     HAVING COUNT(*) > 1
 )
 -- SELECT query to preview duplicates
-SELECT 
+SELECT
     document_id,
     count as duplicate_count,
     ids as duplicate_ids,
@@ -287,9 +289,9 @@ DELETE FROM document_chunks
 WHERE id IN (
     SELECT dc.id
     FROM document_chunks dc
-    JOIN documents d ON dc.document_id = d.id
-    WHERE d.user_id = $1
-        AND dc.created_at < $2
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = $1
+        AND dc."createdAt" < $2
 );
 
 -- Vacuum and analyze (run periodically for performance)
@@ -301,15 +303,15 @@ VACUUM ANALYZE document_chunks;
 
 -- Search within specific page range
 -- Parameters: query_embedding, user_id, document_id, min_page, max_page, top_k
-SELECT 
+SELECT
     dc.id as chunk_id,
     dc.content,
     dc.page,
     d.name as document_name,
     1 - (dc.embedding <=> $1::vector) as similarity
 FROM document_chunks dc
-JOIN documents d ON dc.document_id = d.id
-WHERE d.user_id = $2
+JOIN documents d ON dc."documentId" = d.id
+WHERE d."userId" = $2
     AND d.id = $3
     AND dc.page BETWEEN $4 AND $5
     AND dc.embedding IS NOT NULL
@@ -318,15 +320,15 @@ LIMIT $6;
 
 -- Search with section filtering
 -- Parameters: query_embedding, user_id, section_prefix, top_k
-SELECT 
+SELECT
     dc.id as chunk_id,
     dc.content,
     dc.section,
     d.name as document_name,
     1 - (dc.embedding <=> $1::vector) as similarity
 FROM document_chunks dc
-JOIN documents d ON dc.document_id = d.id
-WHERE d.user_id = $2
+JOIN documents d ON dc."documentId" = d.id
+WHERE d."userId" = $2
     AND dc.section LIKE $3 || '%'
     AND dc.embedding IS NOT NULL
 ORDER BY dc.embedding <=> $1::vector
@@ -352,7 +354,7 @@ CREATE OR REPLACE FUNCTION batch_similarity(
 RETURNS TABLE(chunk_id uuid, similarity float) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         dc.id,
         1 - (dc.embedding <=> query_embedding) as similarity
     FROM document_chunks dc

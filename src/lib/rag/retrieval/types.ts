@@ -19,6 +19,8 @@ export type RetrievalStrategyType = 'vector' | 'keyword' | 'hybrid' | 'multi-que
 export interface RetrievalOptions {
   /** Workspace/workspace ID for scoping the search */
   workspaceId: string;
+  /** User ID for authorization (searches user's own + workspace docs) */
+  userId?: string;
   /** The search query */
   query: string;
   /** Maximum number of results to return (default: 5) */

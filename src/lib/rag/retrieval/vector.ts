@@ -94,9 +94,14 @@ function buildFilters(
   const params: unknown[] = [];
   let idx = paramIndex;
 
-  // Workspace/workspace filter (required)
-  filters.push(`d."userId" = $${idx++}`);
-  params.push(options.workspaceId);
+  // User/workspace filter (required) — search by userId OR workspaceId
+  if (options.userId && options.workspaceId) {
+    filters.push(`(d."userId" = $${idx++} OR d."workspaceId" = $${idx++})`);
+    params.push(options.userId, options.workspaceId);
+  } else {
+    filters.push(`d."userId" = $${idx++}`);
+    params.push(options.userId ?? options.workspaceId);
+  }
 
   // Document status filter
   filters.push(`d.status = 'COMPLETED'`);
@@ -184,7 +189,6 @@ export class VectorRetriever {
         dc.index,
         dc.page,
         dc.section,
-        dc.headings,
         d.name as "documentName",
         d."contentType" as "documentType",
         ${similarityCalc} as score
@@ -217,7 +221,6 @@ export class VectorRetriever {
           documentName: result.documentName,
           documentType: result.documentType || 'unknown',
           page: result.page ?? undefined,
-          headings: result.headings,
           position: result.index,
           section: result.section ?? undefined,
         },

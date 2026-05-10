@@ -88,10 +88,9 @@ const defaultConfig = {
   chunkSize: 1000,
   chunkOverlap: 200,
   maxMessages: 10,
-  hybridSearchEnabled: true,
-  rerankingEnabled: true,
   topK: 5,
   similarityThreshold: 0.7,
+  rerank: true,
 };
 
 /**
@@ -413,7 +412,7 @@ export async function POST(req: Request) {
             await llmCircuitBreaker.execute(async () => {
               await generateText({
                 model: getModel(modelName),
-                messages: [{ role: 'user', content: userMessage.slice(0, 100) }],
+                messages: [{ role: 'user', content: 'ping' }],
                 maxTokens: 1,
                 abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
               });
@@ -1292,7 +1291,7 @@ async function maybeGenerateTitle(
       ],
       maxTokens: 20,
       temperature: 0.7,
-      abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      abortSignal: AbortSignal.timeout(10_000),
     });
 
     const cleanTitle = title

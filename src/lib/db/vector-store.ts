@@ -183,8 +183,8 @@ export class VectorStore {
       }
     }
 
-    // Build parameters and WHERE clause parts
-    const params: unknown[] = [userId];
+    // Build parameters — $1 is always the embedding vector, rest start from $2
+    const params: unknown[] = [];
     let paramIndex = 2;
 
     // Build WHERE conditions using parameterized queries
@@ -193,26 +193,24 @@ export class VectorStore {
       ? `(d."userId" = $${paramIndex++} OR d."workspaceId" = $${paramIndex++})`
       : `d."userId" = $${paramIndex++}`;
 
+    params.push(userId);
     if (workspaceId) {
-      params.push(userId, workspaceId);
+      params.push(workspaceId);
     }
 
     if (filter?.documentIds && filter.documentIds.length > 0) {
-      // Use parameterized array for document IDs
       params.push(...filter.documentIds);
       const docIdPlaceholders = filter.documentIds.map(() => `$${paramIndex++}`).join(', ');
       whereConditions += ` AND d.id IN (${docIdPlaceholders})`;
     }
 
     if (filter?.documentTypes && filter.documentTypes.length > 0) {
-      // Use parameterized array for document types
       params.push(...filter.documentTypes);
       const typePlaceholders = filter.documentTypes.map(() => `$${paramIndex++}`).join(', ');
       whereConditions += ` AND d."contentType" IN (${typePlaceholders})`;
     }
 
     if (filter?.dateRange) {
-      // Use parameterized dates
       params.push(filter.dateRange.from, filter.dateRange.to);
       whereConditions += ` AND d."createdAt" >= $${paramIndex++} AND d."createdAt" <= $${paramIndex++}`;
     }
@@ -220,11 +218,7 @@ export class VectorStore {
     // Add limit parameter (must be last)
     params.push(topK * 2);
 
-    // Note: scoreExpr and distanceExpr are safe as they are controlled by the application, not user input
-
     // Execute search query with proper parameterization
-    // We need to use $queryRawUnsafe because we have dynamic column expressions
-    // But all user inputs are parameterized
     const results = await this.prisma.$queryRawUnsafe<
       Array<{
         chunkId: string;
@@ -258,7 +252,7 @@ export class VectorStore {
         LIMIT $${paramIndex}
       `,
       `[${queryEmbedding.join(',')}]`, // $1 - query embedding as pgvector string
-      ...params.slice(1) // remaining parameters (userId, docIds, types, dates, limit)
+      ...params // $2+ — userId, workspaceId, filters, limit
     );
 
     // Filter by minimum score and format results
@@ -295,11 +289,12 @@ export class VectorStore {
    * Update a single chunk's embedding
    */
   async updateVectors(chunkId: string, embedding: number[]): Promise<void> {
-    await this.prisma.$executeRaw`
-      UPDATE document_chunks
-      SET embedding = ${embedding}::vector
-      WHERE id = ${chunkId}
-    `;
+    const vectorStr = `[${embedding.join(',')}]`;
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE document_chunks SET embedding = $1::vector WHERE id = $2`,
+      vectorStr,
+      chunkId
+    );
   }
 
   /**
@@ -310,11 +305,12 @@ export class VectorStore {
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       for (const update of updates) {
-        await tx.$executeRaw`
-          UPDATE document_chunks
-          SET embedding = ${update.embedding}::vector
-          WHERE id = ${update.chunkId}
-        `;
+        const vectorStr = `[${update.embedding.join(',')}]`;
+        await tx.$executeRawUnsafe(
+          `UPDATE document_chunks SET embedding = $1::vector WHERE id = $2`,
+          vectorStr,
+          update.chunkId
+        );
       }
     });
   }

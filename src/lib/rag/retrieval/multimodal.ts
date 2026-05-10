@@ -108,7 +108,7 @@ export async function searchByImage(
         di."pageNumber",
         di.width,
         di.height,
-        di.mime_type,
+        di."mimeType",
         1 - (ie.embedding <=> ${queryEmbedding}::vector) as similarity
       FROM image_embeddings ie
       JOIN document_images di ON ie."imageId" = di.id
@@ -248,7 +248,7 @@ export async function searchImagesByText(
         di."pageNumber",
         di.width,
         di.height,
-        di.mime_type,
+        di."mimeType",
         1 - (ie.embedding <=> ${textEmbedding}::vector) as similarity
       FROM image_embeddings ie
       JOIN document_images di ON ie."imageId" = di.id

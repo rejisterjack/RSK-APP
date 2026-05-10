@@ -328,26 +328,35 @@ export async function createDocumentChunks(
  */
 export async function searchSimilarChunks(
   embedding: number[],
+  userId: string,
   limit = 5,
   threshold = 0.7
 ): Promise<DocumentChunk[]> {
-  const result = await prisma.$queryRaw<DocumentChunk[]>`
-    SELECT 
+  const vectorStr = `[${embedding.join(',')}]`;
+  const result = await prisma.$queryRawUnsafe<DocumentChunk[]>(
+    `SELECT
       dc.id,
-      dc."documentId" as "documentId",
+      dc."documentId",
       dc.content,
       dc.index,
       dc.start,
       dc.end,
       dc.page,
       dc.section,
-      dc."createdAt" as "createdAt",
-      1 - (dc.embedding <=> ${embedding}::vector) as similarity
+      dc."createdAt",
+      1 - (dc.embedding <=> $1::vector) as similarity
     FROM document_chunks dc
-    WHERE 1 - (dc.embedding <=> ${embedding}::vector) > ${threshold}
-    ORDER BY dc.embedding <=> ${embedding}::vector
-    LIMIT ${limit}
-  `;
+    JOIN documents d ON dc."documentId" = d.id
+    WHERE d."userId" = $2
+      AND d.status = 'COMPLETED'
+      AND 1 - (dc.embedding <=> $1::vector) > $3
+    ORDER BY dc.embedding <=> $1::vector
+    LIMIT $4`,
+    vectorStr,
+    userId,
+    threshold,
+    limit
+  );
 
   return result;
 }
