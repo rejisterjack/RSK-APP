@@ -185,8 +185,8 @@ export async function processDocumentDirect(
         const chunk = batch[j];
         const vector = embeddingVectors[j];
         await prisma.$executeRaw`
-          INSERT INTO document_chunks (
-            id, document_id, content, embedding, index, start, "end", page, section, created_at
+          INSERT INTO "document_chunks" (
+            "id", "documentId", "content", "embedding", "index", "start", "end", "page", "section", "createdAt"
           ) VALUES (
             ${crypto.randomUUID()},
             ${documentId},

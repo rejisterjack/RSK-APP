@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
         await prisma.$executeRaw`
           UPDATE documents SET status = 'FAILED',
             metadata = COALESCE(metadata, '{}'::jsonb) || ${errorMeta}::jsonb,
-            updated_at = NOW()
+            "updatedAt" = NOW()
           WHERE id = ${id}
         `.catch(() => {});
       }
