@@ -29,6 +29,7 @@ const PUBLIC_ROUTES = [
   '/reset-password',
   '/api/auth',
   '/api/webhook',
+  '/api/webhooks/deploy',
   '/api/health',
   '/api/docs',
   '/api/csp-report',

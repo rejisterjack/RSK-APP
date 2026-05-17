@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
-// ISR: documentation rarely changes — revalidate every hour
-export const revalidate = 3600;
+// ISR: documentation rarely changes — revalidate daily (purge via deploy webhook)
+export const revalidate = 86400;
 
 const sections = [
   {

@@ -2,9 +2,10 @@ import type { Schemas } from '@qdrant/js-client-rest';
 
 type Filter = Schemas['Filter'];
 type ScoredPoint = Schemas['ScoredPoint'];
+
 import { logger } from '@/lib/logger';
-import { COLLECTION_DOCUMENT_CHUNKS, COLLECTION_IMAGE_EMBEDDINGS } from './collections';
 import { qdrant } from './client';
+import { COLLECTION_DOCUMENT_CHUNKS, COLLECTION_IMAGE_EMBEDDINGS } from './collections';
 
 export interface ChunkPointData {
   id?: string;
@@ -37,7 +38,11 @@ export interface SearchOptions {
 export async function upsertChunks(
   chunks: ChunkPointData[],
   options: UpsertOptions
-): Promise<{ successCount: number; failureCount: number; errors: Array<{ batchIndex: number; error: string }> }> {
+): Promise<{
+  successCount: number;
+  failureCount: number;
+  errors: Array<{ batchIndex: number; error: string }>;
+}> {
   const { batchSize = 50, onProgress } = options;
   const errors: Array<{ batchIndex: number; error: string }> = [];
   let successCount = 0;
@@ -100,7 +105,11 @@ export async function searchSimilar(
     filter,
     with_payload: withPayload,
     score_threshold: minScore,
-  });
+    search_params: {
+      hnsw_ef: 64,
+      exact: false,
+    },
+  } as Parameters<typeof qdrant.search>[1]);
 }
 
 export async function searchKeyword(
@@ -128,7 +137,7 @@ export async function searchKeyword(
           should: filter?.should,
           must_not: filter?.must_not,
         },
-        limit: topK * 4,
+        limit: topK * 2,
       },
     ],
     limit: topK,
@@ -152,7 +161,7 @@ export async function searchHybrid(
     prefetch: [
       {
         query: queryVector,
-        limit: topK * 4,
+        limit: topK * 2,
         filter,
       },
       {
@@ -169,7 +178,7 @@ export async function searchHybrid(
           should: filter?.should,
           must_not: filter?.must_not,
         },
-        limit: topK * 4,
+        limit: topK * 2,
       },
     ],
     limit: topK,

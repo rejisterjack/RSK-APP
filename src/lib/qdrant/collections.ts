@@ -20,6 +20,14 @@ export async function ensureDocumentChunksCollection(): Promise<void> {
   if (!exists) {
     await qdrant.createCollection(COLLECTION_DOCUMENT_CHUNKS, {
       vectors: { size: 768, distance: 'Cosine' },
+      hnsw_config: {
+        m: 32,
+        ef_construct: 128,
+        full_scan_threshold: 10000,
+      },
+      optimizers_config: {
+        indexing_threshold: 20000,
+      },
     });
   }
 

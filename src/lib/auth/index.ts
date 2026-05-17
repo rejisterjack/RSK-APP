@@ -47,6 +47,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
 import Google from 'next-auth/providers/google';
+import { cache } from 'react';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
@@ -122,9 +123,9 @@ async function isSessionRevokedCached(jti: string): Promise<boolean> {
 // NextAuth Configuration
 // =============================================================================
 
-export const {
+const {
   handlers: { GET, POST },
-  auth,
+  auth: _auth,
   signIn,
   signOut,
 } = NextAuth({
@@ -437,6 +438,15 @@ export const {
   // Debug mode in development
   debug: false,
 });
+
+// =============================================================================
+// Cached auth for request-level deduplication
+// =============================================================================
+
+// Within a single server render or API handler, auth() may be called multiple
+// times. React's cache() deduplicates the calls so the session is resolved once.
+export const auth = cache(_auth);
+export { GET, POST, signIn, signOut };
 
 // =============================================================================
 // Re-exports from session.ts for backward compatibility
