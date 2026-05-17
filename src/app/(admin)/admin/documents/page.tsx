@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { prisma } from '@/lib/db';
+import { prismaRead } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,15 +41,17 @@ async function getAllDocuments(statusFilter?: string): Promise<DocumentRow[]> {
   const where =
     statusFilter && statusFilter !== 'all' ? { status: statusFilter as DocumentStatus } : {};
 
-  const documents = await prisma.document.findMany({
+  const documents = await prismaRead.document.findMany({
     where,
-    include: {
-      workspace: {
-        select: { name: true },
-      },
-      chunks: {
-        select: { id: true },
-      },
+    select: {
+      id: true,
+      name: true,
+      contentType: true,
+      size: true,
+      status: true,
+      chunkCount: true,
+      createdAt: true,
+      workspace: { select: { name: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 200,
@@ -63,7 +65,7 @@ async function getAllDocuments(statusFilter?: string): Promise<DocumentRow[]> {
     status: doc.status,
     workspaceName: doc.workspace?.name ?? null,
     createdAt: doc.createdAt,
-    chunkCount: doc.chunks.length,
+    chunkCount: doc.chunkCount,
   }));
 }
 

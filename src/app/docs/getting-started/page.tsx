@@ -60,7 +60,7 @@ export default function GettingStartedPage() {
               { name: 'Upstash Redis', desc: 'Serverless rate limiting and caching' },
               { name: 'Inngest', desc: 'Reliable background job processing' },
               { name: 'Cloudinary', desc: 'File storage with image optimization' },
-              { name: 'Neon', desc: 'Serverless PostgreSQL with pgvector' },
+              { name: 'Prisma Postgres', desc: 'Managed PostgreSQL with Accelerate' },
             ].map((tech) => (
               <div
                 key={tech.name}
@@ -88,14 +88,14 @@ export default function GettingStartedPage() {
               <span className="text-primary font-bold mt-0.5">2.</span>
               <span>
                 A <strong>PostgreSQL database</strong> with the pgvector extension enabled. The
-                easiest option is a free Neon database at{' '}
+                easiest option is a free Prisma Postgres database at{' '}
                 <a
-                  href="https://console.neon.tech"
+                  href="https://console.prisma.io"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline"
                 >
-                  console.neon.tech
+                  console.prisma.io
                 </a>
                 .
               </span>

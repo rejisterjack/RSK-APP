@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { generateImageEmbedding } from '@/lib/ai/embeddings/image';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { upsertImageEmbedding, searchSimilarImages as qdrantSearchSimilarImages, deleteImagePoints } from '@/lib/qdrant';
 
 /**
  * Image metadata extracted from documents
@@ -268,20 +269,20 @@ export async function processImage(
         },
       });
 
-      // Create ImageEmbedding record
+      // Upsert image embedding into Qdrant
       const contentHash = createHash('sha256').update(image.buffer).digest('hex');
-      const vectorStr = `[${embedding.join(',')}]`;
-      await tx.$executeRawUnsafe(
-        `INSERT INTO image_embeddings (
-          id, "imageId", contentHash, embedding, model, dimensions, "createdAt"
-        ) VALUES ($1, $2, $3, $4::vector, $5, $6, NOW())`,
-        crypto.randomUUID(),
-        docImage.id,
-        contentHash,
-        vectorStr,
-        'Xenova/clip-vit-base-patch32',
-        512
-      );
+      const doc = await tx.document.findUnique({ where: { id: documentId }, select: { userId: true } });
+      await upsertImageEmbedding({
+        id: crypto.randomUUID(),
+        documentId,
+        userId: doc?.userId ?? '',
+        embedding,
+        storageUrl: docImage.storageUrl,
+        caption: undefined,
+        pageNumber: image.pageNumber,
+        model: 'Xenova/clip-vit-base-patch32',
+        dimensions: embedding.length,
+      });
 
       return { docImage, imageEmbedding: undefined as unknown as undefined, contentHash };
     });
@@ -403,49 +404,20 @@ export async function searchSimilarImages(
   try {
     // Generate query embedding
     const queryEmbedding = await generateImageEmbedding(queryImage);
-    const vectorStr = `[${queryEmbedding.join(',')}]`;
 
-    // Search for similar images using pgvector
-    const results = await prisma.$queryRawUnsafe<
-      Array<{
-        id: string;
-        documentId: string;
-        storageUrl: string;
-        caption: string | null;
-        ocrText: string | null;
-        pageNumber: number | null;
-        similarity: number;
-      }>
-    >(
-      `SELECT
-        di.id,
-        di."documentId",
-        di."storageUrl",
-        di.caption,
-        di."ocrText",
-        di."pageNumber",
-        1 - (ie.embedding <=> $1::vector) as similarity
-      FROM image_embeddings ie
-      JOIN document_images di ON ie."imageId" = di.id
-      JOIN documents d ON di."documentId" = d.id
-      WHERE d."userId" = $2
-        AND d.status = 'COMPLETED'
-        AND ie.embedding IS NOT NULL
-      ORDER BY ie.embedding <=> $1::vector
-      LIMIT $3`,
-      vectorStr,
-      workspaceId,
-      topK
-    );
+    // Search for similar images using Qdrant
+    const results = await qdrantSearchSimilarImages(queryEmbedding, {
+      userId: workspaceId,
+      topK,
+    });
 
     return results.map((r) => ({
-      id: r.id,
-      documentId: r.documentId,
-      storageUrl: r.storageUrl,
-      caption: r.caption || undefined,
-      ocrText: r.ocrText || undefined,
-      pageNumber: r.pageNumber || undefined,
-      similarity: Number(r.similarity),
+      id: String(r.id),
+      documentId: (r.payload as Record<string, unknown>)?.documentId as string ?? '',
+      storageUrl: (r.payload as Record<string, unknown>)?.storageUrl as string ?? '',
+      caption: ((r.payload as Record<string, unknown>)?.caption as string | null) ?? undefined,
+      pageNumber: ((r.payload as Record<string, unknown>)?.pageNumber as number | null) ?? undefined,
+      similarity: r.score,
     }));
   } catch (error) {
     logger.warn('Similar image search failed', {
@@ -476,49 +448,20 @@ export async function searchImagesByText(
 
     // Generate text embedding
     const textEmbedding = await generateTextEmbeddingForImageSearch(query);
-    const vectorStr = `[${textEmbedding.join(',')}]`;
 
-    // Search for similar images
-    const results = await prisma.$queryRawUnsafe<
-      Array<{
-        id: string;
-        documentId: string;
-        storageUrl: string;
-        caption: string | null;
-        ocrText: string | null;
-        pageNumber: number | null;
-        similarity: number;
-      }>
-    >(
-      `SELECT
-        di.id,
-        di."documentId",
-        di."storageUrl",
-        di.caption,
-        di."ocrText",
-        di."pageNumber",
-        1 - (ie.embedding <=> $1::vector) as similarity
-      FROM image_embeddings ie
-      JOIN document_images di ON ie."imageId" = di.id
-      JOIN documents d ON di."documentId" = d.id
-      WHERE d."userId" = $2
-        AND d.status = 'COMPLETED'
-        AND ie.embedding IS NOT NULL
-      ORDER BY ie.embedding <=> $1::vector
-      LIMIT $3`,
-      vectorStr,
-      workspaceId,
-      topK
-    );
+    // Search for similar images using Qdrant
+    const results = await qdrantSearchSimilarImages(textEmbedding, {
+      userId: workspaceId,
+      topK,
+    });
 
     return results.map((r) => ({
-      id: r.id,
-      documentId: r.documentId,
-      storageUrl: r.storageUrl,
-      caption: r.caption || undefined,
-      ocrText: r.ocrText || undefined,
-      pageNumber: r.pageNumber || undefined,
-      similarity: Number(r.similarity),
+      id: String(r.id),
+      documentId: (r.payload as Record<string, unknown>)?.documentId as string ?? '',
+      storageUrl: (r.payload as Record<string, unknown>)?.storageUrl as string ?? '',
+      caption: ((r.payload as Record<string, unknown>)?.caption as string | null) ?? undefined,
+      pageNumber: ((r.payload as Record<string, unknown>)?.pageNumber as number | null) ?? undefined,
+      similarity: r.score,
     }));
   } catch (error) {
     logger.warn('Image search by text failed', {
@@ -576,6 +519,16 @@ export async function deleteDocumentImages(documentId: string): Promise<void> {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  // Delete from Qdrant
+  try {
+    await deleteImagePoints(documentId);
+  } catch (error) {
+    logger.warn('Failed to delete image points from Qdrant', {
+      documentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   // Delete from database (cascades to embeddings)

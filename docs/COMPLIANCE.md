@@ -265,9 +265,9 @@ The RAG Starter Kit supports configurable data residency through its infrastruct
 
 | Region | Database | Redis | Application | AI Providers |
 |--------|----------|-------|-------------|-------------|
-| **EU** | Neon EU (Frankfurt), Supabase EU (Frankfurt), or Railway EU (Frankfurt) | Upstash EU (eu-west-1) | Vercel EU (eu-west-1) or Railway EU | OpenAI (no region pinning), Google Gemini (eu-west1) |
-| **US** | Neon US (us-east-1), Supabase US (us-east-1), or Railway US | Upstash US (us-east-1) | Vercel US (us-east-1) or Railway US | OpenAI (us-east-1), Google Gemini (us-central1) |
-| **APAC** | Neon APAC (ap-southeast-1), Supabase APAC (ap-southeast-1) | Upstash APAC (ap-southeast-1) | Vercel or Railway APAC | OpenAI (no APAC region), Google Gemini (asia-east1) |
+| **EU** | Prisma Postgres EU, Supabase EU (Frankfurt), or Railway EU (Frankfurt) | Upstash EU (eu-west-1) | Vercel EU (eu-west-1) or Railway EU | OpenAI (no region pinning), Google Gemini (eu-west1) |
+| **US** | Prisma Postgres US, Supabase US (us-east-1), or Railway US | Upstash US (us-east-1) | Vercel US (us-east-1) or Railway US | OpenAI (us-east-1), Google Gemini (us-central1) |
+| **APAC** | Prisma Postgres APAC, Supabase APAC (ap-southeast-1) | Upstash APAC (ap-southeast-1) | Vercel or Railway APAC | OpenAI (no APAC region), Google Gemini (asia-east1) |
 
 ### Configuration Guidance
 
@@ -307,7 +307,7 @@ The RAG Starter Kit uses the following sub-processors to process personal data:
 | **OpenAI** | AI language model inference | Chat messages, embeddings | US | [Yes](https://openai.com/policies/privacy-policy) |
 | **Google (Gemini)** | AI language model inference, embeddings | Chat messages, embeddings | US, EU | [Yes](https://cloud.google.com/terms/data-processing-addendum) |
 | **GitHub (Microsoft)** | OAuth authentication, source code hosting | Email, name, avatar (via OAuth) | US | [Yes](https://docs.github.com/en/site-policy/privacy-policies/github-dpa) |
-| **Neon / Supabase / Railway** | Managed PostgreSQL database | All application data | US, EU, APAC | Yes (varies by provider) |
+| **Prisma Postgres / Supabase / Railway** | Managed PostgreSQL database | All application data | US, EU, APAC | Yes (varies by provider) |
 
 ### Sub-Processor Changes
 

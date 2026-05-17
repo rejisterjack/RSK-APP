@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { FolderOpen, History } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -29,15 +28,13 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
       {/* Animated tab toggle */}
       <div className="p-3 border-b border-border/50">
         <div className="relative flex items-center rounded-xl bg-muted/50 p-1 border border-white/5">
-          {/* Sliding background pill */}
-          <motion.div
-            layoutId="sidebar-tab-indicator"
-            className="absolute inset-y-1 rounded-lg bg-primary/20 border border-primary/40 shadow-[0_0_12px_rgba(var(--primary-rgb),0.15)]"
+          {/* Sliding background pill — CSS transition instead of framer-motion spring */}
+          <div
+            className="absolute inset-y-1 rounded-lg bg-primary/20 border border-primary/40 shadow-[0_0_12px_rgba(var(--primary-rgb),0.15)] transition-all duration-200 ease-out"
             style={{
               width: 'calc(50% - 4px)',
               left: activeTab === 'knowledge' ? '4px' : 'calc(50%)',
             }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
           />
 
           {/* Knowledge Base button */}
@@ -45,7 +42,7 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
             type="button"
             onClick={() => setActiveTab('knowledge')}
             className={cn(
-              'relative z-10 flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-colors',
+              'relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-semibold rounded-lg transition-colors',
               activeTab === 'knowledge'
                 ? 'text-primary'
                 : 'text-muted-foreground hover:text-foreground/80'
@@ -62,7 +59,7 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
             type="button"
             onClick={() => setActiveTab('history')}
             className={cn(
-              'relative z-10 flex-1 flex items-center justify-center gap-2 py-2 text-xs font-semibold rounded-lg transition-colors',
+              'relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-semibold rounded-lg transition-colors',
               activeTab === 'history'
                 ? 'text-primary'
                 : 'text-muted-foreground hover:text-foreground/80'
@@ -74,22 +71,18 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
         </div>
       </div>
 
-      {/* Content area with animated transition */}
+      {/* Content area with CSS fade-slide transition */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
-        <motion.div
+        <div
           key={activeTab}
-          initial={{ opacity: 0, x: activeTab === 'knowledge' ? -12 : 12 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: activeTab === 'knowledge' ? 12 : -12 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="h-full"
+          className="h-full animate-in fade-in slide-in-from-bottom-2 duration-200"
         >
           {activeTab === 'knowledge' ? (
             <DocumentList {...documentListProps} />
           ) : (
             <ConversationHistoryList {...historyListProps} />
           )}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

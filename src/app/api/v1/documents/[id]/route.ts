@@ -23,6 +23,8 @@ import { auth } from '@/lib/auth';
 import { getServerSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
@@ -50,18 +52,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     where: {
       id,
       workspaceId: workspace.id,
-    },
-    include: {
-      chunks: {
-        orderBy: { index: 'asc' },
-        select: {
-          id: true,
-          index: true,
-          content: true,
-          page: true,
-          section: true,
-        },
-      },
     },
   });
 

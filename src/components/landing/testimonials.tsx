@@ -1,5 +1,3 @@
-'use client';
-
 import { Star } from 'lucide-react';
 
 const TESTIMONIALS = [

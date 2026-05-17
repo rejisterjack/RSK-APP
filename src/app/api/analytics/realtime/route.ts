@@ -13,6 +13,8 @@ import { logger } from '@/lib/logger';
 import { checkApiRateLimit, getRateLimitIdentifier } from '@/lib/security/rate-limiter';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // Configuration
 // =============================================================================

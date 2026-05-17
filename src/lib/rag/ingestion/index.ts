@@ -341,7 +341,12 @@ export async function processDocument(
     // Step 4: Store chunks with embeddings using batch operations
     logger.info(`Storing chunks in vector database`, { documentId, count: valid.length });
 
-    const insertResult = await batchInsertChunks(prisma, valid, {
+    const insertResult = await batchInsertChunks(valid, {
+      userId: document.userId,
+      workspaceId: document.workspaceId ?? undefined,
+      documentName: document.name,
+      documentType: document.contentType,
+    }, {
       batchSize: options.batchSize ?? 50,
       continueOnError: true,
       onProgress: (completed, total) => {
@@ -454,10 +459,9 @@ export async function reprocessDocument(
   documentId: string,
   options: IngestionOptions & { embeddingModel?: string } = {}
 ): Promise<void> {
-  // Delete existing chunks
-  await prisma.documentChunk.deleteMany({
-    where: { documentId },
-  });
+  // Delete existing chunks from Qdrant
+  const { deleteByDocumentId } = await import('@/lib/qdrant');
+  await deleteByDocumentId(documentId);
 
   // Reset document status
   await prisma.document.update({

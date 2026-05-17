@@ -151,8 +151,8 @@ export async function checkPermissions(
   });
 
   if (missingPermissions.length > 0) {
-    // Log permission denied
-    await logAuditEvent({
+    // Log permission denied (fire-and-forget — don't block the response)
+    logAuditEvent({
       event: AuditEvent.PERMISSION_DENIED,
       userId,
       workspaceId,

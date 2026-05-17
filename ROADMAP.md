@@ -57,7 +57,7 @@ The best open-source projects are effortless to start. This phase is entirely ab
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1.2.1 | Single-command local setup via `pnpm dev` | ✅ Done | No Docker — managed cloud services (Neon, Upstash, Cloudinary, Inngest) |
+| 1.2.1 | Single-command local setup via `pnpm dev` | ✅ Done | No Docker — managed cloud services (Prisma Postgres, Upstash, Cloudinary, Inngest) |
 | 1.2.2 | Seed script with sample documents | 📋 Planned | Run once, have a working chatbot with real data to test against |
 | 1.2.3 | Hot reload working locally | ✅ Done | Developer changes code, sees it update — instant feedback |
 | 1.2.4 | Local LLM support via Ollama | ✅ Done | Develop offline without spending API credits |

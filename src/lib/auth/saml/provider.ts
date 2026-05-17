@@ -405,7 +405,7 @@ export async function parseIdPMetadata(metadataXml: string): Promise<ParsedIdPMe
       entityId: metadata.getEntityID(),
       entryPoint: getSsoUrl(),
       logoutUrl: getLogoutUrl(),
-      certificate: parseCertificate(certificate),
+      certificate: parseCertificate(Array.isArray(certificate) ? certificate[0] : certificate),
       nameIdFormats: Array.isArray(nameIdFormats) ? nameIdFormats : [],
       ssoBindings:
         typeof ssoBindingsRaw === 'string'

@@ -31,7 +31,7 @@ If multiple sources support the same claim, cite all of them: "This feature is s
 /**
  * System prompt for when no context is available
  */
-export const NO_CONTEXT_PROMPT = `No relevant documents were found for this query. Answer the user's question using your general knowledge. If the question is specifically about their uploaded documents, let them know no matching documents were found and suggest uploading relevant files or rephrasing the question.`;
+export const NO_CONTEXT_PROMPT = `No relevant documents were found in the knowledge base for this query. Answer the user's question using your general knowledge, but start by letting them know you couldn't find matching information in their uploaded documents. Suggest they try rephrasing the question or checking that the relevant document has been uploaded and processed.`;
 
 /**
  * System prompt for concise answers

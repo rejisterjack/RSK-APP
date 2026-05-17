@@ -1,21 +1,19 @@
 /**
  * Batch Operations
  *
- * Efficient bulk insert operations for vector data.
+ * Efficient bulk operations for vector data stored in Qdrant.
  * Optimized for high-throughput scenarios.
  */
 
-import type { DocumentChunk, PrismaClient } from '@/generated/prisma/client';
-
 import { logger } from '@/lib/logger';
-
-// Type for transaction client
-type PrismaTransactionClient = Omit<
-  PrismaClient,
-  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
->;
-
-type PrismaClientOrTransaction = PrismaClient | PrismaTransactionClient;
+import {
+  COLLECTION_DOCUMENT_CHUNKS,
+  type ChunkPointData,
+  type UpsertOptions,
+  deleteByDocumentId,
+  qdrant,
+  upsertChunks,
+} from '@/lib/qdrant';
 
 // ============================================================================
 // Types
@@ -40,8 +38,6 @@ export interface BatchInsertOptions {
   batchDelayMs?: number;
   /** Continue on error (default: true) */
   continueOnError?: boolean;
-  /** Use transaction per batch (default: true) */
-  useTransaction?: boolean;
   /** Enable progress callback */
   onProgress?: (completed: number, total: number) => void;
 }
@@ -66,109 +62,65 @@ export interface BulkUpdateResult {
   errors: Array<{ chunkId: string; error: string }>;
 }
 
+/** Metadata required for Qdrant upsert operations */
+export interface DocumentMetadata {
+  userId: string;
+  workspaceId?: string;
+  documentName: string;
+  documentType: string;
+}
+
 // ============================================================================
 // Batch Insert Operations
 // ============================================================================
 
 /**
- * Insert document chunks in batches
+ * Insert document chunks in batches via Qdrant
  *
  * This is the recommended way to insert large numbers of chunks as it:
  * - Prevents memory issues
  * - Handles partial failures gracefully
  * - Provides progress tracking
- * - Uses transactions for consistency
+ * - Uses Qdrant batched upserts for throughput
  */
 export async function batchInsertChunks(
-  prisma: PrismaClient,
   chunks: ChunkInsertData[],
+  metadata: DocumentMetadata,
   options: BatchInsertOptions = {}
 ): Promise<BatchInsertResult> {
-  const {
-    batchSize = 100,
-    batchDelayMs = 0,
-    continueOnError = true,
-    useTransaction = true,
-    onProgress,
-  } = options;
-
+  const { onProgress } = options;
   const startTime = Date.now();
-  const errors: Array<{ batchIndex: number; error: string }> = [];
-  let successCount = 0;
-  let failureCount = 0;
 
-  // Process in batches
-  for (let i = 0; i < chunks.length; i += batchSize) {
-    const batch = chunks.slice(i, i + batchSize);
-    const batchIndex = Math.floor(i / batchSize);
+  // Map ChunkInsertData[] to ChunkPointData[] expected by upsertChunks
+  const pointData: ChunkPointData[] = chunks.map((chunk) => ({
+    id: chunk.id,
+    documentId: chunk.documentId,
+    content: chunk.content,
+    embedding: chunk.embedding,
+    index: chunk.index,
+    start: chunk.start,
+    end: chunk.end,
+    page: chunk.page,
+    section: chunk.section,
+  }));
 
-    try {
-      if (useTransaction) {
-        await prisma.$transaction(async (tx) => {
-          await insertBatch(tx, batch);
-        });
-      } else {
-        await insertBatch(prisma, batch);
-      }
+  const upsertOptions: UpsertOptions = {
+    userId: metadata.userId,
+    workspaceId: metadata.workspaceId,
+    documentName: metadata.documentName,
+    documentType: metadata.documentType,
+    batchSize: options.batchSize,
+    onProgress,
+  };
 
-      successCount += batch.length;
-    } catch (error) {
-      failureCount += batch.length;
-      errors.push({
-        batchIndex,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-
-      if (!continueOnError) {
-        break;
-      }
-    }
-
-    // Report progress
-    onProgress?.(Math.min(i + batchSize, chunks.length), chunks.length);
-
-    // Delay between batches if specified
-    if (batchDelayMs > 0 && i + batchSize < chunks.length) {
-      await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
-    }
-  }
+  const result = await upsertChunks(pointData, upsertOptions);
 
   return {
-    successCount,
-    failureCount,
-    errors,
+    successCount: result.successCount,
+    failureCount: result.failureCount,
+    errors: result.errors,
     durationMs: Date.now() - startTime,
   };
-}
-
-/**
- * Insert a single batch of chunks using parameterized queries
- */
-async function insertBatch(
-  client: PrismaClientOrTransaction,
-  chunks: ChunkInsertData[]
-): Promise<void> {
-  for (const chunk of chunks) {
-    const id = chunk.id ?? crypto.randomUUID();
-    await client.$executeRaw`
-      INSERT INTO document_chunks (
-        id, "documentId", content, embedding, "index",
-        start, "end", page, section, "createdAt"
-      )
-      VALUES (
-        ${id},
-        ${chunk.documentId},
-        ${chunk.content},
-        ${chunk.embedding}::vector,
-        ${chunk.index},
-        ${chunk.start ?? 0},
-        ${chunk.end ?? chunk.content.length},
-        ${chunk.page ?? null},
-        ${chunk.section ?? null},
-        NOW()
-      )
-    `;
-  }
 }
 
 // ============================================================================
@@ -177,13 +129,16 @@ async function insertBatch(
 
 /**
  * Update embeddings for existing chunks in batches
+ *
+ * Qdrant uses upsert semantics: we retrieve current points to preserve
+ * payloads, then upsert with the new embedding vector.
  */
 export async function batchUpdateEmbeddings(
-  prisma: PrismaClient,
+  _prisma: unknown,
   updates: Array<{ chunkId: string; embedding: number[] }>,
   options: BatchInsertOptions = {}
 ): Promise<BulkUpdateResult> {
-  const { batchSize = 100, batchDelayMs = 0, continueOnError = true } = options;
+  const { batchSize = 100, continueOnError = true } = options;
 
   const errors: Array<{ chunkId: string; error: string }> = [];
   let successCount = 0;
@@ -192,31 +147,70 @@ export async function batchUpdateEmbeddings(
   for (let i = 0; i < updates.length; i += batchSize) {
     const batch = updates.slice(i, i + batchSize);
 
-    await prisma.$transaction(async (tx: PrismaTransactionClient) => {
+    // Retrieve current points to preserve their payloads
+    const pointIds = batch.map((u) => u.chunkId);
+
+    let retrieved: Awaited<ReturnType<typeof qdrant.retrieve>>;
+    try {
+      retrieved = await qdrant.retrieve(COLLECTION_DOCUMENT_CHUNKS, {
+        ids: pointIds,
+        with_payload: true,
+        with_vector: true,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
       for (const update of batch) {
-        try {
-          await tx.$executeRaw`
-            UPDATE document_chunks
-            SET embedding = ${update.embedding}::vector
-            WHERE id = ${update.chunkId}
-          `;
-          successCount++;
-        } catch (error) {
-          failureCount++;
-          errors.push({
-            chunkId: update.chunkId,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
-
-          if (!continueOnError) {
-            throw error;
-          }
-        }
+        failureCount++;
+        errors.push({ chunkId: update.chunkId, error: `Failed to retrieve points: ${msg}` });
       }
-    });
+      if (!continueOnError) break;
+      continue;
+    }
 
-    if (batchDelayMs > 0 && i + batchSize < updates.length) {
-      await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+    // Build a map for quick lookup, normalizing Qdrant types
+    const pointMap = new Map(
+      retrieved.map((p) => [
+        String(p.id),
+        {
+          payload: (p.payload ?? {}) as Record<string, unknown>,
+          vector: p.vector as number[] | undefined,
+        },
+      ])
+    );
+
+    // Upsert each point with the new embedding
+    const pointsToUpsert: Array<{ id: string; vector: number[]; payload: Record<string, unknown> }> = [];
+    for (const update of batch) {
+      const existing = pointMap.get(update.chunkId);
+      if (!existing) {
+        failureCount++;
+        errors.push({ chunkId: update.chunkId, error: 'Point not found in Qdrant' });
+        if (!continueOnError) break;
+        continue;
+      }
+
+      pointsToUpsert.push({
+        id: update.chunkId,
+        vector: update.embedding,
+        payload: existing.payload,
+      });
+    }
+
+    if (pointsToUpsert.length > 0) {
+      try {
+        await qdrant.upsert(COLLECTION_DOCUMENT_CHUNKS, {
+          wait: true,
+          points: pointsToUpsert,
+        });
+        successCount += pointsToUpsert.length;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        for (const point of pointsToUpsert) {
+          failureCount++;
+          errors.push({ chunkId: point.id, error: msg });
+        }
+        if (!continueOnError) break;
+      }
     }
   }
 
@@ -225,9 +219,12 @@ export async function batchUpdateEmbeddings(
 
 /**
  * Update chunk content and embeddings in batches
+ *
+ * Retrieves existing points from Qdrant, merges the updated fields into
+ * the payload, and upserts them back.
  */
 export async function batchUpdateChunks(
-  prisma: PrismaClient,
+  _prisma: unknown,
   updates: Array<{
     chunkId: string;
     content?: string;
@@ -246,44 +243,85 @@ export async function batchUpdateChunks(
   for (let i = 0; i < updates.length; i += batchSize) {
     const batch = updates.slice(i, i + batchSize);
 
-    await prisma.$transaction(async (tx: PrismaTransactionClient) => {
+    // Retrieve current points
+    const pointIds = batch.map((u) => u.chunkId);
+
+    let retrieved: Awaited<ReturnType<typeof qdrant.retrieve>>;
+    try {
+      retrieved = await qdrant.retrieve(COLLECTION_DOCUMENT_CHUNKS, {
+        ids: pointIds,
+        with_payload: true,
+        with_vector: true,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
       for (const update of batch) {
-        try {
-          if (update.content !== undefined) {
-            await tx.$executeRaw`
-              UPDATE document_chunks SET content = ${update.content} WHERE id = ${update.chunkId}
-            `;
-          }
-          if (update.embedding !== undefined) {
-            await tx.$executeRaw`
-              UPDATE document_chunks SET embedding = ${update.embedding}::vector WHERE id = ${update.chunkId}
-            `;
-          }
-          if (update.page !== undefined) {
-            await tx.$executeRaw`
-              UPDATE document_chunks SET page = ${update.page} WHERE id = ${update.chunkId}
-            `;
-          }
-          if (update.section !== undefined) {
-            await tx.$executeRaw`
-              UPDATE document_chunks SET section = ${update.section} WHERE id = ${update.chunkId}
-            `;
-          }
+        failureCount++;
+        errors.push({ chunkId: update.chunkId, error: `Failed to retrieve points: ${msg}` });
+      }
+      if (!continueOnError) break;
+      continue;
+    }
 
-          successCount++;
-        } catch (error) {
-          failureCount++;
-          errors.push({
-            chunkId: update.chunkId,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
+    const pointMap = new Map(
+      retrieved.map((p) => [
+        String(p.id),
+        {
+          payload: (p.payload ?? {}) as Record<string, unknown>,
+          vector: p.vector as number[] | undefined,
+        },
+      ])
+    );
 
-          if (!continueOnError) {
-            throw error;
-          }
+    const pointsToUpsert: Array<{ id: string; vector: number[]; payload: Record<string, unknown> }> = [];
+    for (const update of batch) {
+      const existing = pointMap.get(update.chunkId);
+      if (!existing) {
+        failureCount++;
+        errors.push({ chunkId: update.chunkId, error: 'Point not found in Qdrant' });
+        if (!continueOnError) break;
+        continue;
+      }
+
+      const payload = { ...existing.payload };
+
+      if (update.content !== undefined) {
+        payload.content = update.content;
+        // Adjust end position if content changed and no explicit end provided
+        if (payload.end !== undefined && payload.end !== null) {
+          payload.end = update.content.length;
         }
       }
-    });
+      if (update.page !== undefined) {
+        payload.page = update.page;
+      }
+      if (update.section !== undefined) {
+        payload.section = update.section;
+      }
+
+      pointsToUpsert.push({
+        id: update.chunkId,
+        vector: update.embedding ?? existing.vector ?? [],
+        payload,
+      });
+    }
+
+    if (pointsToUpsert.length > 0) {
+      try {
+        await qdrant.upsert(COLLECTION_DOCUMENT_CHUNKS, {
+          wait: true,
+          points: pointsToUpsert,
+        });
+        successCount += pointsToUpsert.length;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        for (const point of pointsToUpsert) {
+          failureCount++;
+          errors.push({ chunkId: point.id, error: msg });
+        }
+        if (!continueOnError) break;
+      }
+    }
   }
 
   return { successCount, failureCount, errors };
@@ -294,10 +332,10 @@ export async function batchUpdateChunks(
 // ============================================================================
 
 /**
- * Delete chunks in batches
+ * Delete chunks in batches by point IDs
  */
 export async function batchDeleteChunks(
-  prisma: PrismaClient,
+  _prisma: unknown,
   chunkIds: string[],
   options: BatchInsertOptions = {}
 ): Promise<{ successCount: number; failureCount: number }> {
@@ -310,12 +348,13 @@ export async function batchDeleteChunks(
     const batch = chunkIds.slice(i, i + batchSize);
 
     try {
-      const result = await prisma.documentChunk.deleteMany({
-        where: { id: { in: batch } },
+      await qdrant.delete(COLLECTION_DOCUMENT_CHUNKS, {
+        wait: true,
+        points: batch,
       });
-      successCount += result.count;
-    } catch (error: unknown) {
-      logger.error('Failed to delete batch of chunks', {
+      successCount += batch.length;
+    } catch (error) {
+      logger.error('Failed to delete batch of Qdrant points', {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       failureCount += batch.length;
@@ -329,16 +368,26 @@ export async function batchDeleteChunks(
  * Delete all chunks for multiple documents
  */
 export async function batchDeleteDocumentChunks(
-  prisma: PrismaClient,
+  _prisma: unknown,
   documentIds: string[]
 ): Promise<{ successCount: number; deletedChunks: number }> {
-  const result = await prisma.documentChunk.deleteMany({
-    where: { documentId: { in: documentIds } },
-  });
+  let totalDeleted = 0;
+
+  for (const documentId of documentIds) {
+    try {
+      const deleted = await deleteByDocumentId(documentId);
+      totalDeleted += deleted;
+    } catch (error) {
+      logger.error('Failed to delete Qdrant points for document', {
+        documentId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
 
   return {
     successCount: documentIds.length,
-    deletedChunks: result.count,
+    deletedChunks: totalDeleted,
   };
 }
 
@@ -347,43 +396,54 @@ export async function batchDeleteDocumentChunks(
 // ============================================================================
 
 /**
- * Process chunks in a streaming fashion
- * Useful for very large datasets that don't fit in memory
+ * Process chunks in a streaming fashion using Qdrant scroll API
+ *
+ * Useful for very large datasets that don't fit in memory.
+ * Scrolls through all points belonging to a document in batches.
  */
 export async function streamProcessChunks<T>(
-  prisma: PrismaClient,
+  _prisma: unknown,
   documentId: string,
-  processor: (chunks: Array<Pick<DocumentChunk, 'id' | 'content' | 'index'>>) => Promise<T[]>,
+  processor: (
+    chunks: Array<{ id: string; content: string; index: number }>
+  ) => Promise<T[]>,
   options: { batchSize?: number; onProgress?: (processed: number) => void } = {}
 ): Promise<T[]> {
   const { batchSize = 100, onProgress } = options;
   const results: T[] = [];
-  let offset = 0;
-  let hasMore = true;
+  let offset: string | undefined;
 
-  while (hasMore) {
-    const chunks = await prisma.documentChunk.findMany({
-      where: { documentId },
-      select: { id: true, content: true, index: true },
-      orderBy: { index: 'asc' },
-      skip: offset,
-      take: batchSize,
+  while (true) {
+    const scrollResult = await qdrant.scroll(COLLECTION_DOCUMENT_CHUNKS, {
+      filter: {
+        must: [{ key: 'documentId', match: { value: documentId } }],
+      },
+      limit: batchSize,
+      offset,
+      with_payload: true,
+      with_vector: false,
     });
 
-    if (chunks.length === 0) {
-      hasMore = false;
+    if (scrollResult.points.length === 0) {
       break;
     }
+
+    const chunks = scrollResult.points.map((point) => ({
+      id: String(point.id),
+      content: String(point.payload?.content ?? ''),
+      index: Number(point.payload?.index ?? 0),
+    }));
 
     const batchResults = await processor(chunks);
     results.push(...batchResults);
 
-    offset += chunks.length;
-    onProgress?.(offset);
+    onProgress?.(results.length);
 
-    if (chunks.length < batchSize) {
-      hasMore = false;
+    // Check if there are more pages
+    if (!scrollResult.next_page_offset) {
+      break;
     }
+    offset = String(scrollResult.next_page_offset);
   }
 
   return results;

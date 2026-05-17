@@ -39,22 +39,10 @@ export const GET = withApiAuth(
       const userId = session.user.id;
       const { id: documentId } = await params;
 
-      // Step 2: Fetch document with chunks
+      // Step 2: Fetch document with ingestion job
       const document = await prismaRead.document.findUnique({
         where: { id: documentId },
         include: {
-          chunks: {
-            orderBy: { index: 'asc' },
-            select: {
-              id: true,
-              content: true,
-              index: true,
-              start: true,
-              end: true,
-              page: true,
-              section: true,
-            },
-          },
           ingestionJob: {
             select: {
               status: true,
@@ -88,8 +76,15 @@ export const GET = withApiAuth(
         );
       }
 
-      // Step 4: Format response
+      // B2: Cache response for completed documents (reduce polling DB hits)
+      const cacheControl = document.status === 'COMPLETED'
+        ? 'private, max-age=30, stale-while-revalidate=60'
+        : 'no-cache';
+
+      // Step 4: Fetch chunk stats from Qdrant and format response
       const metadata = (document.metadata as Record<string, unknown>) || {};
+      const chunkCount = document.chunkCount;
+
       const formattedDocument = {
         id: document.id,
         name: document.name,
@@ -100,7 +95,7 @@ export const GET = withApiAuth(
         size: document.size,
         status: STATUS_MAP[document.status] || 'pending',
         progress: document.ingestionJob?.progress,
-        chunkCount: document.chunks.length,
+        chunkCount,
         createdAt: document.createdAt.toISOString(),
         updatedAt: document.updatedAt.toISOString(),
         content: document.content,
@@ -113,15 +108,7 @@ export const GET = withApiAuth(
           ocrConfidence: document.ocrConfidence,
           ocrLanguage: document.ocrLanguage,
         },
-        chunks: document.chunks.map((chunk) => ({
-          id: chunk.id,
-          index: chunk.index,
-          text: chunk.content,
-          start: chunk.start,
-          end: chunk.end,
-          page: chunk.page,
-          section: chunk.section,
-        })),
+        chunks: [],
         jobStatus: document.ingestionJob
           ? {
               status: document.ingestionJob.status,
@@ -135,6 +122,8 @@ export const GET = withApiAuth(
       return NextResponse.json({
         success: true,
         data: formattedDocument,
+      }, {
+        headers: { 'Cache-Control': cacheControl },
       });
     } catch (error) {
       return NextResponse.json(

@@ -79,9 +79,12 @@ const envSchema = z.object({
   // Ollama configuration
   OLLAMA_BASE_URL: z.string().optional(),
 
-  // Embedding configuration — dimensions must match the pgvector column in prisma/schema.prisma.
+  // Qdrant vector database
+  QDRANT_URL: z.string().url('QDRANT_URL must be a valid URL').optional().default('http://localhost:6333'),
+  QDRANT_API_KEY: z.string().optional(),
+
+  // Embedding configuration — dimensions must match the Qdrant collection vector size.
   // Default: 768 (Google Gemini text-embedding-004).
-  // Change only if you also run a migration to alter the vector column dimension.
   EMBEDDING_PROVIDER: z.enum(['google', 'openai', 'ollama']).default('google'),
   EMBEDDING_MODEL: z.string().optional(),
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(768),

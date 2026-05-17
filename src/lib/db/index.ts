@@ -12,8 +12,10 @@
 export { type PrismaClient, prisma, prismaRead } from './client';
 
 import type { Prisma } from '@/generated/prisma/client';
-import type { Chat, Document, DocumentChunk, IngestionJob, Message } from '@/types';
+import type { Chat, Document, IngestionJob, Message } from '@/types';
 import { prisma } from './client';
+import { searchSimilar as qdrantSearchSimilar, deleteByDocumentId } from '@/lib/qdrant';
+import { buildQdrantFilter } from '@/lib/qdrant/filters';
 
 // ---------------------------------------------------------------------------
 // Batch Operations
@@ -28,6 +30,7 @@ export {
   batchUpdateChunks,
   batchUpdateEmbeddings,
   type ChunkInsertData as BatchChunkInsertData,
+  type DocumentMetadata as BatchDocumentMetadata,
   findDuplicates,
   streamProcessChunks,
   validateChunks,
@@ -216,22 +219,12 @@ export async function getDocumentsByUserId(userId: string) {
   return prisma.document.findMany({
     where: { userId },
     orderBy: { createdAt: 'desc' },
-    include: {
-      _count: {
-        select: { chunks: true },
-      },
-    },
   });
 }
 
 export async function getDocumentById(id: string) {
   return prisma.document.findUnique({
     where: { id },
-    include: {
-      chunks: {
-        orderBy: { index: 'asc' },
-      },
-    },
   });
 }
 
@@ -292,73 +285,33 @@ export async function deleteDocument(id: string) {
 }
 
 // ============================================================================
-// Document Chunk Queries
+// Document Chunk Queries (backed by Qdrant)
 // ============================================================================
 
-/**
- * @deprecated Use VectorStore.addVectors or batchInsertChunks instead
- */
-export async function createDocumentChunks(
-  chunks: Array<{
-    documentId: string;
-    content: string;
-    index: number;
-    start: number;
-    end: number;
-    page?: number;
-    section?: string;
-    embedding?: number[];
-  }>
-): Promise<void> {
-  await prisma.documentChunk.createMany({
-    data: chunks.map((chunk) => ({
-      documentId: chunk.documentId,
-      content: chunk.content,
-      index: chunk.index,
-      start: chunk.start,
-      end: chunk.end,
-      page: chunk.page,
-      section: chunk.section,
-    })),
-  });
-}
-
-/**
- * @deprecated Use VectorStore.similaritySearch instead
- */
 export async function searchSimilarChunks(
   embedding: number[],
   userId: string,
   limit = 5,
   threshold = 0.7
-): Promise<DocumentChunk[]> {
-  const vectorStr = `[${embedding.join(',')}]`;
-  const result = await prisma.$queryRawUnsafe<DocumentChunk[]>(
-    `SELECT
-      dc.id,
-      dc."documentId",
-      dc.content,
-      dc.index,
-      dc.start,
-      dc.end,
-      dc.page,
-      dc.section,
-      dc."createdAt",
-      1 - (dc.embedding <=> $1::vector) as similarity
-    FROM document_chunks dc
-    JOIN documents d ON dc."documentId" = d.id
-    WHERE d."userId" = $2
-      AND d.status = 'COMPLETED'
-      AND 1 - (dc.embedding <=> $1::vector) > $3
-    ORDER BY dc.embedding <=> $1::vector
-    LIMIT $4`,
-    vectorStr,
-    userId,
-    threshold,
-    limit
-  );
+) {
+  const filter = buildQdrantFilter({ userId });
+  const results = await qdrantSearchSimilar(embedding, {
+    filter,
+    topK: limit,
+    minScore: threshold,
+  });
 
-  return result;
+  return results.map((r) => ({
+    id: String(r.id),
+    documentId: (r.payload as Record<string, unknown>)?.documentId ?? '',
+    content: (r.payload as Record<string, unknown>)?.content ?? '',
+    index: (r.payload as Record<string, unknown>)?.index ?? 0,
+    score: r.score,
+  }));
+}
+
+export async function deleteDocumentChunks(documentId: string): Promise<number> {
+  return deleteByDocumentId(documentId);
 }
 
 // ============================================================================

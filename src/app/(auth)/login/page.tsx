@@ -3,10 +3,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion, type Variants } from 'framer-motion';
 import { AlertTriangle, Github, Loader2, Mail } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -60,6 +61,14 @@ const itemVariants: Variants = {
 };
 
 export default function LoginPage(): React.ReactElement {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent(): React.ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/chat';
@@ -455,8 +464,14 @@ function SSOLoginButton({
       {isLoading ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : workspaceLogo ? (
-        // biome-ignore lint/performance/noImgElement: External dynamic image
-        <img src={workspaceLogo} alt="Workspace logo" className="mr-2 h-4 w-4 object-contain" />
+        <Image
+          src={workspaceLogo}
+          alt="Workspace logo"
+          width={16}
+          height={16}
+          className="mr-2 h-4 w-4 object-contain"
+          unoptimized
+        />
       ) : (
         <svg
           className="mr-2 h-5 w-5 opacity-70"
@@ -473,5 +488,19 @@ function SSOLoginButton({
       )}
       {workspaceName ? `Sign in with ${workspaceName}` : 'Sign in with SSO'}
     </Button>
+  );
+}
+
+function LoginSkeleton(): React.ReactElement {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="text-center">
+        <div className="h-8 w-48 mx-auto bg-muted rounded" />
+        <div className="h-4 w-64 mx-auto mt-2 bg-muted rounded" />
+      </div>
+      <div className="h-10 w-full bg-muted rounded" />
+      <div className="h-10 w-full bg-muted rounded" />
+      <div className="h-10 w-full bg-muted rounded" />
+    </div>
   );
 }

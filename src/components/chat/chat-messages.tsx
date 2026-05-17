@@ -1,6 +1,5 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useChatContext } from './chat-context';
 import type { Source } from './citations';
@@ -115,7 +114,7 @@ export const ChatMessages = memo(function ChatMessages({
     >
       {/* Scrollable messages area with overscroll containment */}
       <div
-        className="flex-1 overflow-y-auto scrollbar-thin overscroll-y-contain"
+        className="flex-1 min-h-0 overflow-y-auto scrollbar-thin overscroll-y-contain"
         style={{ overscrollBehaviorY: 'contain' } as React.CSSProperties}
         aria-busy={showLoading || isStreaming}
       >
@@ -174,27 +173,22 @@ export const ChatMessages = memo(function ChatMessages({
       </div>
 
       {/* ── Desktop inline sources panel (side panel, hidden on mobile) ── */}
-      <AnimatePresence>
-        {!state.isSourcesInlineCollapsed && (
-          <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 340, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="hidden md:block border-l border-white/10 bg-white/5 backdrop-blur-sm z-20 overflow-y-auto"
-          >
-            <InlineSourcesPanel
-              sources={sources}
-              isCollapsed={state.isSourcesInlineCollapsed}
-              onToggle={() => dispatch({ type: 'TOGGLE_SOURCES_INLINE' })}
-              onSourceClick={(source) => {
-                dispatch({ type: 'SET_SELECTED_SOURCE', source });
-                dispatch({ type: 'SET_SOURCES_PANEL_OPEN', open: true });
-              }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {!state.isSourcesInlineCollapsed && (
+        <div
+          className="hidden md:block border-l border-white/10 bg-white/5 backdrop-blur-sm z-20 overflow-y-auto transition-all duration-200 ease-out"
+          style={{ width: 340 }}
+        >
+          <InlineSourcesPanel
+            sources={sources}
+            isCollapsed={state.isSourcesInlineCollapsed}
+            onToggle={() => dispatch({ type: 'TOGGLE_SOURCES_INLINE' })}
+            onSourceClick={(source) => {
+              dispatch({ type: 'SET_SELECTED_SOURCE', source });
+              dispatch({ type: 'SET_SOURCES_PANEL_OPEN', open: true });
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 });

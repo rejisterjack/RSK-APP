@@ -142,7 +142,7 @@ The Controller provides general written authorization for the Processor to engag
 5. **OpenAI** -- AI language model inference and embeddings
 6. **Google (Gemini)** -- AI language model inference and embeddings
 7. **GitHub (Microsoft)** -- OAuth authentication provider
-8. **Database hosting provider** (Neon, Supabase, or Railway as configured)
+8. **Database hosting provider** (Prisma Postgres, Supabase, or Railway as configured)
 
 ### 7.2 Notification of Changes
 

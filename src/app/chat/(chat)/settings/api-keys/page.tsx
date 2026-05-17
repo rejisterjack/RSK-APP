@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { Suspense, useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
 import { CreateKeyDialog } from '@/components/api-keys/create-key-dialog';
@@ -127,6 +127,14 @@ interface ApiKey {
 }
 
 export default function ApiKeysSettingsPage(): React.ReactElement {
+  return (
+    <Suspense fallback={<ApiKeysSkeleton />}>
+      <ApiKeysContent />
+    </Suspense>
+  );
+}
+
+function ApiKeysContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const workspaceId = searchParams.get('workspaceId') || 'default';
 
@@ -529,6 +537,22 @@ export default function ApiKeysSettingsPage(): React.ReactElement {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function ApiKeysSkeleton(): React.ReactElement {
+  return (
+    <div className="container mx-auto max-w-6xl py-8 px-4">
+      <div className="mb-8">
+        <Skeleton className="h-8 w-48 mb-2" />
+        <Skeleton className="h-4 w-80" />
+      </div>
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
     </div>
   );
 }

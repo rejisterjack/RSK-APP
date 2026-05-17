@@ -71,13 +71,16 @@ export async function searchSimilarChunks(
   userId: string,
   config: Partial<RAGConfig> = {}
 ): Promise<VectorSearchResult[]> {
+  // Collection initialization is handled at app startup, not on every search.
+  // See src/lib/db/init.ts — ensureDocumentChunksCollection runs once per cold start.
+
   const vectorStore = createVectorStore(prisma);
 
   const searchOptions: SearchOptions = {
     userId,
     workspaceId: config.workspaceId,
     topK: config.topK ?? 5,
-    minScore: config.similarityThreshold ?? 0.7,
+    minScore: config.similarityThreshold ?? 0.5,
     searchType: 'cosine',
     filter: config.filter,
   };
@@ -142,19 +145,20 @@ export async function searchSimilarChunksByDocuments(
 export async function retrieveSources(
   query: string,
   userId: string,
-  config: Partial<RAGConfig> = {}
+  config: Partial<RAGConfig> & { precomputedEmbedding?: number[] } = {}
 ): Promise<Source[]> {
   return tracing.retrieveSources(query, config.topK ?? 5, async () => {
-    // Generate query embedding — if this fails (bad API key, quota), skip retrieval
+    // Use pre-computed embedding if provided (avoids redundant API call when caller already generated it)
+    // Otherwise generate query embedding — if this fails (bad API key, quota), skip retrieval
     let queryEmbedding: number[];
-    try {
-      queryEmbedding = await generateQueryEmbedding(query);
-    } catch (error) {
-      console.warn(
-        '[RAG] Query embedding generation failed:',
-        error instanceof Error ? error.message : String(error)
-      );
-      return [];
+    if (config.precomputedEmbedding) {
+      queryEmbedding = config.precomputedEmbedding;
+    } else {
+      try {
+        queryEmbedding = await generateQueryEmbedding(query);
+      } catch (_error) {
+        return [];
+      }
     }
 
     // Check semantic cache first
@@ -167,12 +171,12 @@ export async function retrieveSources(
     let results: VectorSearchResult[];
     try {
       results = await searchSimilarChunks(queryEmbedding, userId, config);
-    } catch (error) {
-      console.warn(
-        '[RAG] Vector search failed:',
-        error instanceof Error ? error.message : String(error)
-      );
+    } catch (_error) {
       return [];
+    }
+
+    if (results.length === 0) {
+    } else {
     }
 
     // Map to Source type
@@ -380,11 +384,10 @@ export async function getSourceDocumentStats(sources: Source[]): Promise<
 > {
   const documentIds = [...new Set(sources.map((s) => s.metadata.documentId))];
 
+  // Get document names and chunk counts from Prisma (stored during ingestion)
   const stats = await prisma.document.findMany({
     where: { id: { in: documentIds } },
-    include: {
-      _count: { select: { chunks: true } },
-    },
+    select: { id: true, name: true, chunkCount: true },
   });
 
   const matchedCounts = new Map<string, number>();
@@ -398,7 +401,7 @@ export async function getSourceDocumentStats(sources: Source[]): Promise<
   return stats.map((doc) => ({
     documentId: doc.id,
     documentName: doc.name,
-    totalChunks: doc._count.chunks,
+    totalChunks: doc.chunkCount,
     matchedChunks: matchedCounts.get(doc.id) ?? 0,
   }));
 }
@@ -419,39 +422,28 @@ export async function hybridSearch(
     topK: (config.topK ?? 5) * 2, // Get more for fusion
   });
 
-  // Get full-text search results using Prisma
-  const textResults = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      documentId: string;
-      content: string;
-      index: number;
-      page: number | null;
-      section: string | null;
-      documentName: string;
-      textScore: number;
-    }>
-  >`
-    SELECT
-      dc.id,
-      dc."documentId" as "documentId",
-      dc.content,
-      dc.index,
-      dc.page,
-      dc.section,
-      d.name as "documentName",
-      ts_rank_cd(
-        to_tsvector('english', dc.content),
-        plainto_tsquery('english', ${query})
-      ) as "textScore"
-    FROM document_chunks dc
-    JOIN documents d ON dc."documentId" = d.id
-    WHERE d."userId" = ${userId}
-      AND d.status = 'COMPLETED'
-      AND to_tsvector('english', dc.content) @@ plainto_tsquery('english', ${query})
-    ORDER BY "textScore" DESC
-    LIMIT ${(config.topK ?? 5) * 2}
-  `;
+  // Get full-text search results using Qdrant keyword search
+  const { searchKeyword: qdrantKeywordSearch } = await import('@/lib/qdrant');
+  const { buildQdrantFilter: buildFilter } = await import('@/lib/qdrant/filters');
+  const keywordFilter = buildFilter({ userId });
+  const keywordResults = await qdrantKeywordSearch(query, {
+    filter: keywordFilter,
+    topK: (config.topK ?? 5) * 2,
+  });
+
+  const textResults = keywordResults.map((point) => {
+    const p = point.payload as Record<string, unknown>;
+    return {
+      id: String(point.id),
+      documentId: (p?.documentId as string) ?? '',
+      content: (p?.content as string) ?? '',
+      index: (p?.index as number) ?? 0,
+      page: (p?.page as number | null) ?? null,
+      section: (p?.section as string | null) ?? null,
+      documentName: (p?.documentName as string) ?? '',
+      textScore: point.score ?? 0,
+    };
+  });
 
   // Fuse results using Reciprocal Rank Fusion (RRF)
   const k = 60; // RRF constant

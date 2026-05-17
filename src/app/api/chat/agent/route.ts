@@ -58,6 +58,8 @@ import {
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 import type { RAGConfig } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 const defaultConfig: RAGConfig = {
   chunkSize: 1000,
   chunkOverlap: 200,

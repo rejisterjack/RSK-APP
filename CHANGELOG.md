@@ -83,7 +83,7 @@ This is the first stable release of `rag-starter-kit` — a production-ready RAG
 - Health check endpoint at `/api/health`
 
 **Developer Experience**
-- Full managed cloud services stack — Neon PostgreSQL, Upstash Redis, Cloudinary, Inngest all connected
+- Full managed cloud services stack — Prisma Postgres, Upstash Redis, Cloudinary, Inngest all connected
 - Hot reload in local development
 - Seed script with sample documents for immediate testing
 - Vitest unit tests with coverage reporting
@@ -98,7 +98,7 @@ This is the first stable release of `rag-starter-kit` — a production-ready RAG
 - Automated migrations
 
 **Infrastructure**
-- Managed cloud services — Neon PostgreSQL, Upstash Redis, Cloudinary storage, Inngest background jobs
+- Managed cloud services — Prisma Postgres, Upstash Redis, Cloudinary storage, Inngest background jobs
 - Environment variable validation on startup
 - Complete `.env.example` with documentation for every variable
 

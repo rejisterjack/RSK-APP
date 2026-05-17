@@ -1,6 +1,3 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import { ArrowRight, Bot, FileText, MessageSquare, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -49,13 +46,7 @@ export function HowItWorks(): React.ReactElement {
       <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center mb-20"
-        >
+        <div className="text-center mb-20 animate-in fade-in slide-in-from-bottom-8 duration-700">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary mb-6 text-sm font-medium border border-primary/20">
             <MessageSquare className="h-4 w-4" />
             <span>How It Works</span>
@@ -69,7 +60,7 @@ export function HowItWorks(): React.ReactElement {
             No Python, no config hell, no infrastructure management. Upload your content, ask
             questions, and own everything.
           </p>
-        </motion.div>
+        </div>
 
         {/* Steps */}
         <div className="grid gap-6 lg:grid-cols-3 relative">
@@ -77,13 +68,10 @@ export function HowItWorks(): React.ReactElement {
           <div className="hidden lg:block absolute top-16 left-[33%] right-[33%] h-px bg-gradient-to-r from-border/30 via-primary/30 to-border/30 z-0" />
 
           {steps.map((step, i) => (
-            <motion.div
+            <div
               key={step.step}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-50px' }}
-              transition={{ duration: 0.6, delay: i * 0.15, ease: [0.16, 1, 0.3, 1] }}
-              className="relative z-10"
+              className="relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700"
+              style={{ animationDelay: `${i * 150}ms` }}
             >
               <div
                 className={`glass-panel rounded-2xl p-8 border ${step.border} bg-gradient-to-b ${step.color} h-full flex flex-col`}
@@ -112,18 +100,12 @@ export function HowItWorks(): React.ReactElement {
                   {step.detail}
                 </div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
 
         {/* Bottom CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="mt-16 text-center"
-        >
+        <div className="mt-16 text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
           <Button
             asChild
             size="lg"
@@ -134,7 +116,7 @@ export function HowItWorks(): React.ReactElement {
               <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
             </Link>
           </Button>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

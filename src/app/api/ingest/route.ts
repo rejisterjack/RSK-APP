@@ -720,7 +720,6 @@ export const GET = withApiAuth(async (req: NextRequest, session) => {
       where: { id: documentId },
       include: {
         ingestionJob: true,
-        chunks: { select: { id: true } },
       },
     });
 
@@ -785,7 +784,7 @@ export const GET = withApiAuth(async (req: NextRequest, session) => {
       type: document.contentType,
       status: stage,
       progress,
-      chunkCount: document.chunks.length,
+      chunkCount: 0,
       error,
       errorCategory: job?.errorCategory ?? undefined,
       metadata: {
@@ -878,10 +877,9 @@ export const DELETE = withApiAuth(async (req: NextRequest, session) => {
 
     // Can only cancel pending or processing documents
     if (document.status !== 'PENDING' && document.status !== 'PROCESSING') {
-      // Explicitly delete chunks before document for safety
-      const chunkResult = await prisma.documentChunk.deleteMany({
-        where: { documentId },
-      });
+      // Delete chunks from Qdrant
+      const { deleteByDocumentId } = await import('@/lib/qdrant');
+      const chunksRemoved = await deleteByDocumentId(documentId);
 
       // Delete the document record
       await prisma.document.delete({
@@ -893,7 +891,7 @@ export const DELETE = withApiAuth(async (req: NextRequest, session) => {
         data: {
           documentId,
           status: 'deleted',
-          chunksRemoved: chunkResult.count,
+          chunksRemoved,
           message: 'Document and associated data deleted successfully',
         },
       });

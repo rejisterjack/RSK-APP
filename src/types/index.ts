@@ -99,7 +99,6 @@ export interface DocumentChunk {
   id: string;
   documentId: string;
   content: string;
-  embedding: number[];
   metadata: ChunkMetadata;
   index: number;
 }

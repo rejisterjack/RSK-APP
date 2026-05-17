@@ -6,23 +6,10 @@
  * 2. Local development starts with data to test against
  * 3. CI/CD environments have reproducible baseline state
  *
- * Run: pnpm db:seed
+ * Run: bun run db:seed
+ *
+ * Note: Bun auto-loads .env files before script execution.
  */
-
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
-
-// Load .env manually (dotenv is not directly accessible in pnpm hoisting)
-const envPath = resolve(import.meta.dirname, '../.env');
-const envContent = readFileSync(envPath, 'utf-8');
-for (const line of envContent.split('\n')) {
-  const match = line.match(/^([^#=]+)=(.*)$/);
-  if (match && !match[1].startsWith('#')) {
-    const key = match[1].trim();
-    const val = match[2].trim().replace(/^"(.*)"$/, '$1');
-    if (!process.env[key]) process.env[key] = val;
-  }
-}
 
 import { hash } from 'bcryptjs';
 import { PrismaClient } from '../src/generated/prisma/client';
@@ -228,10 +215,10 @@ A: Any user with role=ADMIN in the database can access /admin. The seed script c
 A: Click the "Deploy to Vercel" button in the README, or run: vercel --prod. You'll need to set all environment variables in the Vercel dashboard.
 
 **Q: Do I need Docker?**
-A: No. The project uses managed cloud services (Neon PostgreSQL, Upstash Redis, Cloudinary, Inngest cloud) so you never need to manage containers in production. Docker is available for local development only.
+A: No. The project uses managed cloud services (Prisma Postgres, Upstash Redis, Cloudinary, Inngest cloud) so you never need to manage containers in production. Docker is available for local development only.
 
 **Q: How do I back up my data?**
-A: Your data lives in your own PostgreSQL database (e.g., Neon). Use pg_dump or your host's backup facility. Documents are in your Cloudinary account.
+A: Your data lives in your own Prisma Postgres database. Use pg_dump or your host's backup facility. Documents are in your Cloudinary account.
 `,
     size: 3200,
   },
@@ -463,46 +450,50 @@ async function main() {
       // Split document into chunks matching the default RAG config
       const textChunks = chunkText(doc.content, 1000, 200);
 
+      const chunkData: Array<{
+        documentId: string;
+        content: string;
+        embedding: number[];
+        index: number;
+        start: number;
+        end: number;
+      }> = [];
+
       for (let i = 0; i < textChunks.length; i++) {
         const chunkContent = textChunks[i]!;
-        const start = i * 800;
-        const end = Math.min(start + 1000, doc.content.length);
+        const startPos = i * 800;
+        const endPos = Math.min(startPos + 1000, doc.content.length);
 
-        let embeddingValue: string | null = null;
+        let embedding: number[] = [];
 
         if (embeddingProvider) {
           try {
-            const vector = await embeddingProvider.embedQuery(chunkContent);
-            // Format as pgvector literal: '[0.1,0.2,...]'
-            embeddingValue = `[${vector.join(',')}]`;
+            embedding = await embeddingProvider.embedQuery(chunkContent);
           } catch {
-            console.log(`   ⚠️  Embedding failed for chunk ${i}, creating without vector`);
+            console.log(`   ⚠️  Embedding failed for chunk ${i}, skipping chunk`);
           }
         }
 
-        if (embeddingValue) {
-          // Use raw SQL to insert with the vector embedding
-          await prisma.$executeRawUnsafe(
-            `INSERT INTO document_chunks (id, "documentId", content, index, start, "end", embedding, "createdAt")
-             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6::vector, NOW())`,
-            document.id,
-            chunkContent,
-            i,
-            start,
-            end,
-            embeddingValue
-          );
-        } else {
-          await prisma.documentChunk.create({
-            data: {
-              documentId: document.id,
-              content: chunkContent,
-              index: i,
-              start,
-              end,
-            },
+        if (embedding.length > 0) {
+          chunkData.push({
+            documentId: document.id,
+            content: chunkContent,
+            embedding,
+            index: i,
+            start: startPos,
+            end: endPos,
           });
         }
+      }
+
+      if (chunkData.length > 0) {
+        const { upsertChunks } = await import('../src/lib/qdrant');
+        await upsertChunks(chunkData, {
+          userId: adminUser.id,
+          workspaceId: workspace.id,
+          documentName: doc.name,
+          documentType: doc.contentType,
+        });
       }
 
       console.log(`✅ Document: ${doc.name} (${textChunks.length} chunks)`);

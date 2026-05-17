@@ -6,10 +6,10 @@ This document covers backup strategies, recovery procedures, and verification st
 
 ## Backup Strategy by Provider
 
-### Neon PostgreSQL
-- **Automatic backups**: Neon performs continuous WAL backups with point-in-time recovery (PITR) up to 7 days on free tier, 30 days on Pro
-- **Manual branch**: Create a branch as a snapshot: `neon branches create --name backup-$(date +%Y%m%d)`
-- **Export**: `pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql`
+### Prisma Postgres (Accelerate)
+- **Automatic backups**: Managed by Prisma with point-in-time recovery
+- **Export**: `pg_dump $DIRECT_URL > backup_$(date +%Y%m%d).sql`
+- **Console**: Manage backups at [console.prisma.io](https://console.prisma.io)
 
 ### Supabase
 - **Automatic backups**: Daily snapshots on Pro plan, no automatic backups on free tier
@@ -55,16 +55,16 @@ npx tsx scripts/backup-verify.ts
 # 5. Redeploy or restart the application
 ```
 
-### Point-in-Time Recovery (Neon)
+### Point-in-Time Recovery (Prisma Postgres)
 
 ```bash
-# 1. Create a branch at the desired point in time
-neon branches create --name recovery-branch --timestamp "2025-01-15T10:00:00Z"
+# 1. Use Prisma Console to restore to a point in time
+#    or restore from a pg_dump backup:
+gunzip -c backup_YYYYMMDD.sql.gz | psql $DIRECT_URL
 
-# 2. Get the connection string for the recovery branch
-neon connection-string recovery-branch
+# 2. Update DATABASE_URL / DIRECT_URL in your deployment environment if needed
 
-# 3. Update DATABASE_URL and redeploy
+# 3. Redeploy or restart the application
 
 # 4. Verify data integrity
 npx tsx scripts/backup-verify.ts

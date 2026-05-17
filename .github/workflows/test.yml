@@ -20,25 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run TypeScript check
-        run: pnpm type-check
+        run: bun run type-check
 
   lint:
     name: Lint
@@ -46,22 +39,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Run ESLint
-        run: pnpm lint
+        run: bun run lint
 
   # ==========================================
   # Unit & Integration Tests
@@ -72,25 +58,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run unit tests
-        run: pnpm test:unit --reporter=verbose
+        run: bun run test:unit --reporter=verbose
 
   integration-tests:
     name: Integration Tests
@@ -113,28 +92,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run database migrations
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ragdb_test?schema=public
           POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/ragdb_test?schema=public
-        run: pnpm db:migrate:prod
+        run: bun run db:migrate:prod
 
       - name: Run integration tests
         env:
@@ -143,7 +115,7 @@ jobs:
           NODE_ENV: test
           NEXTAUTH_SECRET: test-secret-key-for-ci-only
           NEXTAUTH_URL: http://localhost:3000
-        run: pnpm test:integration --reporter=verbose
+        run: bun run test:integration --reporter=verbose
 
   # ==========================================
   # Coverage
@@ -154,25 +126,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run tests with coverage
-        run: pnpm test:coverage
+        run: bun run test:coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -208,30 +173,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Setup database
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ragdb_test?schema=public
-        run: pnpm db:migrate:prod
+        run: bun run db:migrate:prod
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps
+        run: bunx playwright install --with-deps
 
       - name: Run E2E tests
         env:
@@ -241,7 +199,7 @@ jobs:
           REDIS_URL: redis://localhost:6379
           NEXTAUTH_SECRET: test-secret-key-for-ci-only
           NEXTAUTH_URL: http://localhost:3000
-        run: pnpm test:e2e
+        run: bun run test:e2e
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
@@ -261,27 +219,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run RAG evaluation
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: pnpm test:evaluation
+        run: bun run test:evaluation
 
       - name: Upload evaluation results
         uses: actions/upload-artifact@v4
@@ -299,24 +250,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
+          bun-version: "1.2"
 
       - name: Install dependencies
-        run: pnpm install
+        run: bun install
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Build application
         env:
           NODE_ENV: production
-        run: pnpm build
+        run: bun run build

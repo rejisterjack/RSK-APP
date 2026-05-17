@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { canManageWorkspace } from '@/lib/workspace/permissions';
 
+export const dynamic = 'force-dynamic';
+
 // Valid experiment types and statuses
 const VALID_EXPERIMENT_TYPES = ['prompt', 'model', 'retrieval', 'ui'] as const;
 const VALID_EXPERIMENT_STATUSES = ['DRAFT', 'RUNNING', 'PAUSED', 'COMPLETED'] as const;

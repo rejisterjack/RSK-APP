@@ -96,14 +96,14 @@ pnpm install`}
                   <td className="px-4 py-2 text-muted-foreground">
                     Create a free database at{' '}
                     <a
-                      href="https://console.neon.tech"
+                      href="https://console.prisma.io"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline"
                     >
-                      console.neon.tech
+                      console.prisma.io
                     </a>
-                    . Copy the pooled connection string.
+                    . Copy the Accelerate connection string.
                   </td>
                 </tr>
                 <tr>
@@ -174,13 +174,10 @@ pnpm install`}
             Set Up the Database
           </h2>
           <p className="text-muted-foreground mb-3">
-            Enable the pgvector extension on your Neon database, then run the Prisma migrations:
+            Run the Prisma migrations to set up your database:
           </p>
           <CodeBlock title="Terminal">
-            {`# Enable pgvector (run in Neon SQL editor or psql)
-# CREATE EXTENSION IF NOT EXISTS vector;
-
-# Run database migrations
+            {`# Run database migrations
 pnpm db:migrate
 
 # Generate the Prisma client

@@ -88,7 +88,7 @@ export const DocumentList = memo(function DocumentList({
   return (
     <section
       className={cn(
-        'flex h-full flex-col border-r border-border/50 bg-background/60 shadow-xl backdrop-blur-xl',
+        'flex h-full flex-col bg-background/60 shadow-xl backdrop-blur-xl',
         className
       )}
       aria-label="Document library"
@@ -183,7 +183,7 @@ export const DocumentList = memo(function DocumentList({
               <Button
                 variant="ghost"
                 size="icon"
-                className="min-h-[40px] min-w-[40px] h-9 w-9 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                 onClick={onDeleteAll}
                 aria-label="Delete all documents"
               >
@@ -192,7 +192,7 @@ export const DocumentList = memo(function DocumentList({
             )}
             <Button
               size="sm"
-              className="gap-2 min-h-[40px] h-auto rounded-xl shadow-md shadow-primary/20 px-4 bg-primary/90 hover:bg-primary"
+              className="gap-2 h-9 rounded-xl shadow-md shadow-primary/20 px-3 bg-primary/90 hover:bg-primary"
               onClick={onUpload}
             >
               <Upload className="h-4 w-4" />
@@ -230,7 +230,7 @@ export const DocumentList = memo(function DocumentList({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-4 rounded-xl border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors text-xs min-h-[44px] px-4"
+                  className="mt-4 rounded-xl border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors text-xs h-9 px-4"
                   onClick={onUpload}
                 >
                   <Upload className="mr-1.5 h-3.5 w-3.5" />

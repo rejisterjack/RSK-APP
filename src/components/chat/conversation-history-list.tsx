@@ -302,16 +302,23 @@ export function ConversationHistoryList({
               const isConfirmingDelete = conversation.id === deleteConfirmId;
 
               return (
-                <button
-                  type="button"
+                <div
                   key={conversation.id}
+                  role="button"
+                  tabIndex={0}
                   className={cn(
-                    'group relative flex items-start gap-3 rounded-xl px-3 py-3 transition-colors text-left w-full',
+                    'group relative flex items-start gap-3 rounded-xl px-3 py-3 transition-colors text-left w-full cursor-pointer',
                     isCurrentChat
                       ? 'bg-primary/10 border border-primary/20'
                       : 'hover:bg-muted/50 border border-transparent'
                   )}
                   onClick={() => handleSelect(conversation.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelect(conversation.id);
+                    }
+                  }}
                 >
                   {/* Icon */}
                   <div
@@ -408,7 +415,7 @@ export function ConversationHistoryList({
                       </Button>
                     </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>

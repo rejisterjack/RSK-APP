@@ -1,0 +1,21 @@
+# Bun configuration
+# https://bun.sh/docs/runtime/bunfig
+
+[install]
+peer = false
+optional = true
+
+[test]
+# Preload setup file before tests
+preload = ["./tests/setup.ts"]
+
+# Coverage
+coverage = true
+coverageReporter = ["text", "json", "lcov"]
+coverageDir = "coverage"
+
+# Test timeout (milliseconds)
+testTimeout = 10000
+
+# Include/exclude patterns
+# Bun test defaults match tests/**/*.{test,spec}.{js,ts} and src/**/*.{test,spec}.{js,ts}

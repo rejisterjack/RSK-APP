@@ -8,6 +8,8 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
+export const dynamic = 'force-dynamic';
+
 const VALID_TYPES = ['chat', 'document', 'message', 'workspace'] as const;
 type SearchType = (typeof VALID_TYPES)[number];
 

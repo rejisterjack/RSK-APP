@@ -242,8 +242,8 @@ export function DocumentCard({
             )}
 
             {document.status === 'error' && document.errorMessage && (
-              <div className="space-y-1" role="alert" aria-live="assertive">
-                <div className="flex items-start gap-1.5">
+              <div className="space-y-1 min-w-0" role="alert" aria-live="assertive">
+                <div className="flex items-start gap-1.5 min-w-0">
                   {document.errorCategory && document.errorCategory !== 'UNKNOWN' && (
                     <Badge
                       variant="outline"

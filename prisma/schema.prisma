@@ -184,12 +184,12 @@ model Document {
   ocrError            String?
   userId              String
   workspaceId         String?
+  chunkCount          Int                              @default(0)
   version             Int                              @default(1)
   createdAt           DateTime                         @default(now())
   updatedAt           DateTime                         @updatedAt
   storageKey          String?
   storageUrl          String?
-  chunks              DocumentChunk[]
   collections         DocumentCollectionsOnDocuments[]
   images              DocumentImage[]
   tags                DocumentTagsOnDocuments[]
@@ -202,27 +202,10 @@ model Document {
   @@index([status])
   @@index([workspaceId, status])
   @@index([workspaceId, createdAt])
+  @@index([workspaceId, status, createdAt])
   @@index([ocrProcessed])
   @@index([ocrConfidence])
   @@map("documents")
-}
-
-model DocumentChunk {
-  id         String                 @id @default(cuid())
-  documentId String
-  content    String
-  index      Int
-  start      Int
-  end        Int
-  page       Int?
-  section    String?
-  embedding  Unsupported("vector")?
-  createdAt  DateTime               @default(now())
-  document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  images     DocumentImage[]
-
-  @@index([documentId])
-  @@map("document_chunks")
 }
 
 model IngestionJob {
@@ -268,29 +251,12 @@ model DocumentImage {
   status              ImageStatus    @default(PENDING)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
-  chunk               DocumentChunk? @relation(fields: [chunkId], references: [id])
   document            Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
-  @@index([chunkId])
   @@index([status])
   @@index([ocrConfidence])
   @@map("document_images")
-}
-
-model ImageEmbedding {
-  id          String                @id @default(cuid())
-  imageId     String?
-  imageUrl    String?
-  contentHash String                @unique
-  embedding   Unsupported("vector")
-  model       String                @default("Xenova/clip-vit-base-patch32")
-  dimensions  Int                   @default(512)
-  createdAt   DateTime              @default(now())
-
-  @@index([imageId])
-  @@index([contentHash])
-  @@map("image_embeddings")
 }
 
 model Chat {
@@ -312,6 +278,7 @@ model Chat {
   @@index([userId])
   @@index([workspaceId])
   @@index([userId, workspaceId])
+  @@index([userId, updatedAt])
   @@map("chats")
 }
 

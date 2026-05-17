@@ -9,6 +9,7 @@
 
 import { AlertCircle, MessageSquare, RefreshCw } from 'lucide-react';
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { logger } from '@/lib/logger';
@@ -60,21 +61,15 @@ export default function ChatError({ error, reset }: ChatErrorProps) {
             </Button>
 
             {isAuthError ? (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => (window.location.href = '/login')}
-              >
-                Sign In
+              <Button variant="outline" className="w-full" asChild>
+                <Link href="/login">Sign In</Link>
               </Button>
             ) : (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => (window.location.href = '/chat')}
-              >
-                <MessageSquare className="mr-2 h-4 w-4" />
-                New Conversation
+              <Button variant="outline" className="w-full" asChild>
+                <Link href="/chat">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  New Conversation
+                </Link>
               </Button>
             )}
           </div>

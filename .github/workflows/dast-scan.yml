@@ -22,8 +22,7 @@ on:
         default: 'http://localhost:3000'
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '10'
+  BUN_VERSION: "1.2"
 
 jobs:
   # ==========================================
@@ -55,30 +54,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run migrations
-        run: pnpm db:migrate
+        run: bun run db:migrate
         env:
           POSTGRES_PRISMA_URL: postgres://postgres:postgres@localhost:5432/ragdb_test
 
       - name: Build application
-        run: pnpm build
+        run: bun run build
         env:
           POSTGRES_PRISMA_URL: postgres://postgres:postgres@localhost:5432/ragdb_test
           NEXTAUTH_SECRET: test-secret-for-dast-only
@@ -87,7 +79,7 @@ jobs:
 
       - name: Start application in background
         run: |
-          pnpm start &
+          bun run start &
           sleep 10
           curl --retry 10 --retry-delay 5 --fail http://localhost:3000/api/health || exit 1
         env:
@@ -200,9 +192,9 @@ jobs:
              [[ "${{ needs.zap-full.result }}" == "failure" ]] || \
              [[ "${{ needs.zap-api.result }}" == "failure" ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **Vulnerabilities detected!** Review the ZAP reports for details." >> $GITHUB_STEP_SUMMARY
+            echo "**Vulnerabilities detected!** Review the ZAP reports for details." >> $GITHUB_STEP_SUMMARY
             exit 1
           else
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ **All DAST scans passed!**" >> $GITHUB_STEP_SUMMARY
+            echo "**All DAST scans passed!**" >> $GITHUB_STEP_SUMMARY
           fi

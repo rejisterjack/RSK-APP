@@ -8,17 +8,7 @@ interface GlobalErrorProps {
   reset: () => void;
 }
 
-/**
- * Report error to external services (Sentry, LogRocket, etc.)
- * This is the central hook for production error capture.
- *
- * To integrate Sentry:
- *   1. pnpm add @sentry/nextjs
- *   2. Run `npx @sentry/wizard@latest -i nextjs`
- *   3. Replace the console.error below with Sentry.captureException(error)
- */
 function reportError(error: Error & { digest?: string }): void {
-  // Report to Sentry
   if (process.env.SENTRY_DSN) {
     Sentry.captureException(error, {
       tags: { digest: error.digest },
@@ -26,19 +16,17 @@ function reportError(error: Error & { digest?: string }): void {
     });
   }
 
-  // Fallback: custom error reporting endpoint for environments without Sentry
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
     try {
       const payload = {
         message: error.message,
         digest: error.digest,
-        stack: error.stack?.slice(0, 2000), // Truncate large stacks
+        stack: error.stack?.slice(0, 2000),
         url: window.location.href,
         userAgent: navigator.userAgent,
         timestamp: new Date().toISOString(),
       };
 
-      // Use sendBeacon for reliability during page unload/crash
       if (navigator.sendBeacon) {
         navigator.sendBeacon(
           '/api/error-report',
@@ -50,9 +38,7 @@ function reportError(error: Error & { digest?: string }): void {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
           keepalive: true,
-        }).catch(() => {
-          // Silently fail — we're already in an error state
-        });
+        }).catch(() => {});
       }
     } catch {
       // Don't throw from the error reporter
@@ -147,10 +133,10 @@ export default function GlobalError({ error, reset }: GlobalErrorProps): React.R
               >
                 Try Again
               </button>
-              <button
-                type="button"
-                onClick={() => (window.location.href = '/')}
+              <a
+                href="/"
                 style={{
+                  display: 'inline-block',
                   padding: '0.625rem 1.5rem',
                   backgroundColor: '#f3f4f6',
                   color: '#374151',
@@ -159,10 +145,11 @@ export default function GlobalError({ error, reset }: GlobalErrorProps): React.R
                   fontSize: '0.95rem',
                   fontWeight: 500,
                   cursor: 'pointer',
+                  textDecoration: 'none',
                 }}
               >
                 Go Home
-              </button>
+              </a>
             </div>
           </div>
         </div>

@@ -6,7 +6,7 @@ This guide walks you through deploying the RAG Starter Kit to Vercel's free Hobb
 
 ```
 Vercel Hobby (Serverless Functions, 10s timeout)
-├── Neon PostgreSQL (free tier, pgvector)
+├── Prisma Postgres (Accelerate, pgvector)
 ├── Upstash Redis (free tier, caching + rate limiting)
 ├── Cloudinary (free tier, file storage)
 ├── Inngest Cloud (free tier, background jobs)
@@ -25,16 +25,13 @@ All components are managed services with free tiers. No Docker, containers, or s
 
 ## Step 1: Set Up Managed Services
 
-### 1a. Neon Database (PostgreSQL + pgvector)
+### 1a. Prisma Postgres (Accelerate)
 
-1. Go to [console.neon.tech](https://console.neon.tech) and create a free database
+1. Go to [console.prisma.io](https://console.prisma.io) and create a new project with a Postgres database
 2. Name it `rag-starter-kit`
-3. After creation, run this SQL in the SQL editor:
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS vector;
-   ```
-4. Copy the **pooled** connection string (ends with `-pooler.neon.tech`)
-5. Save it as `DATABASE_URL`
+3. Copy the **Accelerate connection string** (starts with `prisma+postgres://`)
+4. Save it as `DATABASE_URL`
+5. Copy the **direct connection string** and save it as `DIRECT_URL`
 
 ### 1b. Upstash Redis
 
@@ -135,7 +132,7 @@ pnpm db:migrate:prod
 
 | Variable | Source | Free Tier |
 |----------|--------|-----------|
-| `DATABASE_URL` | Neon | 0.5GB storage |
+| `DATABASE_URL` | Prisma Postgres (Accelerate) | 0.5GB storage |
 | `OPENROUTER_API_KEY` | OpenRouter | Free models |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI Studio | 1,500 req/day |
 | `NEXTAUTH_SECRET` | Generate: `openssl rand -base64 32` | - |

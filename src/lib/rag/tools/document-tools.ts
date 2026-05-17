@@ -115,19 +115,22 @@ Returns a concise summary highlighting key points.`,
       // Get document and its chunks
       const document = await prisma.document.findUnique({
         where: { id: documentId },
-        include: {
-          chunks: {
-            orderBy: { index: 'asc' },
-          },
-        },
       });
 
       if (!document) {
         return createErrorResult(`Document not found: ${documentId}`);
       }
 
-      // Combine chunks for summarization
-      const fullText = document.chunks.map((c) => c.content).join('\n\n');
+      // Get chunks from Qdrant
+      const { qdrant, COLLECTION_DOCUMENT_CHUNKS } = await import('@/lib/qdrant');
+      const scrollResult = await qdrant.scroll(COLLECTION_DOCUMENT_CHUNKS, {
+        filter: { must: [{ key: 'documentId', match: { value: documentId } }] },
+        limit: 1000,
+        with_payload: true,
+      });
+      const fullText = scrollResult.points
+        .map((p) => String((p.payload as Record<string, unknown>)?.content ?? ''))
+        .join('\n\n');
 
       if (!fullText) {
         return createErrorResult('Document has no content to summarize');
@@ -155,17 +158,20 @@ Returns a concise summary highlighting key points.`,
         { model: 'gpt-4o-mini', temperature: 0.3, maxTokens: 600 }
       );
 
-      const sources: Source[] = document.chunks.slice(0, 3).map((chunk) => ({
-        id: chunk.id,
-        content: chunk.content,
-        metadata: {
-          documentId: document.id,
-          documentName: document.name,
-          page: chunk.page ?? undefined,
-          chunkIndex: chunk.index,
-          totalChunks: document.chunks.length,
-        },
-      }));
+      const sources: Source[] = scrollResult.points.slice(0, 3).map((point) => {
+        const p = (point.payload ?? {}) as Record<string, unknown>;
+        return {
+          id: String(point.id),
+          content: String(p.content ?? ''),
+          metadata: {
+            documentId: document.id,
+            documentName: document.name,
+            page: typeof p.page === 'number' ? p.page : undefined,
+            chunkIndex: typeof p.index === 'number' ? p.index : 0,
+            totalChunks: scrollResult.points.length,
+          },
+        };
+      });
 
       return createSuccessResult(
         {
@@ -173,7 +179,7 @@ Returns a concise summary highlighting key points.`,
           documentName: document.name,
           summary: response.content.trim(),
           wordCount: response.content.split(/\s+/).length,
-          totalChunks: document.chunks.length,
+          totalChunks: scrollResult.points.length,
           focus,
         },
         sources
@@ -217,18 +223,16 @@ Returns document metadata including names, types, sizes, and status.`,
         const document = await prisma.document.findFirst({
           where: {
             id: documentId,
-            userId: workspaceId, // Note: in real app, join with workspace members
-          },
-          include: {
-            _count: {
-              select: { chunks: true },
-            },
+            userId: workspaceId,
           },
         });
 
         if (!document) {
           return createErrorResult(`Document not found: ${documentId}`);
         }
+
+        const { getDocumentStats } = await import('@/lib/qdrant');
+        const stats = await getDocumentStats(documentId).catch(() => ({ totalChunks: 0 }));
 
         return createSuccessResult({
           document: {
@@ -237,7 +241,7 @@ Returns document metadata including names, types, sizes, and status.`,
             contentType: document.contentType,
             size: document.size,
             status: document.status,
-            chunkCount: document._count.chunks,
+            chunkCount: stats.totalChunks,
             createdAt: document.createdAt,
             updatedAt: document.updatedAt,
             metadata: document.metadata,
@@ -248,25 +252,25 @@ Returns document metadata including names, types, sizes, and status.`,
       // List all documents in workspace
       const documents = await prisma.document.findMany({
         where: {
-          userId: workspaceId, // Note: in real app, join with workspace members
+          userId: workspaceId,
         },
         orderBy: { createdAt: 'desc' },
-        include: {
-          _count: {
-            select: { chunks: true },
-          },
-        },
       });
+
+      const { getDocumentStats } = await import('@/lib/qdrant');
+      const allStats = await Promise.all(
+        documents.map((d) => getDocumentStats(d.id).catch(() => ({ totalChunks: 0 })))
+      );
 
       return createSuccessResult({
         totalDocuments: documents.length,
-        documents: documents.map((d) => ({
+        documents: documents.map((d, i) => ({
           id: d.id,
           name: d.name,
           contentType: d.contentType,
           size: d.size,
           status: d.status,
-          chunkCount: d._count.chunks,
+          chunkCount: allStats[i]?.totalChunks ?? 0,
           createdAt: d.createdAt,
           updatedAt: d.updatedAt,
         })),
@@ -310,42 +314,30 @@ Returns semantically similar chunks ranked by relevance.`,
 
       // Generate embedding for the query
       const queryEmbedding = await generateQueryEmbedding(query);
-      const vectorStr = `[${queryEmbedding.join(',')}]`;
 
-      // Perform semantic search using raw SQL
-      const results = await prisma.$queryRawUnsafe<
-        Array<{
-          id: string;
-          documentId: string;
-          content: string;
-          index: number;
-          page: number | null;
-          section: string | null;
-          documentName: string;
-          similarity: number;
-        }>
-      >(
-        `SELECT
-          dc.id,
-          dc."documentId",
-          dc.content,
-          dc.index,
-          dc.page,
-          dc.section,
-          d.name as "documentName",
-          1 - (dc.embedding <=> $1::vector) as similarity
-        FROM document_chunks dc
-        JOIN documents d ON dc."documentId" = d.id
-        WHERE d."userId" = $2
-          AND d.status = 'COMPLETED'
-          AND 1 - (dc.embedding <=> $1::vector) > $3
-        ORDER BY dc.embedding <=> $1::vector
-        LIMIT $4`,
-        vectorStr,
-        workspaceId,
-        threshold,
-        topK
-      );
+      // Perform semantic search using Qdrant
+      const { searchSimilar } = await import('@/lib/qdrant');
+      const { buildQdrantFilter } = await import('@/lib/qdrant/filters');
+      const qdrantFilter = buildQdrantFilter({ workspaceId });
+      const qdrantResults = await searchSimilar(queryEmbedding, {
+        filter: qdrantFilter,
+        topK,
+        minScore: threshold,
+      });
+
+      const results = qdrantResults.map((point) => {
+        const p = point.payload as Record<string, unknown>;
+        return {
+          id: String(point.id),
+          documentId: (p?.documentId as string) ?? '',
+          content: (p?.content as string) ?? '',
+          index: (p?.index as number) ?? 0,
+          page: (p?.page as number | null) ?? null,
+          section: (p?.section as string | null) ?? null,
+          documentName: (p?.documentName as string) ?? '',
+          similarity: point.score ?? 0,
+        };
+      });
 
       const sources: Source[] = results.map((r) => ({
         id: r.id,
@@ -413,12 +405,6 @@ Returns a comparison analysis with similarities and differences.`,
       // Get documents
       const documents = await prisma.document.findMany({
         where: { id: { in: documentIds } },
-        include: {
-          chunks: {
-            orderBy: { index: 'asc' },
-            take: 20, // Limit chunks for comparison
-          },
-        },
       });
 
       if (documents.length !== documentIds.length) {
@@ -427,14 +413,24 @@ Returns a comparison analysis with similarities and differences.`,
         return createErrorResult(`Documents not found: ${missingIds.join(', ')}`);
       }
 
-      // Build comparison prompt
+      const { qdrant, COLLECTION_DOCUMENT_CHUNKS } = await import('@/lib/qdrant');
+      const docChunks = await Promise.all(
+        documents.map((d) =>
+          qdrant.scroll(COLLECTION_DOCUMENT_CHUNKS, {
+            filter: { must: [{ key: 'documentId', match: { value: d.id } }] },
+            limit: 20,
+            with_payload: true,
+          })
+        )
+      );
+
       const llm = createProviderFromEnv();
 
-      const docTexts = documents.map((d) => ({
+      const docTexts = documents.map((d, i) => ({
         name: d.name,
         id: d.id,
-        content: d.chunks
-          .map((c) => c.content)
+        content: docChunks[i].points
+          .map((p) => String((p.payload as Record<string, unknown>)?.content ?? ''))
           .join('\n\n')
           .slice(0, 3000),
       }));
@@ -468,18 +464,21 @@ ${aspect ? `4. Specific findings about "${aspect}":` : ''}`;
         { model: 'gpt-4o-mini', temperature: 0.3, maxTokens: 1000 }
       );
 
-      const sources: Source[] = documents.flatMap((d) =>
-        d.chunks.slice(0, 2).map((chunk) => ({
-          id: chunk.id,
-          content: chunk.content,
-          metadata: {
-            documentId: d.id,
-            documentName: d.name,
-            page: chunk.page ?? undefined,
-            chunkIndex: chunk.index,
-            totalChunks: d.chunks.length,
-          },
-        }))
+      const sources: Source[] = documents.flatMap((d, i) =>
+        docChunks[i].points.slice(0, 2).map((point) => {
+          const p = (point.payload ?? {}) as Record<string, unknown>;
+          return {
+            id: String(point.id),
+            content: String(p.content ?? ''),
+            metadata: {
+              documentId: d.id,
+              documentName: d.name,
+              page: typeof p.page === 'number' ? p.page : undefined,
+              chunkIndex: typeof p.index === 'number' ? p.index : 0,
+              totalChunks: docChunks[i].points.length,
+            },
+          };
+        })
       );
 
       return createSuccessResult(

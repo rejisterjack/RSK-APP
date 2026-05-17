@@ -1,6 +1,3 @@
-'use client';
-
-import { motion } from 'framer-motion';
 import { Check, Minus } from 'lucide-react';
 
 const corePlatform = [
@@ -31,12 +28,8 @@ export function WhatsIncluded(): React.ReactElement {
   return (
     <section className="py-24 lg:py-32 relative overflow-hidden bg-muted/10 border-y border-border/50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-16"
+        <div
+          className="text-center mb-16 animate-in fade-in slide-in-from-bottom-8 duration-700"
         >
           <h2 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl lg:text-5xl mb-6">
             What's <span className="text-gradient">Included</span>
@@ -44,16 +37,13 @@ export function WhatsIncluded(): React.ReactElement {
           <p className="mt-4 text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto">
             Everything you need to ship a production AI app, straight out of the box.
           </p>
-        </motion.div>
+        </div>
 
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Core Platform */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="glass-panel rounded-3xl p-8 border border-border"
+          <div
+            className="glass-panel rounded-3xl p-8 border border-border animate-in fade-in slide-in-from-left-8 duration-700"
+            style={{ animationDelay: '200ms' }}
           >
             <div className="flex items-center gap-3 mb-8">
               <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -71,15 +61,12 @@ export function WhatsIncluded(): React.ReactElement {
                 </li>
               ))}
             </ul>
-          </motion.div>
+          </div>
 
           {/* Infrastructure */}
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="glass-panel rounded-3xl p-8 border border-border"
+          <div
+            className="glass-panel rounded-3xl p-8 border border-border animate-in fade-in slide-in-from-right-8 duration-700"
+            style={{ animationDelay: '400ms' }}
           >
             <div className="flex items-center gap-3 mb-8">
               <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -97,16 +84,13 @@ export function WhatsIncluded(): React.ReactElement {
                 </li>
               ))}
             </ul>
-          </motion.div>
+          </div>
         </div>
 
         {/* Out of scope */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          className="mt-14 text-center"
+        <div
+          className="mt-14 text-center animate-in fade-in slide-in-from-bottom-4 duration-700"
+          style={{ animationDelay: '600ms' }}
         >
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 mb-5">
             Deliberate exclusions
@@ -124,7 +108,7 @@ export function WhatsIncluded(): React.ReactElement {
               )
             )}
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

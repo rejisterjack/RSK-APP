@@ -10,6 +10,8 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { compareBranches } from '@/lib/rag/conversation-branch';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // GET - Compare two branches
 // =============================================================================

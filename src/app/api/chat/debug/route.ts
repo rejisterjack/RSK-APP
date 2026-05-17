@@ -28,6 +28,8 @@ import {
 } from '@/lib/rag/retrieval';
 import type { RAGConfig, Source, VectorSearchResult } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------

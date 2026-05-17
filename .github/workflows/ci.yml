@@ -11,8 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "20"
-  PNPM_VERSION: "9"
+  BUN_VERSION: "1.2"
 
 jobs:
   # ─────────────────────────────────────────────
@@ -24,26 +23,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Lint (Biome)
-        run: pnpm check
+        run: bun run check
 
       - name: Type Check
-        run: pnpm type-check
+        run: bun run type-check
 
   unit-tests:
     name: Unit & Integration Tests
@@ -52,23 +46,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run unit tests
-        run: pnpm test:run
+        run: bun run test:run
         env:
           # Minimal env vars for test context
           DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
@@ -92,23 +81,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Build
-        run: pnpm build
+        run: bun run build
         env:
           DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
           NEXTAUTH_SECRET: "test-secret-at-least-32-characters-long!!"
@@ -125,24 +109,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Audit dependencies (critical)
-        run: pnpm audit --audit-level=critical
+        run: npm audit --audit-level=critical
 
       - name: Audit dependencies (high)
         if: always()
-        run: pnpm audit --audit-level=high
+        run: npm audit --audit-level=high
         continue-on-error: true
 
   # ─────────────────────────────────────────────
@@ -156,26 +135,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: pnpm test:e2e:chrome
+        run: bun run test:e2e:chrome
         env:
           DATABASE_URL: "postgresql://test:test@localhost:5432/testdb"
           NEXTAUTH_SECRET: "test-secret-at-least-32-characters-long!!"
@@ -202,20 +176,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma Client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run RAG eval against staging
         run: |

@@ -1,6 +1,5 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -71,9 +70,31 @@ export function MessageList({
     const anchor = scrollAnchorRef.current ?? endRef.current;
     if (!anchor) return;
 
-    // Instant scroll during streaming (avoids laggy smooth-scroll pileup),
-    // smooth scroll when a new message is added.
-    anchor.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' });
+    // Find the scrollable parent container
+    const getScrollParent = (element: HTMLElement): HTMLElement | null => {
+      let parent = element.parentElement;
+      while (parent) {
+        const style = window.getComputedStyle(parent);
+        if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+          return parent;
+        }
+        parent = parent.parentElement;
+      }
+      return null;
+    };
+
+    const container = getScrollParent(anchor);
+    if (!container) return;
+
+    // Only auto-scroll if user is already near bottom (within 150px)
+    const isNearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+
+    if (isNearBottom) {
+      // Instant scroll during streaming (avoids laggy smooth-scroll pileup),
+      // smooth scroll when a new message is added.
+      anchor.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' });
+    }
   }, [messages.length, streamingContent.length, isStreaming]);
 
   // Observe the sentinel to show/hide scroll-to-bottom button
@@ -212,27 +233,24 @@ export function MessageList({
       </ul>
 
       {/* Scroll to bottom button */}
-      <AnimatePresence>
-        {showScrollButton && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.15 }}
-            className="sticky bottom-4 float-right mr-6 z-50"
+      {showScrollButton && (
+        <div
+          className={cn(
+            'sticky bottom-4 float-right mr-6 z-50 transition-all duration-150',
+            showScrollButton ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
+          )}
+        >
+          <Button
+            variant="default"
+            size="icon"
+            className="h-10 w-10 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground border border-primary-foreground/20"
+            onClick={scrollToBottom}
+            aria-label="Scroll to bottom"
           >
-            <Button
-              variant="default"
-              size="icon"
-              className="h-10 w-10 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground border border-primary-foreground/20"
-              onClick={scrollToBottom}
-              aria-label="Scroll to bottom"
-            >
-              <ChevronDown className="h-5 w-5" aria-hidden="true" />
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <ChevronDown className="h-5 w-5" aria-hidden="true" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
   parseXLSXBuffer,
 } from '@/lib/rag/ingestion';
 import { isYouTubeUrl } from '@/lib/rag/ingestion/parsers/youtube';
+import { ensureDocumentChunksCollection } from '@/lib/qdrant';
 import { getFile } from '@/lib/storage/cloudinary-storage';
 
 async function updateJob(jobId: string, data: Record<string, unknown>) {
@@ -158,32 +159,42 @@ export async function processDocumentInline(
 
   await updateJob(job.id, { documentId, progress: 40 });
 
+  // Ensure Qdrant collection exists before upserting
+  try {
+    await ensureDocumentChunksCollection();
+  } catch (err) {
+    logger.error('Failed to ensure Qdrant collection exists', {
+      documentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw new Error('Vector database not available — collection could not be created');
+  }
+
   // Embed + store
   const embeddings = createEmbeddings();
   const batchSize = 100;
 
+  const { upsertChunks } = await import('@/lib/qdrant');
+
   for (let i = 0; i < chunks.length; i += batchSize) {
     const batch = chunks.slice(i, i + batchSize);
     const vectors = await embeddings.embedDocuments(batch.map((c) => c.content));
-    for (let j = 0; j < batch.length; j++) {
-      const vectorStr = `[${vectors[j].join(',')}]`;
-      await prisma.$executeRaw`
-        INSERT INTO "document_chunks" (
-          "id", "documentId", "content", "embedding", "index", "start", "end", "page", "section", "createdAt"
-        ) VALUES (
-          ${crypto.randomUUID()},
-          ${documentId},
-          ${batch[j].content},
-          ${vectorStr}::vector,
-          ${batch[j].metadata.index},
-          ${batch[j].metadata.start},
-          ${batch[j].metadata.end},
-          ${batch[j].metadata.page ?? null},
-          ${batch[j].metadata.headings?.[0] ?? null},
-          NOW()
-        )
-      `;
-    }
+    const chunkPoints = batch.map((c, j) => ({
+      documentId,
+      content: c.content,
+      embedding: vectors[j],
+      index: c.metadata.index,
+      start: c.metadata.start,
+      end: c.metadata.end,
+      page: c.metadata.page ?? null,
+      section: c.metadata.headings?.[0] ?? null,
+    }));
+    await upsertChunks(chunkPoints, {
+      userId: document.userId ?? _userId,
+      workspaceId: document.workspaceId ?? undefined,
+      documentName: document.name,
+      documentType: document.contentType,
+    });
     const progress = Math.round(50 + ((i + batch.length) / chunks.length) * 45);
     await updateJob(job.id, { documentId, progress });
   }
@@ -194,6 +205,7 @@ export async function processDocumentInline(
     where: { id: documentId },
     data: {
       status: 'COMPLETED',
+      chunkCount: chunks.length,
       metadata: {
         ...metadata,
         processedAt: new Date().toISOString(),

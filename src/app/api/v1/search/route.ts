@@ -62,6 +62,8 @@ import { logger } from '@/lib/logger';
 import { generateQueryEmbedding, searchSimilarChunks } from '@/lib/rag/retrieval';
 import type { RAGConfig } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 interface SearchRequest {
   query: string;
   limit?: number;

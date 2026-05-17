@@ -21,6 +21,8 @@ import {
   getRateLimitIdentifier,
 } from '@/lib/security/rate-limiter';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // Product Knowledge Base (Embedded Context)
 // This provides instant answers without requiring DB ingestion first.

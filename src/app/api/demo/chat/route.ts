@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { generateRAGResponse } from '@/lib/rag/engine';
@@ -50,7 +50,7 @@ async function getDemoUserId(): Promise<string> {
   return cachedDemoUserId;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   try {

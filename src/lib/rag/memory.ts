@@ -63,6 +63,7 @@ const MAX_MESSAGES_CAP = 500;
 export class ConversationMemory {
   private config: MemoryConfig;
   private llmProvider = createProviderFromEnv();
+  private messageCounts = new Map<string, number>();
 
   constructor(
     private prisma: PrismaClient,
@@ -82,6 +83,57 @@ export class ConversationMemory {
     });
 
     return messages.map((m: PrismaMessage) => this.mapPrismaMessage(m));
+  }
+
+  /**
+   * Get history with cursor-based pagination for efficient loading of older messages.
+   * Returns messages in chronological order (asc).
+   */
+  async getHistoryCursor(
+    conversationId: string,
+    options: { limit: number; cursor?: string | null }
+  ): Promise<{ messages: Message[]; nextCursor: string | null }> {
+    const { limit, cursor } = options;
+    const pageSize = Math.min(Math.max(limit, 1), 100);
+
+    const where: { chatId: string; createdAt?: { lt: Date } } = {
+      chatId: conversationId,
+    };
+
+    // Decode cursor to get the createdAt timestamp
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+        if (decoded.createdAt) {
+          where.createdAt = { lt: new Date(decoded.createdAt) };
+        }
+      } catch {
+        // Invalid cursor — return from beginning
+      }
+    }
+
+    // Fetch one extra to determine if there's a next page
+    const rows = await this.prisma.message.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+      take: pageSize + 1,
+    });
+
+    const hasMore = rows.length > pageSize;
+    const messages = hasMore ? rows.slice(0, pageSize) : rows;
+
+    let nextCursor: string | null = null;
+    if (hasMore && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      nextCursor = Buffer.from(
+        JSON.stringify({ id: lastMsg.id, createdAt: lastMsg.createdAt })
+      ).toString('base64url');
+    }
+
+    return {
+      messages: messages.map((m: PrismaMessage) => this.mapPrismaMessage(m)),
+      nextCursor,
+    };
   }
 
   /**
@@ -129,8 +181,14 @@ export class ConversationMemory {
       },
     });
 
-    // Check if we need to compress history
-    await this.checkAndCompressHistory(conversationId);
+    // Track count in memory to avoid DB count query on every add
+    const currentCount = (this.messageCounts.get(conversationId) ?? 0) + 1;
+    this.messageCounts.set(conversationId, currentCount);
+
+    // Only check compression when approaching threshold
+    if (currentCount >= this.config.maxMessages) {
+      await this.checkAndCompressHistory(conversationId);
+    }
 
     return this.mapPrismaMessage(created);
   }

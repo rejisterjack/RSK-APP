@@ -1,7 +1,3 @@
-'use client';
-
-import { motion } from 'framer-motion';
-
 interface Tech {
   name: string;
   category: string;
@@ -52,20 +48,14 @@ export function TechStackMarquee(): React.ReactElement {
   return (
     <section className="py-20 overflow-hidden">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mb-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
+        <div className="text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Built with <span className="text-gradient">Modern Tools</span>
           </h2>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
             Every dependency is deliberate, current, and maintained. No legacy, no dead weight.
           </p>
-        </motion.div>
+        </div>
       </div>
 
       {/* First marquee - left to right */}

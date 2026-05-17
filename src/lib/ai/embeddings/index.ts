@@ -73,23 +73,31 @@ export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvi
   }
 }
 
+let cachedDefaultProvider: EmbeddingProvider | null = null;
+
 /**
  * Create embedding provider from environment variables
+ *
+ * When called without overrides, returns a cached singleton to avoid
+ * re-creating the provider on every call.
  *
  * Environment variables:
  * - EMBEDDING_PROVIDER: 'google', 'openai', or 'ollama' (default: 'google')
  * - EMBEDDING_MODEL: Model name (default: text-embedding-004 for Google)
-
  * - OPENAI_API_KEY: OpenAI API key (if using OpenAI)
  * - OLLAMA_BASE_URL: Ollama base URL (if using Ollama)
  */
 export function createEmbeddingProviderFromEnv(
   overrides?: ProviderFactoryConfig
 ): EmbeddingProvider {
+  if (!overrides && cachedDefaultProvider) return cachedDefaultProvider;
+
   const provider =
     overrides?.provider ??
     (process.env.EMBEDDING_PROVIDER as 'google' | 'openai' | 'ollama') ??
     'google';
+
+  let result: EmbeddingProvider;
 
   switch (provider) {
     case 'google': {
@@ -103,7 +111,8 @@ export function createEmbeddingProviderFromEnv(
 
       const apiKey = overrides?.apiKey;
 
-      return createGoogleProvider(model, apiKey);
+      result = createGoogleProvider(model, apiKey);
+      break;
     }
 
     case 'ollama': {
@@ -115,7 +124,8 @@ export function createEmbeddingProviderFromEnv(
         );
       }
 
-      return createOllamaProvider(model, overrides?.baseUrl ?? process.env.OLLAMA_BASE_URL);
+      result = createOllamaProvider(model, overrides?.baseUrl ?? process.env.OLLAMA_BASE_URL);
+      break;
     }
 
     case 'openai': {
@@ -127,12 +137,16 @@ export function createEmbeddingProviderFromEnv(
         );
       }
 
-      return createOpenAIProvider(model, overrides?.apiKey ?? process.env.OPENAI_API_KEY);
+      result = createOpenAIProvider(model, overrides?.apiKey ?? process.env.OPENAI_API_KEY);
+      break;
     }
 
     default:
       throw new Error(`Unknown provider: ${provider}. Supported: google, openai, ollama`);
   }
+
+  if (!overrides) cachedDefaultProvider = result;
+  return result;
 }
 
 /**

@@ -18,6 +18,10 @@ export const CACHE_KEYS = {
 
   /** User workspace list (10 min) */
   userWorkspaces: (userId: string) => `cache:uws:${userId}` as const,
+
+  /** Chat message history (2 min) */
+  chatHistory: (chatId: string, limit: number) =>
+    `cache:chat:${chatId}:${limit}` as const,
 } as const;
 
 export const CACHE_TTL = {
@@ -25,4 +29,5 @@ export const CACHE_TTL = {
   PERMISSION_CONTEXT: 5 * 60 * 1000,
   API_KEY_VALIDATION: 60 * 1000,
   USER_WORKSPACES: 10 * 60 * 1000,
+  CHAT_HISTORY: 2 * 60 * 1000,
 } as const;

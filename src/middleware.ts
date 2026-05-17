@@ -1,4 +1,3 @@
-import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import NextAuth from 'next-auth';
 import { authConfig } from '@/lib/auth/auth.config';
@@ -48,13 +47,13 @@ const ADMIN_ROUTES = ['/admin', '/api/admin'];
 // CORS Helpers
 // =============================================================================
 
-function computeCorsOrigin(req: NextRequest): string | null {
+function computeCorsOrigin(req: Request): string | null {
   const origin = req.headers.get('origin') ?? '';
   const allowedOrigins = (env.ALLOWED_ORIGINS ?? env.NEXTAUTH_URL).split(',').map((s) => s.trim());
   return allowedOrigins.includes(origin) ? origin : null;
 }
 
-function getCorsHeaders(req: NextRequest) {
+function getCorsHeaders(req: Request) {
   const corsOrigin = computeCorsOrigin(req);
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -88,13 +87,22 @@ export default auth(async function middleware(req) {
   const { nextUrl } = req;
   const { pathname } = nextUrl;
 
+  // Fast-path: skip all processing for health/readiness probes
+  if (pathname === '/api/health' || pathname === '/api/ready') {
+    return NextResponse.next();
+  }
+
   try {
     const requestId = req.headers.get('X-Request-ID') ?? crypto.randomUUID();
 
-    // CSP nonce per request
-    const nonceBytes = new Uint8Array(16);
-    crypto.getRandomValues(nonceBytes);
-    const cspNonce = btoa(String.fromCharCode(...nonceBytes));
+    // Only generate CSP nonce for HTML pages (API routes don't render inline scripts)
+    const isHtmlRequest = !pathname.startsWith('/api/');
+    let cspNonce = '';
+    if (isHtmlRequest) {
+      const nonceBytes = new Uint8Array(16);
+      crypto.getRandomValues(nonceBytes);
+      cspNonce = btoa(String.fromCharCode(...nonceBytes));
+    }
 
     // Auth state from the auth() wrapper
     const isLoggedIn = !!req.auth;
@@ -238,14 +246,13 @@ export default auth(async function middleware(req) {
     }
 
     return withRequestId(response, requestId);
-  } catch (error) {
+  } catch (_error) {
     // Let auth routes pass through on middleware failure — the auth handler will deal with it
     if (pathname?.startsWith('/api/auth/')) {
       return NextResponse.next();
     }
 
     if (env.NODE_ENV === 'development') {
-      console.error('[Middleware Error]', error instanceof Error ? error.message : 'Unknown');
     }
 
     if (pathname?.startsWith('/api/')) {

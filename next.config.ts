@@ -10,66 +10,59 @@ const withBundleAnalyzer = bundleAnalyzer({
 });
 
 const withMDX = createMDX({
-	// Add markdown plugins here if needed (e.g., remark-gfm, rehype-highlight)
 	options: {
-		// Enable JSX in MDX files
 		jsx: true,
 	},
 });
 
 const nextConfig: NextConfig = {
-	// Enable MDX page support
 	pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
 
-	// "standalone" enables output file tracing — produces minimal function bundles
-	// by including only necessary dependencies. Reduces cold start times on both
-	// Vercel serverless functions and Docker deployments.
-	// output: "standalone" — not needed for Vercel, only for Docker/self-hosted
+	cacheComponents: true,
+
+	turbopack: {
+		resolveAlias: {
+			nodemailer: './src/lib/empty-module.ts',
+			pdf2pic: './src/lib/empty-module.ts',
+		},
+	},
+
 	experimental: {
-		// Partial Prerendering - improves TTFB by streaming static shell
-		// Requires Next.js 15+ canary version - disabled for stability
-		// ppr: true,
-
-		// Dynamic IO - enables async/await in Server Components
-		// Renamed to cacheComponents in newer versions
-		// dynamicIO: true,
-
-		// Limit server action / API route body size to prevent memory exhaustion attacks
 		serverActions: {
 			bodySizeLimit: '4mb',
 		},
 
-		// Optimize package imports for better tree-shaking
+		staleTimes: {
+			dynamic: 30,
+			static: 300,
+		},
+
 		optimizePackageImports: [
-				'recharts',
-				'd3',
-				'@react-pdf/renderer',
-				'lucide-react',
-				'date-fns',
-				'framer-motion',
-				'react-markdown',
-				'@tanstack/react-virtual',
-				'@tanstack/react-query',
-				'@radix-ui/react-icons',
-				'cmdk',
-				'sonner',
-				'archiver',
-				'docx',
-				'dompurify',
-				'i18next',
-				'react-i18next',
-				'zustand',
-				'@hookform/resolvers',
-				'react-hook-form',
-				'react-day-picker',
-			],
+			'recharts',
+			'd3',
+			'@react-pdf/renderer',
+			'lucide-react',
+			'date-fns',
+			'framer-motion',
+			'react-markdown',
+			'@tanstack/react-virtual',
+			'@tanstack/react-query',
+			'@radix-ui/react-icons',
+			'cmdk',
+			'sonner',
+			'archiver',
+			'docx',
+			'dompurify',
+			'i18next',
+			'react-i18next',
+			'zustand',
+			'@hookform/resolvers',
+			'react-hook-form',
+			'react-day-picker',
+			'elysia',
+		],
 	},
 	webpack: (config, { isServer }): webpack.Configuration => {
-		// Suppress "Serializing big strings impacts deserialization performance" warnings.
-		// Prisma generated files (up to 268KB) trigger this because webpack's
-		// PackFileCacheStrategy logs a warning when serializing strings > ~128KB.
-		// This is purely informational — gzip compression on the filesystem cache
-		// already mitigates the deserialization cost. The warning is safe to suppress.
 		config.infrastructureLogging = {
 			...config.infrastructureLogging,
 			level: 'error',
@@ -78,7 +71,6 @@ const nextConfig: NextConfig = {
 			config.cache.compression = process.env.NODE_ENV === 'production' ? 'gzip' : false;
 		}
 
-		// Exclude playwright from client-side bundle
 		if (!isServer) {
 			config.resolve.fallback = {
 				...config.resolve.fallback,
@@ -89,8 +81,6 @@ const nextConfig: NextConfig = {
 				crypto: false,
 			};
 		}
-		// Exclude problematic modules from webpack processing
-		// Server-only heavy deps are externalized to reduce bundle size and build time
 		config.externals.push(
 			/^playwright-core/,
 			/^chromium-bidi/,
@@ -99,25 +89,16 @@ const nextConfig: NextConfig = {
 			/^pdf2pic/,
 			/^pg-native/,
 			/^@aws-sdk\/client-kms/,
-			/^@xenova\/transformers/,   // 45MB — local embeddings (server-only)
-			/^sharp/,                    // native binary — image processing (server-only)
-			/^isolated-vm/,              // 16MB — code execution sandbox (server-only)
-			/^samlify/,                  // SAML SSO (server-only)
-			/^ably/,                     // 9.2MB — realtime messaging (server-only)
+			/^@xenova\/transformers/,
+			/^sharp/,
+			/^isolated-vm/,
+			/^samlify/,
+			/^ably/,
 		);
 
-		// thread-stream (used by pino) spawns worker threads via dynamic require("lib/worker.js")
-		// which breaks under webpack bundling with output: "standalone" and is unavailable on
-		// Vercel serverless. Resolve to false — pino works without it when no transports are used.
 		config.resolve.alias = {
 			...config.resolve.alias,
 			'thread-stream': false,
-		};
-
-		// Prevent pg from trying to load optional native bindings
-		// Resolve optional OTEL peer deps to false to suppress "Module not found" warnings
-		config.resolve.alias = {
-			...config.resolve.alias,
 			'pg-native': false,
 			'@opentelemetry/exporter-jaeger': false,
 			'@opentelemetry/winston-transport': false,
@@ -140,15 +121,24 @@ const nextConfig: NextConfig = {
 	},
 	poweredByHeader: false,
 
+	serverExternalPackages: [
+		'nodemailer',
+		'pdf2pic',
+		'tesseract.js',
+		'sharp',
+		'isolated-vm',
+		'samlify',
+		'ably',
+		'@xenova/transformers',
+		'@aws-sdk/client-kms',
+		'pg-native',
+	],
+
 	async headers(): Promise<Header[]> {
-		// Note: Access-Control-Allow-Origin is now handled dynamically in middleware.ts
-		// to properly handle multiple allowed origins per the HTTP spec
 		return [
 			{
 				source: "/api/:path*",
 				headers: [
-					// CORS headers are set dynamically in middleware.ts
-					// This fixes the invalid multi-value Access-Control-Allow-Origin header issue
 					{
 						key: "Access-Control-Allow-Methods",
 						value: "GET, POST, PUT, DELETE, OPTIONS",
@@ -167,7 +157,6 @@ const nextConfig: NextConfig = {
 					},
 				],
 			},
-			// PWA headers
 			{
 				source: "/manifest.json",
 				headers: [

@@ -14,6 +14,8 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // Configuration
 // =============================================================================

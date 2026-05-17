@@ -15,6 +15,8 @@ import { deleteNotionIntegration, getNotionIntegration } from '@/lib/integration
 import { logger } from '@/lib/logger';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // GET /api/integrations/notion - Get integration status
 // =============================================================================

@@ -11,6 +11,13 @@ import {
   ensurePartitions,
 } from '@/lib/db/partition-manager';
 import { logger } from '@/lib/logger';
+import {
+  COLLECTION_DOCUMENT_CHUNKS,
+  type ChunkPointData,
+  deleteByDocumentId,
+  qdrant,
+  upsertChunks,
+} from '@/lib/qdrant';
 import { dispatchAlert } from '@/lib/monitoring/alerting';
 import { detectAnomalies } from '@/lib/monitoring/anomaly-detector';
 import { ChunkingEngine } from '@/lib/rag/chunking';
@@ -322,27 +329,23 @@ export const processDocumentJob = inngest.createFunction(
         const contents = batch.map((chunk) => chunk.content);
         const embeddingVectors = await embeddings.embedDocuments(contents);
 
-        for (let j = 0; j < batch.length; j++) {
-          const chunk = batch[j];
-          const vectorStr = `[${embeddingVectors[j].join(',')}]`;
+        const pointData: ChunkPointData[] = batch.map((chunk, j) => ({
+          documentId,
+          content: chunk.content,
+          embedding: embeddingVectors[j] ?? [],
+          index: chunk.metadata.index,
+          start: chunk.metadata.start,
+          end: chunk.metadata.end,
+          page: chunk.metadata.page ?? null,
+          section: chunk.metadata.headings?.[0] ?? null,
+        }));
 
-          await prisma.$executeRaw`
-            INSERT INTO "document_chunks" (
-              "id", "documentId", "content", "embedding", "index", "start", "end", "page", "section", "createdAt"
-            ) VALUES (
-              ${crypto.randomUUID()},
-              ${documentId},
-              ${chunk.content},
-              ${vectorStr}::vector,
-              ${chunk.metadata.index},
-              ${chunk.metadata.start},
-              ${chunk.metadata.end},
-              ${chunk.metadata.page ?? null},
-              ${chunk.metadata.headings?.[0] ?? null},
-              NOW()
-            )
-          `;
-        }
+        await upsertChunks(pointData, {
+          userId,
+          workspaceId: document.workspaceId ?? undefined,
+          documentName: document.name,
+          documentType: document.contentType,
+        });
 
         const progress = Math.round(50 + ((i + batch.length) / totalChunks) * 45);
         await updateJobStatus(job.id, { progress });
@@ -445,9 +448,7 @@ export const retryIngestionJob = inngest.createFunction(
         },
       });
 
-      await prisma.documentChunk.deleteMany({
-        where: { documentId },
-      });
+      await deleteByDocumentId(documentId);
     });
 
     await step.run('requeue-job', async () =>
@@ -594,9 +595,7 @@ export const cleanupStaleJobs = inngest.createFunction(
           await deleteDocumentFiles(job.documentId).catch(() => {});
         }
 
-        await prisma.documentChunk
-          .deleteMany({ where: { documentId: job.documentId } })
-          .catch(() => {});
+        await deleteByDocumentId(job.documentId).catch(() => {});
       });
     }
 
@@ -829,10 +828,17 @@ export const reEmbedWorkspaceJob = inngest.createFunction(
     for (const doc of documents) {
       const result = await step.run(`re-embed-doc-${doc.id}`, async () => {
         try {
-          const chunks = await prisma.documentChunk.findMany({
-            where: { documentId: doc.id },
-            select: { id: true, content: true },
+          const scrollResult = await qdrant.scroll(COLLECTION_DOCUMENT_CHUNKS, {
+            filter: { must: [{ key: 'documentId', match: { value: doc.id } }] },
+            limit: 100,
+            with_payload: true,
+            with_vector: false,
           });
+          const chunks = scrollResult.points.map((p) => ({
+            id: String(p.id),
+            content: ((p.payload as Record<string, unknown>)?.content as string) ?? '',
+            index: ((p.payload as Record<string, unknown>)?.index as number) ?? 0,
+          }));
 
           if (chunks.length === 0) {
             return { documentId: doc.id, chunksProcessed: 0 };
@@ -850,11 +856,24 @@ export const reEmbedWorkspaceJob = inngest.createFunction(
             for (let j = 0; j < batch.length; j++) {
               const vector = vectors[j];
               if (vector) {
-                await prisma.$executeRaw`
-                  UPDATE document_chunks
-                  SET embedding = ${`[${vector.join(',')}]`}::vector
-                  WHERE id = ${batch[j].id}
-                `;
+                const existingPoints = await qdrant.retrieve(COLLECTION_DOCUMENT_CHUNKS, {
+                  ids: [batch[j].id],
+                  with_payload: true,
+                  with_vector: false,
+                });
+                const existing = existingPoints[0];
+                if (existing) {
+                  await qdrant.upsert(COLLECTION_DOCUMENT_CHUNKS, {
+                    wait: true,
+                    points: [
+                      {
+                        id: existing.id,
+                        vector: vector,
+                        payload: existing.payload ?? {},
+                      },
+                    ],
+                  });
+                }
               }
             }
 

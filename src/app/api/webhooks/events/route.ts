@@ -4,6 +4,8 @@ import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { getAvailableWebhookEvents } from '@/lib/webhooks/delivery';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/webhooks/events
  * Get all available webhook event types that can be subscribed to

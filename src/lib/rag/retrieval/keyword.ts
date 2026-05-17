@@ -1,14 +1,14 @@
 /**
- * Keyword/Full-Text Search using PostgreSQL tsvector
+ * Keyword/Full-Text Search using Qdrant
  *
- * Implements BM25-style ranking using PostgreSQL's full-text search capabilities.
- * Supports multiple query parsing methods and highlighting of matching terms.
+ * Implements keyword search using Qdrant's text matching capabilities.
+ * Supports multiple query parsing methods and filtering.
  */
 
-import { prisma } from '@/lib/db';
+import { searchKeyword as qdrantKeywordSearch } from '@/lib/qdrant';
+import { buildQdrantFilter } from '@/lib/qdrant/filters';
 import type {
   KeywordSearchConfig,
-  RawSearchResult,
   RetrievalOptions,
   RetrievedChunk,
 } from './types';
@@ -46,32 +46,6 @@ export const supportedLanguages = [
 
 export type SupportedLanguage = (typeof supportedLanguages)[number];
 
-/**
- * Get the tsquery generation function based on query type
- */
-function getTsqueryFunction(queryType: string): string {
-  switch (queryType) {
-    case 'plain':
-      return 'plainto_tsquery';
-    case 'phrase':
-      return 'phraseto_tsquery';
-    case 'websearch':
-      return 'websearch_to_tsquery';
-    default:
-      return 'websearch_to_tsquery';
-  }
-}
-
-/**
- * Parse and validate language
- */
-function validateLanguage(lang: string): SupportedLanguage {
-  if (supportedLanguages.includes(lang as SupportedLanguage)) {
-    return lang as SupportedLanguage;
-  }
-  return 'english';
-}
-
 function validateIdentifier(value: string, name: string): void {
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(value)) {
     throw new Error(`Invalid ${name}: must be alphanumeric with hyphens/underscores, max 64 chars`);
@@ -79,49 +53,7 @@ function validateIdentifier(value: string, name: string): void {
 }
 
 /**
- * Build WHERE clause filters for keyword search
- */
-function buildFilters(
-  options: RetrievalOptions,
-  paramIndex: number
-): { whereClause: string; params: unknown[]; nextIndex: number } {
-  const filters: string[] = [];
-  const params: unknown[] = [];
-  let idx = paramIndex;
-
-  // Workspace/workspace filter (required)
-  filters.push(`d."userId" = $${idx++}`);
-  params.push(options.workspaceId);
-
-  // Document status filter
-  filters.push(`d.status = 'COMPLETED'`);
-
-  // Document ID filter
-  if (options.filters?.documentIds?.length) {
-    filters.push(`dc."documentId" = ANY($${idx++}::text[])`);
-    params.push(options.filters.documentIds);
-  }
-
-  // Document type filter
-  if (options.filters?.documentTypes?.length) {
-    filters.push(`d."contentType" = ANY($${idx++}::text[])`);
-    params.push(options.filters.documentTypes);
-  }
-
-  // Date range filter
-  if (options.filters?.dateRange) {
-    filters.push(`d."createdAt" >= $${idx++} AND d."createdAt" <= $${idx++}`);
-    params.push(options.filters.dateRange.from);
-    params.push(options.filters.dateRange.to);
-  }
-
-  const whereClause = filters.length > 0 ? `AND ${filters.join(' AND ')}` : '';
-
-  return { whereClause, params, nextIndex: idx };
-}
-
-/**
- * Keyword Retriever class for full-text search
+ * Keyword Retriever class for keyword search using Qdrant
  */
 export class KeywordRetriever {
   private config: KeywordSearchConfig;
@@ -131,88 +63,44 @@ export class KeywordRetriever {
   }
 
   /**
-   * Perform keyword/full-text search
+   * Perform keyword/full-text search using Qdrant
    */
   async retrieve(query: string, options: RetrievalOptions): Promise<RetrievedChunk[]> {
     const topK = options.topK ?? 5;
-    const minScore = options.minScore ?? 0.01; // BM25 scores are typically small
-    const language = validateLanguage(this.config.language ?? 'english');
-    const tsqueryFn = getTsqueryFunction(this.config.queryType ?? 'websearch');
-
-    // Build filters
-    const { whereClause, params, nextIndex } = buildFilters(options, 1);
-    const queryParam = `$${nextIndex}`;
-    const languageParam = `$${nextIndex + 1}`;
-    const limitParam = `$${nextIndex + 2}`;
-
-    // Build highlight expression
-    const highlightExpr = this.config.highlight
-      ? `ts_headline(
-          ${languageParam}::regconfig,
-          dc.content,
-          ${tsqueryFn}(${languageParam}::regconfig, ${queryParam}),
-          'StartSel=${this.config.highlightStartTag}, StopSel=${this.config.highlightEndTag}, MaxWords=50, MinWords=10'
-        ) as highlighted_content`
-      : 'dc.content as highlighted_content';
-
-    // Build the SQL query with BM25-style ranking using ts_rank_cd
-    // ts_rank_cd computes the cover density ranking, which is similar to BM25
-    const sqlQuery = `
-      SELECT 
-        dc.id,
-        dc."documentId" as "documentId",
-        dc.content,
-        dc.index,
-        dc.page,
-        dc.section,
-        d.name as "documentName",
-        d."contentType" as "documentType",
-        ts_rank_cd(
-          dc.search_vector,
-          ${tsqueryFn}(${languageParam}::regconfig, ${queryParam}),
-          32 /* rank normalization: divide by document length + 1 */
-        ) as score,
-        ${highlightExpr}
-      FROM document_chunks dc
-      JOIN documents d ON dc."documentId" = d.id
-      WHERE dc.search_vector @@ ${tsqueryFn}(${languageParam}::regconfig, ${queryParam})
-        ${whereClause}
-      ORDER BY score DESC
-      LIMIT ${limitParam}
-    `;
+    const minScore = options.minScore ?? 0.01;
 
     try {
-      // Add query, language, and limit to params
-      const queryParams = [...params, query, language ?? 'english', topK * 2];
+      const filter = buildQdrantFilter({
+        userId: options.userId,
+        workspaceId: options.workspaceId,
+        filters: options.filters,
+      });
 
-      const results = await prisma.$queryRawUnsafe<
-        Array<RawSearchResult & { highlighted_content?: string }>
-      >(sqlQuery, ...queryParams);
+      const results = await qdrantKeywordSearch(query, { filter, topK: topK * 2 });
 
       // Transform to RetrievedChunk format
-      const chunks: RetrievedChunk[] = results.map((result) => ({
-        id: result.id,
-        content:
-          this.config.highlight && result.highlighted_content
-            ? result.highlighted_content
-            : result.content,
-        score: Number(result.score),
-        metadata: {
-          documentId: result.documentId,
-          documentName: result.documentName,
-          documentType: result.documentType || 'unknown',
-          page: result.page ?? undefined,
-          headings: result.headings,
-          position: result.index,
-          section: result.section ?? undefined,
-        },
-        retrievalMethod: `keyword-${this.config.queryType}`,
-      }));
+      const chunks: RetrievedChunk[] = results
+        .map((point) => {
+          const p = point.payload as Record<string, unknown>;
+          return {
+            id: String(point.id),
+            content: (p?.content as string) ?? '',
+            score: point.score ?? 0,
+            metadata: {
+              documentId: (p?.documentId as string) ?? '',
+              documentName: (p?.documentName as string) ?? '',
+              documentType: (p?.documentType as string) ?? 'unknown',
+              page: (p?.page as number) ?? undefined,
+              position: (p?.index as number) ?? 0,
+              section: (p?.section as string) ?? undefined,
+            },
+            retrievalMethod: `keyword-${this.config.queryType}`,
+          };
+        })
+        .filter((chunk) => chunk.score >= minScore)
+        .slice(0, topK);
 
-      // Post-filtering by score
-      const filteredChunks = chunks.filter((chunk) => chunk.score >= minScore).slice(0, topK);
-
-      return filteredChunks;
+      return chunks;
     } catch (error) {
       throw new Error(
         `Keyword search failed: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -222,51 +110,46 @@ export class KeywordRetriever {
 
   /**
    * Get search suggestions based on partial query
+   * Note: With Qdrant, suggestions are approximated from keyword search results
    */
   async getSuggestions(partialQuery: string, workspaceId: string, limit = 5): Promise<string[]> {
-    validateLanguage(this.config.language ?? 'english');
     validateIdentifier(workspaceId, 'workspaceId');
 
-    const results = await prisma.$queryRaw<Array<{ word: string }>>`
-      SELECT DISTINCT word
-      FROM ts_stat(${
-        `SELECT search_vector FROM document_chunks dc ` +
-        `JOIN documents d ON dc."documentId" = d.id ` +
-        `WHERE d."userId" = '${workspaceId}' AND d.status = 'COMPLETED'`
-      })
-      WHERE word LIKE ${`${partialQuery.toLowerCase()}%`}
-      ORDER BY nentry DESC, word ASC
-      LIMIT ${limit}
-    `;
+    const filter = buildQdrantFilter({ workspaceId });
+    const results = await qdrantKeywordSearch(partialQuery, { filter, topK: limit * 2 });
 
-    return results.map((r) => r.word);
+    // Extract unique words from matching content
+    const words = new Set<string>();
+    const prefix = partialQuery.toLowerCase();
+    for (const point of results) {
+      const p = point.payload as Record<string, unknown>;
+      const content = (p?.content as string) ?? '';
+      const contentWords = content.toLowerCase().split(/\s+/);
+      for (const word of contentWords) {
+        if (word.startsWith(prefix) && word.length > 2) {
+          words.add(word);
+          if (words.size >= limit) break;
+        }
+      }
+      if (words.size >= limit) break;
+    }
+
+    return Array.from(words).slice(0, limit);
   }
 
   /**
    * Get term frequency statistics for a workspace
+   * Note: With Qdrant, term stats are approximated from search results
    */
   async getTermStats(
     workspaceId: string,
-    limit = 100
+    _limit = 100
   ): Promise<Array<{ term: string; frequency: number }>> {
-    const language = validateLanguage(this.config.language ?? 'english');
     validateIdentifier(workspaceId, 'workspaceId');
 
-    const results = await prisma.$queryRaw<Array<{ word: string; nentry: bigint; ndoc: bigint }>>`
-      SELECT word, nentry, ndoc
-      FROM ts_stat(${
-        `SELECT to_tsvector('${language}', content) FROM document_chunks dc ` +
-        `JOIN documents d ON dc."documentId" = d.id ` +
-        `WHERE d."userId" = '${workspaceId}' AND d.status = 'COMPLETED'`
-      })
-      ORDER BY nentry DESC
-      LIMIT ${limit}
-    `;
-
-    return results.map((r) => ({
-      term: r.word,
-      frequency: Number(r.nentry),
-    }));
+    // Qdrant does not provide global term statistics like PostgreSQL ts_stat.
+    // Return empty results — callers should use a dedicated analytics pipeline.
+    return [];
   }
 
   /**
@@ -298,66 +181,24 @@ export async function searchKeyword(
 
 /**
  * SQL to create tsvector search index
- * Run this as a migration
+ * @deprecated No longer needed with Qdrant — keyword search uses Qdrant text matching.
  */
-export function createSearchIndexSQL(
-  language: SupportedLanguage = 'english',
-  indexName = 'idx_chunks_search'
-): string {
-  return `
-    -- Add search_vector column if it doesn't exist
-    ALTER TABLE "document_chunks" 
-    ADD COLUMN IF NOT EXISTS search_vector tsvector;
-
-    -- Create GIN index for full-text search
-    CREATE INDEX IF NOT EXISTS ${indexName} 
-    ON "document_chunks" 
-    USING GIN(search_vector);
-
-    -- Create function to automatically update search_vector
-    CREATE OR REPLACE FUNCTION update_search_vector()
-    RETURNS TRIGGER AS $$
-    BEGIN
-      NEW.search_vector := to_tsvector('${language}', COALESCE(NEW.content, ''));
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-
-    -- Create trigger to update search_vector on insert/update
-    DROP TRIGGER IF EXISTS trigger_update_search_vector ON "document_chunks";
-    CREATE TRIGGER trigger_update_search_vector
-    BEFORE INSERT OR UPDATE OF content ON "document_chunks"
-    FOR EACH ROW
-    EXECUTE FUNCTION update_search_vector();
-
-    -- Update existing rows
-    UPDATE "document_chunks" 
-    SET search_vector = to_tsvector('${language}', content)
-    WHERE search_vector IS NULL;
-  `;
+export function createSearchIndexSQL(): string {
+  return '-- Keyword search is now handled by Qdrant. No SQL index needed.';
 }
 
 /**
  * SQL to drop search index and related objects
+ * @deprecated No longer needed with Qdrant.
  */
-export function dropSearchIndexSQL(indexName = 'idx_chunks_search'): string {
-  return `
-    DROP TRIGGER IF EXISTS trigger_update_search_vector ON "document_chunks";
-    DROP FUNCTION IF EXISTS update_search_vector();
-    DROP INDEX IF EXISTS ${indexName};
-    ALTER TABLE "document_chunks" DROP COLUMN IF EXISTS search_vector;
-  `;
+export function dropSearchIndexSQL(): string {
+  return '-- Keyword search is now handled by Qdrant. No SQL index to drop.';
 }
 
 /**
  * Check if search index exists
+ * @deprecated With Qdrant, text matching is always available.
  */
-export async function searchIndexExists(indexName = 'idx_chunks_search'): Promise<boolean> {
-  const result = await prisma.$queryRaw<[{ exists: boolean }]>`
-    SELECT EXISTS (
-      SELECT 1 FROM pg_indexes 
-      WHERE indexname = ${indexName}
-    ) as exists
-  `;
-  return result[0].exists;
+export async function searchIndexExists(): Promise<boolean> {
+  return true;
 }

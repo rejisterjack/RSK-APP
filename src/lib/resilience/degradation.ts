@@ -15,17 +15,27 @@ export type DegradableFeature = 'llm_generation' | 'vector_search' | 'file_uploa
 
 const KEY_PREFIX = 'degraded:';
 const DEGRADATION_TTL_MS = 5 * 60 * 1000; // 5 min default TTL
+const MEMORY_CACHE_TTL_MS = 5000; // 5s in-memory cache to avoid Redis/DB on repeated checks
+
+const memoryCache = new Map<DegradableFeature, { value: boolean; expires: number }>();
 
 /**
  * Check if a feature is currently marked as degraded.
- * Strategy: Redis first (fast, 1ms), then database (correct, 5ms), then assume healthy.
+ * Strategy: In-memory cache (instant) → Redis (fast, 1ms) → database (correct, 5ms) → assume healthy.
  */
 export async function isFeatureDegraded(feature: DegradableFeature): Promise<boolean> {
+  // Layer 0: In-memory TTL cache
+  const cached = memoryCache.get(feature);
+  if (cached && Date.now() < cached.expires) return cached.value;
+
   // Layer 1: Redis (fastest)
   if (isRedisConfigured()) {
     try {
       const result = await redis.get(`${KEY_PREFIX}${feature}`);
-      if (result !== null) return true;
+      if (result !== null) {
+        memoryCache.set(feature, { value: true, expires: Date.now() + MEMORY_CACHE_TTL_MS });
+        return true;
+      }
     } catch {
       // Redis failed, fall through to database
     }
@@ -38,7 +48,10 @@ export async function isFeatureDegraded(feature: DegradableFeature): Promise<boo
       where: { feature },
     });
 
-    if (!record || record.status !== 'degraded') return false;
+    if (!record || record.status !== 'degraded') {
+      memoryCache.set(feature, { value: false, expires: Date.now() + MEMORY_CACHE_TTL_MS });
+      return false;
+    }
 
     // Auto-recovery: if expiresAt has passed, clear the degradation
     if (record.expiresAt && record.expiresAt < new Date()) {
@@ -47,9 +60,11 @@ export async function isFeatureDegraded(feature: DegradableFeature): Promise<boo
         data: { status: 'healthy', expiresAt: null },
       });
       logger.info('Feature auto-recovered from degradation', { feature });
+      memoryCache.set(feature, { value: false, expires: Date.now() + MEMORY_CACHE_TTL_MS });
       return false;
     }
 
+    memoryCache.set(feature, { value: true, expires: Date.now() + MEMORY_CACHE_TTL_MS });
     return true;
   } catch (error) {
     // Database also failed — assume healthy (safe default)
@@ -57,6 +72,7 @@ export async function isFeatureDegraded(feature: DegradableFeature): Promise<boo
       feature,
       error: error instanceof Error ? error.message : 'Unknown',
     });
+    memoryCache.set(feature, { value: false, expires: Date.now() + MEMORY_CACHE_TTL_MS });
     return false;
   }
 }

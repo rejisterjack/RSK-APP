@@ -112,23 +112,26 @@ export async function POST(req: Request) {
 
       const chunks = simpleChunk(file.content, 1000, 200);
 
-      for (let i = 0; i < chunks.length; i++) {
-        const { content, start, end } = chunks[i];
-        const embedding = await generateEmbedding(content);
-        await prisma.$executeRaw`
-          INSERT INTO document_chunks ("id", "documentId", "content", "index", "start", "end", "embedding", "createdAt")
-          VALUES (
-            gen_random_uuid()::text,
-            ${document.id},
-            ${content},
-            ${i},
-            ${start},
-            ${end},
-            ${`[${embedding.join(',')}]`}::vector,
-            NOW()
-          )
-        `;
-      }
+      const { upsertChunks } = await import('@/lib/qdrant');
+      const chunkPoints = await Promise.all(
+        chunks.map(async ({ content, start, end }, i) => {
+          const embedding = await generateEmbedding(content);
+          return {
+            documentId: document.id,
+            content,
+            embedding,
+            index: i,
+            start,
+            end,
+          };
+        })
+      );
+      await upsertChunks(chunkPoints, {
+        userId: session.user.id,
+        workspaceId: workspace.id,
+        documentName: file.title || file.path,
+        documentType: 'github',
+      });
 
       await prisma.document.update({
         where: { id: document.id },

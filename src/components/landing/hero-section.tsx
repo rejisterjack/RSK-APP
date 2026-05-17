@@ -303,7 +303,7 @@ export function HeroSection(): React.ReactElement {
                   transition={{ delay: 2.6 }}
                   className="text-green-400/80 pl-4"
                 >
-                  ✔ Connecting to Neon PostgreSQL...
+                  ✔ Connecting to Prisma Postgres...
                 </motion.p>
                 <motion.p
                   initial={{ opacity: 0 }}

@@ -1,9 +1,17 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 export default function MfaPage() {
+  return (
+    <Suspense fallback={<MfaSkeleton />}>
+      <MfaContent />
+    </Suspense>
+  );
+}
+
+function MfaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const userId = searchParams.get('userId') ?? '';
@@ -77,6 +85,21 @@ export default function MfaPage() {
         <p className="text-center text-xs text-muted-foreground">
           Use a backup code if you lost your device
         </p>
+      </div>
+    </div>
+  );
+}
+
+function MfaSkeleton() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="w-full max-w-sm space-y-6 p-6">
+        <div className="text-center">
+          <div className="h-8 w-64 mx-auto bg-muted animate-pulse rounded" />
+          <div className="h-4 w-48 mx-auto mt-2 bg-muted animate-pulse rounded" />
+        </div>
+        <div className="h-14 w-full bg-muted animate-pulse rounded-md" />
+        <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
       </div>
     </div>
   );

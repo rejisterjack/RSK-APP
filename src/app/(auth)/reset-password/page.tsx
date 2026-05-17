@@ -4,13 +4,21 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, Loader2, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function ResetPasswordPage(): React.ReactElement {
+  return (
+    <Suspense fallback={<ResetPasswordSkeleton />}>
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent(): React.ReactElement {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -192,5 +200,19 @@ export default function ResetPasswordPage(): React.ReactElement {
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+function ResetPasswordSkeleton(): React.ReactElement {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="text-center">
+        <div className="h-8 w-48 mx-auto bg-muted rounded" />
+        <div className="h-4 w-32 mx-auto mt-2 bg-muted rounded" />
+      </div>
+      <div className="h-10 w-full bg-muted rounded" />
+      <div className="h-10 w-full bg-muted rounded" />
+      <div className="h-10 w-full bg-muted rounded" />
+    </div>
   );
 }

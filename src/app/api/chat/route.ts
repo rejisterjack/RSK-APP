@@ -13,14 +13,14 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateText, type LanguageModel, streamText } from 'ai';
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import type { LLMMessage } from '@/lib/ai/llm';
 import { modelHealthCache } from '@/lib/ai/model-health-cache';
 import { buildSystemPromptWithContext } from '@/lib/ai/prompts/templates';
 import { bufferUsageRecord } from '@/lib/analytics/usage-buffer';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { prisma, prismaRead } from '@/lib/db';
 import {
   ConcurrentModificationError,
   extractVersion,
@@ -40,28 +40,37 @@ import {
 } from '@/lib/security/rate-limiter';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 
+export const dynamic = 'force-dynamic';
+
 // Lazy-loaded modules to reduce cold-start time.
 // These are heavy and only needed inside the handler body.
-async function citations() {
-  return await import('@/lib/rag/citations');
-}
-async function memory() {
-  return await import('@/lib/rag/memory');
-}
-async function retrieval() {
-  return await import('@/lib/rag/retrieval');
-}
-async function tokenBudget() {
-  return await import('@/lib/rag/token-budget');
-}
-async function degradation() {
-  return await import('@/lib/resilience/degradation');
-}
-async function externalServices() {
-  return await import('@/lib/resilience/external-services');
-}
-async function tracing() {
-  return await import('@/lib/tracing');
+async function loadModules() {
+  const [
+    degradationMod,
+    memoryMod,
+    retrievalMod,
+    tracingMod,
+    citationsMod,
+    tokenBudgetMod,
+    externalServicesMod,
+  ] = await Promise.all([
+    import('@/lib/resilience/degradation'),
+    import('@/lib/rag/memory'),
+    import('@/lib/rag/retrieval'),
+    import('@/lib/tracing'),
+    import('@/lib/rag/citations'),
+    import('@/lib/rag/token-budget'),
+    import('@/lib/resilience/external-services'),
+  ]);
+  return {
+    degradationMod,
+    memoryMod,
+    retrievalMod,
+    tracingMod,
+    citationsMod,
+    tokenBudgetMod,
+    externalServicesMod,
+  };
 }
 
 // =============================================================================
@@ -109,7 +118,7 @@ const MODEL_FALLBACK_CHAIN = [
 // POST Handler
 // =============================================================================
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const startTime = Date.now();
 
   // Cold-start monitoring: track time from module load to first response
@@ -124,8 +133,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Step 1: Authenticate user
-    const session = await auth();
+    // Phase 1: Auth + heavy module loading in parallel
+    const [session, mods] = await Promise.all([auth(), loadModules()]);
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } },
@@ -136,13 +146,19 @@ export async function POST(req: Request) {
     const userId = session.user.id;
     const workspaceId = session.user.workspaceId;
 
-    // Step 2: Check rate limit
+    // Phase 2: Rate limit + degradation + permission check in parallel
     const rateLimitIdentifier = getRateLimitIdentifier(req, { userId, workspaceId });
-    const rateLimitResult = await checkApiRateLimit(rateLimitIdentifier, 'chat', {
-      userId,
-      workspaceId,
-      endpoint: '/api/chat',
-    });
+    const [rateLimitResult, isLlmDegraded, hasWorkspaceAccess] = await Promise.all([
+      checkApiRateLimit(rateLimitIdentifier, 'chat', {
+        userId,
+        workspaceId,
+        endpoint: '/api/chat',
+      }),
+      mods.degradationMod.isFeatureDegraded('llm_generation'),
+      workspaceId
+        ? checkPermission(userId, workspaceId, Permission.READ_DOCUMENTS)
+        : Promise.resolve(true),
+    ]);
 
     if (!rateLimitResult.success) {
       return NextResponse.json(
@@ -163,9 +179,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 2b: Check if LLM generation is degraded
-    const { isFeatureDegraded } = await degradation();
-    if (await isFeatureDegraded('llm_generation')) {
+    if (isLlmDegraded) {
       return NextResponse.json(
         {
           success: false,
@@ -178,26 +192,22 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 3: Validate workspace access
-    if (workspaceId) {
-      const hasAccess = await checkPermission(userId, workspaceId, Permission.READ_DOCUMENTS);
-      if (!hasAccess) {
-        await logAuditEvent({
-          event: AuditEvent.PERMISSION_DENIED,
-          userId,
-          workspaceId,
-          metadata: {
-            action: 'chat',
-            requiredPermission: Permission.READ_DOCUMENTS,
-          },
-          severity: 'WARNING',
-        });
+    if (!hasWorkspaceAccess) {
+      logAuditEvent({
+        event: AuditEvent.PERMISSION_DENIED,
+        userId,
+        workspaceId,
+        metadata: {
+          action: 'chat',
+          requiredPermission: Permission.READ_DOCUMENTS,
+        },
+        severity: 'WARNING',
+      });
 
-        return NextResponse.json(
-          { success: false, error: { code: 'FORBIDDEN', message: 'Access denied to workspace' } },
-          { status: 403 }
-        );
-      }
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Access denied to workspace' } },
+        { status: 403 }
+      );
     }
 
     // Step 4: Parse and validate request body
@@ -247,65 +257,76 @@ export async function POST(req: Request) {
     const effectiveConversationId = conversationId ?? chatId;
     const userMessage = messages[messages.length - 1].content;
 
-    // Step 6: Get conversation history
-    const { ConversationMemory } = await memory();
-    const conversationMemory = new ConversationMemory(prisma);
+    // Step 6+7: Fetch conversation history and retrieve sources in parallel.
+    // Embedding generation is kicked off early and passed as precomputedEmbedding
+    // to retrieveSources, avoiding sequential wait.
+    const ConversationMemory = mods.memoryMod.ConversationMemory;
+    const conversationMemory = new ConversationMemory(prismaRead);
     let history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-
-    if (effectiveConversationId) {
-      // Verify user has access to this conversation
-      const chat = await prisma.chat.findFirst({
-        where: {
-          id: effectiveConversationId,
-          OR: [{ userId }, { workspaceId: workspaceId ?? '' }],
-        },
-      });
-
-      if (!chat) {
-        return NextResponse.json(
-          { success: false, error: { code: 'NOT_FOUND', message: 'Chat not found' } },
-          { status: 404 }
-        );
-      }
-
-      const recentMessages = await conversationMemory.getRecentMessages(
-        effectiveConversationId,
-        10
-      );
-      history = recentMessages
-        .filter((m) => m.role !== 'system')
-        .map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }));
-    }
-
-    // Step 7: Retrieve relevant sources (graceful fallback if embedding/vector search fails)
     let sources: Awaited<ReturnType<typeof import('@/lib/rag/retrieval')['retrieveSources']>> = [];
     let vectorSearchDegraded = false;
-    try {
-      const { isFeatureDegraded: checkDegraded } = await degradation();
-      if (await checkDegraded('vector_search')) {
-        vectorSearchDegraded = true;
-        logger.info('Vector search degraded, skipping RAG retrieval');
-      } else {
-        const { retrieveSources } = await retrieval();
-        const { withSpan } = await tracing();
-        sources = await withSpan('chat.retrieve_sources', async (span) => {
-          span.setAttribute('chat.query_length', userMessage.length);
-          const result = await retrieveSources(userMessage, userId, { ...config, workspaceId });
-          span.setAttribute('chat.sources_count', result.length);
-          return result;
+    let retrievalError: string | null = null;
+
+    // Start embedding generation early (concurrent with history fetch)
+    const embeddingPromise = mods.retrievalMod.generateQueryEmbedding(userMessage).catch(() => null as number[] | null);
+
+    const [historyResult, retrievalResult] = await Promise.all([
+      (async () => {
+        if (!effectiveConversationId) return { history: [], chatNotFound: false };
+        const chat = await prismaRead.chat.findFirst({
+          where: {
+            id: effectiveConversationId,
+            OR: [{ userId }, { workspaceId: workspaceId ?? '' }],
+          },
         });
-      }
-    } catch (err) {
-      logger.warn('Source retrieval failed, continuing without RAG context', {
-        error: err instanceof Error ? err.message : String(err),
-      });
+        if (!chat) return { history: [], chatNotFound: true };
+        const recentMessages = await conversationMemory.getRecentMessages(effectiveConversationId, 10);
+        return {
+          history: recentMessages
+            .filter((m) => m.role !== 'system')
+            .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+          chatNotFound: false,
+        };
+      })(),
+      (async () => {
+        try {
+          if (await mods.degradationMod.isFeatureDegraded('vector_search')) {
+            return { sources: [], degraded: true, error: null };
+          }
+          const { withSpan } = mods.tracingMod;
+          const precomputedEmbedding = await embeddingPromise;
+          const s = await withSpan('chat.retrieve_sources', async (span) => {
+            span.setAttribute('chat.query_length', userMessage.length);
+            const result = await mods.retrievalMod.retrieveSources(userMessage, userId, { ...config, workspaceId, ...(precomputedEmbedding ? { precomputedEmbedding } : {}) });
+            span.setAttribute('chat.sources_count', result.length);
+            return result;
+          });
+          return { sources: s, degraded: false, error: null };
+        } catch (err) {
+          return { sources: [], degraded: false, error: err instanceof Error ? err.message : String(err) };
+        }
+      })(),
+    ]);
+
+    if (historyResult.chatNotFound) {
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Chat not found' } },
+        { status: 404 }
+      );
+    }
+    history = historyResult.history;
+    sources = retrievalResult.sources;
+    vectorSearchDegraded = retrievalResult.degraded;
+    if (retrievalResult.error) {
+      retrievalError = retrievalResult.error;
+      logger.warn('Source retrieval failed, continuing without RAG context', { error: retrievalError });
+    }
+    if (vectorSearchDegraded) {
+      logger.info('Vector search degraded, skipping RAG retrieval');
     }
 
     // Step 8: Build context with citations
-    const { CitationHandler, sourcesToChunks } = await citations();
+    const { CitationHandler, sourcesToChunks } = mods.citationsMod;
     const citationHandler = new CitationHandler();
     const chunks = sourcesToChunks(sources);
     const { context, citationMap } = citationHandler.formatContextWithCitations(chunks);
@@ -323,7 +344,7 @@ export async function POST(req: Request) {
     ];
 
     // Step 10b: Estimate token usage for budget tracking
-    const { estimateMessageTokens } = await tokenBudget();
+    const { estimateMessageTokens } = mods.tokenBudgetMod;
     const estimatedTokens = estimateMessageTokens(llmMessages);
     if (estimatedTokens > config.maxTokens * 2) {
       return NextResponse.json(
@@ -347,8 +368,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // Step 12: Log chat message
-    await logAuditEvent({
+    // Step 12: Log chat message (fire-and-forget)
+    logAuditEvent({
       event: AuditEvent.CHAT_MESSAGE_SENT,
       userId,
       workspaceId,
@@ -366,7 +387,7 @@ export async function POST(req: Request) {
       const allModels = [config.model, ...MODEL_FALLBACK_CHAIN.filter((m) => m !== config.model)];
 
       // If the circuit breaker is open, fail fast
-      const { llmCircuitBreaker } = await externalServices();
+      const { llmCircuitBreaker } = mods.externalServicesMod;
       if (llmCircuitBreaker.getState() === 'OPEN') {
         return NextResponse.json(
           {
@@ -397,33 +418,26 @@ export async function POST(req: Request) {
       }
 
       let usedModel = modelsToTry[0];
-      let probeOk = false;
 
-      // If the primary model was recently confirmed healthy, skip probing entirely
-      if (modelHealthCache.isRecentlyHealthy(modelsToTry[0])) {
-        usedModel = modelsToTry[0];
-        probeOk = true;
-        logger.debug('Skipping probe — model recently healthy', { model: usedModel });
-      } else {
-        // Only probe when model health is unknown or expired
+      // Skip probing — attempt the model directly with a fast timeout.
+      // The circuit breaker and health cache already filter out known-bad models.
+      // If the primary fails, we catch the stream error and fall back.
+      if (!modelHealthCache.isRecentlyHealthy(modelsToTry[0])) {
+        // Health is unknown — try a lightweight check first
+        let foundWorking = false;
         for (const modelName of modelsToTry) {
-          const probeStart = Date.now();
           try {
             await llmCircuitBreaker.execute(async () => {
               await generateText({
                 model: getModel(modelName),
-                messages: [{ role: 'user', content: 'ping' }],
+                messages: [{ role: 'user', content: 'hi' }],
                 maxTokens: 1,
                 abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
               });
             });
             usedModel = modelName;
-            probeOk = true;
+            foundWorking = true;
             modelHealthCache.recordSuccess(modelName);
-            logger.debug('Model probe succeeded', {
-              model: modelName,
-              durationMs: Date.now() - probeStart,
-            });
             break;
           } catch (err) {
             modelHealthCache.recordFailure(modelName);
@@ -432,19 +446,19 @@ export async function POST(req: Request) {
             });
           }
         }
-      }
 
-      if (!probeOk) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'MODEL_UNAVAILABLE',
-              message: 'All AI models are currently unavailable. Please try again in a moment.',
+        if (!foundWorking) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: 'MODEL_UNAVAILABLE',
+                message: 'All AI models are currently unavailable. Please try again in a moment.',
+              },
             },
-          },
-          { status: 503 }
-        );
+            { status: 503 }
+          );
+        }
       }
 
       const result = streamText({
@@ -463,6 +477,12 @@ export async function POST(req: Request) {
                   role: 'ASSISTANT',
                 },
               });
+              // Invalidate chat history cache
+              const { del } = await import('@/lib/cache');
+              const { CACHE_KEYS } = await import('@/lib/cache/keys');
+              for (const lim of [50, 100]) {
+                await del(CACHE_KEYS.chatHistory(effectiveConversationId, lim));
+              }
             }
 
             if (completion.usage) {
@@ -509,6 +529,8 @@ export async function POST(req: Request) {
         headers: {
           'X-Message-Sources': JSON.stringify(sourcesMetadata),
           'X-Model-Used': usedModel,
+          'X-RAG-Status': sources.length > 0 ? 'hit' : retrievalError ? 'error' : vectorSearchDegraded ? 'degraded' : 'miss',
+          ...(retrievalError ? { 'X-RAG-Error': retrievalError.slice(0, 200) } : {}),
           ...(vectorSearchDegraded ? { 'X-Degraded-Features': 'vector_search' } : {}),
         },
       });
@@ -554,6 +576,12 @@ export async function POST(req: Request) {
             },
           },
         });
+        // Invalidate chat history cache
+        const { del: cacheDel } = await import('@/lib/cache');
+        const { CACHE_KEYS: CK } = await import('@/lib/cache/keys');
+        for (const lim of [50, 100]) {
+          await cacheDel(CK.chatHistory(effectiveConversationId, lim));
+        }
       }
 
       // Buffer usage record (batched write)
@@ -630,7 +658,7 @@ export async function POST(req: Request) {
 // PUT Handler - Create a new chat
 // =============================================================================
 
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
   try {
     // Authenticate user
     const session = await auth();
@@ -739,8 +767,8 @@ export async function PUT(req: Request) {
       },
     });
 
-    // Log creation
-    await logAuditEvent({
+    // Log creation (fire-and-forget)
+    logAuditEvent({
       event: AuditEvent.CHAT_CREATED,
       userId,
       workspaceId: resolvedWorkspaceId ?? undefined,
@@ -787,7 +815,7 @@ export async function PUT(req: Request) {
 // GET Handler - Get chat history
 // =============================================================================
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     // Authenticate user
     const session = await auth();
@@ -805,6 +833,7 @@ export async function GET(req: Request) {
     const chatId = searchParams.get('chatId');
     const conversationId = searchParams.get('conversationId');
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '50', 10) || 50, 1), 100);
+    const cursor = searchParams.get('cursor');
 
     const effectiveId = chatId ?? conversationId;
 
@@ -819,7 +848,7 @@ export async function GET(req: Request) {
     }
 
     // Verify user has access to this chat
-    const chat = await prisma.chat.findFirst({
+    const chat = await prismaRead.chat.findFirst({
       where: {
         id: effectiveId,
         OR: [{ userId }, { workspaceId: session.user.workspaceId ?? '' }],
@@ -833,14 +862,45 @@ export async function GET(req: Request) {
       );
     }
 
-    const { ConversationMemory: ConvMem } = await memory();
-    const convMemory = new ConvMem(prisma);
-    const messages = await convMemory.getHistory(effectiveId, limit);
+    const { ConversationMemory: ConvMem } = await import('@/lib/rag/memory');
+    const convMemory = new ConvMem(prismaRead);
+
+    // Use cursor-based pagination when cursor is provided, otherwise fall back to cached simple fetch
+    if (cursor) {
+      const { messages, nextCursor } = await convMemory.getHistoryCursor(effectiveId, { limit, cursor });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          messages: messages.map((m: { id: string; role: string; content: string; createdAt: Date; sources?: unknown }) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            createdAt: m.createdAt.toISOString(),
+            sources: m.sources,
+          })),
+          count: messages.length,
+          nextCursor,
+        },
+      });
+    }
+
+    const { getOrSet } = await import('@/lib/cache');
+    const { CACHE_KEYS, CACHE_TTL } = await import('@/lib/cache/keys');
+
+    const messages = await getOrSet(
+      CACHE_KEYS.chatHistory(effectiveId, limit),
+      async () => {
+        const mem = new ConvMem(prismaRead);
+        return mem.getHistory(effectiveId, limit);
+      },
+      CACHE_TTL.CHAT_HISTORY,
+    );
 
     return NextResponse.json({
       success: true,
       data: {
-        messages: messages.map((m) => ({
+        messages: messages.map((m: { id: string; role: string; content: string; createdAt: Date; sources?: unknown }) => ({
           id: m.id,
           role: m.role,
           content: m.content,
@@ -868,7 +928,7 @@ export async function GET(req: Request) {
 // DELETE Handler - Delete chat
 // =============================================================================
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
     // Authenticate user
     const session = await auth();
@@ -894,7 +954,7 @@ export async function DELETE(req: Request) {
     }
 
     // Verify user has access to delete this chat
-    const chat = await prisma.chat.findFirst({
+    const chat = await prismaRead.chat.findFirst({
       where: {
         id: chatId,
         OR: [{ userId }, workspaceId ? { workspaceId } : {}],
@@ -924,8 +984,8 @@ export async function DELETE(req: Request) {
       where: { id: chatId },
     });
 
-    // Log deletion
-    await logAuditEvent({
+    // Log deletion (fire-and-forget)
+    logAuditEvent({
       event: AuditEvent.CHAT_DELETED,
       userId,
       workspaceId: chat.workspaceId ?? undefined,
@@ -951,7 +1011,7 @@ export async function DELETE(req: Request) {
 // PATCH Handler - Update chat (title, model, etc.)
 // =============================================================================
 
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   try {
     // Authenticate user
     const session = await auth();
@@ -1003,7 +1063,7 @@ export async function PATCH(req: Request) {
     }
 
     // Verify user has access to this chat
-    const chat = await prisma.chat.findFirst({
+    const chat = await prismaRead.chat.findFirst({
       where: {
         id: chatId,
         OR: [{ userId }, workspaceId ? { workspaceId } : {}],
@@ -1044,9 +1104,8 @@ export async function PATCH(req: Request) {
       throw e;
     }
 
-    // Log update
-    // FIXED: Use correct audit event for chat updates
-    await logAuditEvent({
+    // Log update (fire-and-forget)
+    logAuditEvent({
       event: AuditEvent.CHAT_UPDATED,
       userId,
       workspaceId: chat.workspaceId ?? undefined,
@@ -1198,7 +1257,7 @@ async function generateWithFallback(
 
   for (const modelName of modelsToTry) {
     try {
-      const { llmCircuitBreaker: breaker } = await externalServices();
+      const { llmCircuitBreaker: breaker } = await import('@/lib/resilience/external-services');
       const result = await breaker.execute(async () =>
         generateText({
           model: getModel(modelName),

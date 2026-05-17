@@ -6,7 +6,8 @@
  */
 
 import { generateEmbedding } from '@/lib/ai';
-import { prisma } from '@/lib/db';
+import { searchSimilar } from '@/lib/qdrant';
+import { buildQdrantFilter } from '@/lib/qdrant/filters';
 import type { RAGConfig, Source } from '@/types';
 
 // Default RAG configuration
@@ -52,35 +53,22 @@ export async function searchSimilarChunks(
   const topK = config.topK ?? defaultRAGConfig.topK;
   const threshold = config.similarityThreshold ?? defaultRAGConfig.similarityThreshold;
 
-  const results = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      documentId: string;
-      content: string;
-      index: number;
-      page: number | null;
-      section: string | null;
-      documentName: string;
-      similarity: number;
-    }>
-  >`
-    SELECT 
-      dc.id,
-      dc."documentId" as "documentId",
-      dc.content,
-      dc.index,
-      dc.page,
-      dc.section,
-      d.name as "documentName",
-      1 - (dc.embedding <=> ${queryEmbedding}::vector) as similarity
-    FROM document_chunks dc
-    JOIN documents d ON dc."documentId" = d.id
-    WHERE d."userId" = ${userId}
-      AND d.status = 'COMPLETED'
-      AND 1 - (dc.embedding <=> ${queryEmbedding}::vector) > ${threshold}
-    ORDER BY dc.embedding <=> ${queryEmbedding}::vector
-    LIMIT ${topK}
-  `;
+  const filter = buildQdrantFilter({ userId });
+  const qdrantResults = await searchSimilar(queryEmbedding, { filter, topK, minScore: threshold });
+
+  const results = qdrantResults.map((point) => {
+    const p = point.payload as Record<string, unknown>;
+    return {
+      id: String(point.id),
+      documentId: (p?.documentId as string) ?? '',
+      content: (p?.content as string) ?? '',
+      index: (p?.index as number) ?? 0,
+      page: (p?.page as number | null) ?? null,
+      section: (p?.section as string | null) ?? null,
+      documentName: (p?.documentName as string) ?? '',
+      similarity: point.score ?? 0,
+    };
+  });
 
   return results;
 }

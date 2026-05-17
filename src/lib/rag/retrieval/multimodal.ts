@@ -11,6 +11,8 @@ import {
   generateImageEmbedding,
   generateTextEmbeddingForImageSearch,
 } from '@/lib/ai/embeddings/image';
+import { searchSimilar, searchSimilarImages } from '@/lib/qdrant';
+import { buildQdrantFilter } from '@/lib/qdrant/filters';
 import { prisma } from '@/lib/db';
 import type { RetrievalOptions, RetrievedChunk } from './types';
 
@@ -82,108 +84,64 @@ export async function searchByImage(
     // Generate query embedding
     const queryEmbedding = await generateImageEmbedding(queryImage);
 
-    // Search for similar images using pgvector
-    const results = await prisma.$queryRaw<
-      Array<{
-        id: string;
-        documentId: string;
-        document_name: string;
-        storageUrl: string;
-        caption: string | null;
-        ocrText: string | null;
-        pageNumber: number | null;
-        width: number | null;
-        height: number | null;
-        mime_type: string;
-        similarity: number;
-      }>
-    >`
-      SELECT 
-        di.id,
-        di."documentId",
-        d.name as document_name,
-        di."storageUrl",
-        di.caption,
-        di."ocrText",
-        di."pageNumber",
-        di.width,
-        di.height,
-        di."mimeType",
-        1 - (ie.embedding <=> ${queryEmbedding}::vector) as similarity
-      FROM image_embeddings ie
-      JOIN document_images di ON ie."imageId" = di.id
-      JOIN documents d ON di."documentId" = d.id
-      WHERE d."userId" = ${workspaceId}
-        AND d.status = 'COMPLETED'
-        AND ie.embedding IS NOT NULL
-        AND 1 - (ie.embedding <=> ${queryEmbedding}::vector) > ${minScore}
-      ORDER BY ie.embedding <=> ${queryEmbedding}::vector
-      LIMIT ${topK}
-    `;
+    // Search for similar images using Qdrant
+    const qdrantResults = await searchSimilarImages(queryEmbedding, {
+      userId: workspaceId,
+      topK,
+    });
 
-    const images: ImageSearchResult[] = results.map((r) => ({
-      id: r.id,
-      documentId: r.documentId,
-      documentName: r.document_name,
-      storageUrl: r.storageUrl,
-      caption: r.caption || undefined,
-      ocrText: r.ocrText || undefined,
-      pageNumber: r.pageNumber || undefined,
-      similarity: Number(r.similarity),
-      metadata: {
-        width: r.width || undefined,
-        height: r.height || undefined,
-        mimeType: r.mime_type,
-      },
-    }));
+    const images: ImageSearchResult[] = qdrantResults
+      .filter((point) => (point.score ?? 0) >= minScore)
+      .map((point) => {
+        const p = point.payload as Record<string, unknown>;
+        return {
+          id: String(point.id),
+          documentId: (p?.documentId as string) ?? '',
+          documentName: '', // Not stored in image embeddings payload
+          storageUrl: (p?.storageUrl as string) ?? '',
+          caption: (p?.caption as string) || undefined,
+          ocrText: undefined,
+          pageNumber: (p?.pageNumber as number) || undefined,
+          similarity: point.score ?? 0,
+          metadata: {
+            mimeType: undefined,
+          },
+        };
+      });
 
     // Optionally fetch related chunks
     let chunks: RetrievedChunk[] = [];
     if (includeChunks && images.length > 0) {
       const documentIds = [...new Set(images.map((img) => img.documentId))];
 
-      // Get chunks from related documents
-      const chunkResults = await prisma.$queryRaw<
-        Array<{
-          id: string;
-          documentId: string;
-          content: string;
-          index: number;
-          page: number | null;
-          section: string | null;
-          document_name: string;
-        }>
-      >`
-        SELECT 
-          dc.id,
-          dc."documentId",
-          dc.content,
-          dc.index,
-          dc.page,
-          dc.section,
-          d.name as document_name
-        FROM document_chunks dc
-        JOIN documents d ON dc."documentId" = d.id
-        WHERE dc."documentId" = ANY(${documentIds}::text[])
-          AND d."userId" = ${workspaceId}
-        ORDER BY dc.index
-        LIMIT ${topK * 2}
-      `;
+      // Get chunks from related documents via Qdrant
+      const chunkFilter = buildQdrantFilter({
+        userId: workspaceId,
+        filters: { documentIds },
+      });
+      const zeroVector = new Array(768).fill(0);
+      const chunkResults = await searchSimilar(zeroVector, {
+        filter: chunkFilter,
+        topK: topK * 2,
+      });
 
-      chunks = chunkResults.map((c) => ({
-        id: c.id,
-        content: c.content,
-        score: 0.5, // Default score for associated chunks
-        metadata: {
-          documentId: c.documentId,
-          documentName: c.document_name,
-          documentType: 'PDF',
-          page: c.page || undefined,
-          position: c.index,
-          section: c.section || undefined,
-        },
-        retrievalMethod: 'image-associated',
-      }));
+      chunks = chunkResults.map((point) => {
+        const p = point.payload as Record<string, unknown>;
+        return {
+          id: String(point.id),
+          content: (p?.content as string) ?? '',
+          score: 0.5,
+          metadata: {
+            documentId: (p?.documentId as string) ?? '',
+            documentName: (p?.documentName as string) ?? '',
+            documentType: (p?.documentType as string) ?? 'PDF',
+            page: (p?.page as number) || undefined,
+            position: (p?.index as number) ?? 0,
+            section: (p?.section as string) || undefined,
+          },
+          retrievalMethod: 'image-associated',
+        };
+      });
     }
 
     return {
@@ -222,107 +180,63 @@ export async function searchImagesByText(
     // Generate text embedding for image search
     const textEmbedding = await generateTextEmbeddingForImageSearch(query);
 
-    // Search for matching images
-    const results = await prisma.$queryRaw<
-      Array<{
-        id: string;
-        documentId: string;
-        document_name: string;
-        storageUrl: string;
-        caption: string | null;
-        ocrText: string | null;
-        pageNumber: number | null;
-        width: number | null;
-        height: number | null;
-        mime_type: string;
-        similarity: number;
-      }>
-    >`
-      SELECT 
-        di.id,
-        di."documentId",
-        d.name as document_name,
-        di."storageUrl",
-        di.caption,
-        di."ocrText",
-        di."pageNumber",
-        di.width,
-        di.height,
-        di."mimeType",
-        1 - (ie.embedding <=> ${textEmbedding}::vector) as similarity
-      FROM image_embeddings ie
-      JOIN document_images di ON ie."imageId" = di.id
-      JOIN documents d ON di."documentId" = d.id
-      WHERE d."userId" = ${workspaceId}
-        AND d.status = 'COMPLETED'
-        AND ie.embedding IS NOT NULL
-        AND 1 - (ie.embedding <=> ${textEmbedding}::vector) > ${minScore}
-      ORDER BY ie.embedding <=> ${textEmbedding}::vector
-      LIMIT ${topK}
-    `;
+    // Search for matching images using Qdrant
+    const qdrantResults = await searchSimilarImages(textEmbedding, {
+      userId: workspaceId,
+      topK,
+    });
 
-    const images: ImageSearchResult[] = results.map((r) => ({
-      id: r.id,
-      documentId: r.documentId,
-      documentName: r.document_name,
-      storageUrl: r.storageUrl,
-      caption: r.caption || undefined,
-      ocrText: r.ocrText || undefined,
-      pageNumber: r.pageNumber || undefined,
-      similarity: Number(r.similarity),
-      metadata: {
-        width: r.width || undefined,
-        height: r.height || undefined,
-        mimeType: r.mime_type,
-      },
-    }));
+    const images: ImageSearchResult[] = qdrantResults
+      .filter((point) => (point.score ?? 0) >= minScore)
+      .map((point) => {
+        const p = point.payload as Record<string, unknown>;
+        return {
+          id: String(point.id),
+          documentId: (p?.documentId as string) ?? '',
+          documentName: '',
+          storageUrl: (p?.storageUrl as string) ?? '',
+          caption: (p?.caption as string) || undefined,
+          ocrText: undefined,
+          pageNumber: (p?.pageNumber as number) || undefined,
+          similarity: point.score ?? 0,
+          metadata: {
+            mimeType: undefined,
+          },
+        };
+      });
 
     // Optionally fetch related chunks
     let chunks: RetrievedChunk[] = [];
     if (includeChunks && images.length > 0) {
       const documentIds = [...new Set(images.map((img) => img.documentId))];
 
-      const chunkResults = await prisma.$queryRaw<
-        Array<{
-          id: string;
-          documentId: string;
-          content: string;
-          index: number;
-          page: number | null;
-          section: string | null;
-          document_name: string;
-        }>
-      >`
-        SELECT 
-          dc.id,
-          dc."documentId",
-          dc.content,
-          dc.index,
-          dc.page,
-          dc.section,
-          d.name as document_name
-        FROM document_chunks dc
-        JOIN documents d ON dc."documentId" = d.id
-        WHERE dc."documentId" = ANY(${documentIds}::text[])
-          AND d."userId" = ${workspaceId}
-        ORDER BY dc.index
-        LIMIT ${topK * 2}
-      `;
+      const chunkFilter = buildQdrantFilter({
+        userId: workspaceId,
+        filters: { documentIds },
+      });
+      const zeroVector = new Array(768).fill(0);
+      const chunkResults = await searchSimilar(zeroVector, {
+        filter: chunkFilter,
+        topK: topK * 2,
+      });
 
-      chunks = chunkResults.map((c) => ({
-        id: c.id,
-        content: c.content,
-        score: 0.5,
-        metadata: {
-          documentId: c.documentId,
-          documentName: c.document_name,
-          documentType: 'PDF',
-          page: c.page || undefined,
-          position: c.index,
-          section: c.section || undefined,
-        },
-        retrievalMethod: 'text-image-associated',
-      }));
+      chunks = chunkResults.map((point) => {
+        const p = point.payload as Record<string, unknown>;
+        return {
+          id: String(point.id),
+          content: (p?.content as string) ?? '',
+          score: 0.5,
+          metadata: {
+            documentId: (p?.documentId as string) ?? '',
+            documentName: (p?.documentName as string) ?? '',
+            documentType: (p?.documentType as string) ?? 'PDF',
+            page: (p?.page as number) || undefined,
+            position: (p?.index as number) ?? 0,
+            section: (p?.section as string) || undefined,
+          },
+          retrievalMethod: 'text-image-associated',
+        };
+      });
     }
 
     return {
@@ -382,47 +296,33 @@ export async function searchMultiModal(
     if (options.includeChunks && mergedImages.length > 0) {
       const documentIds = [...new Set(mergedImages.map((img) => img.documentId))];
 
-      const chunkResults = await prisma.$queryRaw<
-        Array<{
-          id: string;
-          documentId: string;
-          content: string;
-          index: number;
-          page: number | null;
-          section: string | null;
-          document_name: string;
-        }>
-      >`
-        SELECT 
-          dc.id,
-          dc."documentId",
-          dc.content,
-          dc.index,
-          dc.page,
-          dc.section,
-          d.name as document_name
-        FROM document_chunks dc
-        JOIN documents d ON dc."documentId" = d.id
-        WHERE dc."documentId" = ANY(${documentIds}::text[])
-          AND d."userId" = ${workspaceId}
-        ORDER BY dc.index
-        LIMIT ${(options.topK ?? 5) * 2}
-      `;
+      const chunkFilter = buildQdrantFilter({
+        userId: workspaceId,
+        filters: { documentIds },
+      });
+      const zeroVector = new Array(768).fill(0);
+      const chunkResults = await searchSimilar(zeroVector, {
+        filter: chunkFilter,
+        topK: (options.topK ?? 5) * 2,
+      });
 
-      chunks = chunkResults.map((c) => ({
-        id: c.id,
-        content: c.content,
-        score: 0.5,
-        metadata: {
-          documentId: c.documentId,
-          documentName: c.document_name,
-          documentType: 'PDF',
-          page: c.page || undefined,
-          position: c.index,
-          section: c.section || undefined,
-        },
-        retrievalMethod: 'multimodal-associated',
-      }));
+      chunks = chunkResults.map((point) => {
+        const p = point.payload as Record<string, unknown>;
+        return {
+          id: String(point.id),
+          content: (p?.content as string) ?? '',
+          score: 0.5,
+          metadata: {
+            documentId: (p?.documentId as string) ?? '',
+            documentName: (p?.documentName as string) ?? '',
+            documentType: (p?.documentType as string) ?? 'PDF',
+            page: (p?.page as number) || undefined,
+            position: (p?.index as number) ?? 0,
+            section: (p?.section as string) || undefined,
+          },
+          retrievalMethod: 'multimodal-associated',
+        };
+      });
     }
 
     return {

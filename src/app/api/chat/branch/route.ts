@@ -9,7 +9,7 @@
  * - DELETE /api/chat/branch?branchId=x - Delete branch
  */
 
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -22,11 +22,13 @@ import {
   listBranches,
 } from '@/lib/rag/conversation-branch';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // POST - Create new branch
 // =============================================================================
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     // Authenticate
     const session = await auth();
@@ -135,7 +137,7 @@ export async function POST(req: Request) {
 // GET - List branches for a conversation
 // =============================================================================
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     // Authenticate
     const session = await auth();
@@ -218,7 +220,7 @@ export async function GET(req: Request) {
 // PATCH - Edit message and create new branch
 // =============================================================================
 
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   try {
     // Authenticate
     const session = await auth();
@@ -345,7 +347,7 @@ export async function PATCH(req: Request) {
 // PUT - Rename branch
 // =============================================================================
 
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
   try {
     // Authenticate
     const session = await auth();
@@ -445,7 +447,7 @@ export async function PUT(req: Request) {
 // DELETE - Delete branch
 // =============================================================================
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
     // Authenticate
     const session = await auth();

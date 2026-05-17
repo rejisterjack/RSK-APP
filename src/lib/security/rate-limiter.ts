@@ -359,15 +359,27 @@ export function checkMemoryRateLimit(
 // Public API
 // =============================================================================
 
+// Short-lived in-memory cache for rate limit results on hot paths.
+// Avoids Redis/DB round-trips when the same user checks multiple times within 1s.
+const rlMemoryCache = new Map<string, { result: RateLimitResult; expires: number }>();
+const RL_CACHE_TTL_MS = 1000; // 1 second
+
 export async function checkRateLimit(
   identifier: string,
   type: RateLimitType,
   limitOverride?: number
 ): Promise<RateLimitResult> {
+  const cacheKey = `${type}:${identifier}:${limitOverride ?? ''}`;
+  const cached = rlMemoryCache.get(cacheKey);
+  if (cached && Date.now() < cached.expires) return cached.result;
+
   const base = rateLimits[type];
   const config = limitOverride !== undefined ? { ...base, limit: limitOverride } : { ...base };
   const limiter = getRateLimiter();
-  return limiter.checkLimit(identifier, config);
+  const result = await limiter.checkLimit(identifier, config);
+
+  rlMemoryCache.set(cacheKey, { result, expires: Date.now() + RL_CACHE_TTL_MS });
+  return result;
 }
 
 export async function checkApiRateLimit(
@@ -378,7 +390,7 @@ export async function checkApiRateLimit(
   const result = await checkRateLimit(identifier, type, metadata?.limitOverride);
 
   if (!result.success && metadata?.userId) {
-    await logAuditEvent({
+    logAuditEvent({
       event: AuditEvent.RATE_LIMIT_HIT,
       userId: metadata.userId,
       workspaceId: metadata.workspaceId,

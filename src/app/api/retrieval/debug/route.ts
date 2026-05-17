@@ -19,7 +19,8 @@ import { NextResponse } from 'next/server';
 import { generateEmbedding } from '@/lib/ai';
 import { auth } from '@/lib/auth';
 import { getServerSession } from '@/lib/auth/session';
-import { prisma } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   // Gate on RETRIEVAL_DEBUG env var
@@ -56,7 +57,7 @@ export async function GET(req: Request) {
   const embedding = await generateEmbedding(query);
   timings.embedding_ms = Date.now() - embedStart;
 
-  // Step 2: Vector similarity search via pgvector
+  // Step 2: Vector similarity search via Qdrant
   const searchStart = Date.now();
   type ChunkRow = {
     id: string;
@@ -67,21 +68,18 @@ export async function GET(req: Request) {
     documentName: string;
   };
 
-  const chunks = await prisma.$queryRaw<ChunkRow[]>`
-    SELECT
-      dc.id,
-      dc.content,
-      dc."documentId",
-      dc.index,
-      1 - (dc.embedding <=> ${`[${embedding.join(',')}]`}::vector) AS similarity,
-      d.name AS "documentName"
-    FROM document_chunks dc
-    JOIN documents d ON d.id = dc."documentId"
-    WHERE d."workspaceId" = ${workspace.id}
-      AND dc.embedding IS NOT NULL
-    ORDER BY dc.embedding <=> ${`[${embedding.join(',')}]`}::vector
-    LIMIT ${limitParam}
-  `;
+  const { searchSimilar } = await import('@/lib/qdrant');
+  const { buildQdrantFilter } = await import('@/lib/qdrant/filters');
+  const qdrantFilter = buildQdrantFilter({ workspaceId: workspace.id });
+  const qdrantResults = await searchSimilar(embedding, { filter: qdrantFilter, topK: limitParam });
+  const chunks: ChunkRow[] = qdrantResults.map((point) => ({
+    id: String(point.id),
+    content: (point.payload as Record<string, unknown>)?.content as string ?? '',
+    documentId: (point.payload as Record<string, unknown>)?.documentId as string ?? '',
+    index: (point.payload as Record<string, unknown>)?.index as number ?? 0,
+    similarity: point.score ?? 0,
+    documentName: (point.payload as Record<string, unknown>)?.documentName as string ?? '',
+  }));
   timings.vector_search_ms = Date.now() - searchStart;
 
   // Step 3: Keyword BM25-style scoring (simple term overlap, no external dep)

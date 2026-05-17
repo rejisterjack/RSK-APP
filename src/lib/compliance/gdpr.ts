@@ -128,14 +128,15 @@ async function eraseAllUserData(userId: string, report: ErasureReport): Promise<
   const apiKeysDeleted = await prisma.apiKey.deleteMany({ where: { userId } });
   report.itemsProcessed.apiKeys = apiKeysDeleted.count;
 
-  // 4. Document chunks (cascade from documents)
+  // 4. Document chunks (Qdrant vectors)
   const documents = await prisma.document.findMany({
     where: { userId },
     select: { id: true },
   });
 
+  const { deleteByDocumentId } = await import('@/lib/qdrant');
   for (const doc of documents) {
-    await prisma.documentChunk.deleteMany({ where: { documentId: doc.id } });
+    await deleteByDocumentId(doc.id);
   }
 
   // 5. Documents
@@ -178,8 +179,9 @@ async function eraseUserDocuments(userId: string, report: ErasureReport): Promis
     select: { id: true },
   });
 
+  const { deleteByDocumentId } = await import('@/lib/qdrant');
   for (const doc of documents) {
-    await prisma.documentChunk.deleteMany({ where: { documentId: doc.id } });
+    await deleteByDocumentId(doc.id);
   }
 
   const result = await prisma.document.deleteMany({ where: { userId } });

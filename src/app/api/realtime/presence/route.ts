@@ -22,6 +22,8 @@ import {
 import type { PresenceStatus } from '@/lib/realtime/types';
 import { getRateLimiter } from '@/lib/security/rate-limiter';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // POST Handler - Update User Presence
 // =============================================================================

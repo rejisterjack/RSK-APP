@@ -619,7 +619,7 @@ Implementation: `src/lib/security/ssrf-protection.ts`, `src/lib/security/input-v
 | Component | Service | Notes |
 |-----------|---------|-------|
 | Application | Vercel or Railway | Edge functions, automatic HTTPS |
-| Database | Managed PostgreSQL (Neon, Supabase, or Railway) | TLS connections, automatic backups |
+| Database | Managed PostgreSQL (Prisma Postgres, Supabase, or Railway) | TLS connections, automatic backups |
 | Cache/Rate Limiting | Upstash Redis | REST API (Edge-compatible), TLS |
 | File Storage | Cloudinary | Server-side encryption at rest |
 | AI Models | OpenAI, OpenRouter, Google Gemini | TLS, API key authentication |

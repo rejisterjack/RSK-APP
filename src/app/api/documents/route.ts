@@ -12,9 +12,10 @@
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { prisma, prismaRead } from '@/lib/db';
 import { parsePaginationParams, validatePaginationParams } from '@/lib/db/cursor-pagination';
 import {
   addRateLimitHeaders,
@@ -22,6 +23,8 @@ import {
   getRateLimitIdentifier,
 } from '@/lib/security/rate-limiter';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
+
+export const dynamic = 'force-dynamic';
 
 // Document status mapping from DB to UI
 const STATUS_MAP: Record<string, 'pending' | 'processing' | 'completed' | 'error'> = {
@@ -95,7 +98,7 @@ export async function GET(req: NextRequest) {
     if (workspaceIdFilter) {
       const hasAccess = await checkPermission(userId, workspaceIdFilter, Permission.READ_DOCUMENTS);
       if (!hasAccess) {
-        await logAuditEvent({
+        logAuditEvent({
           event: AuditEvent.PERMISSION_DENIED,
           userId,
           workspaceId: workspaceIdFilter,
@@ -134,10 +137,17 @@ export async function GET(req: NextRequest) {
     const { limit: pageSize, cursor, sortOrder } = paginationParams;
     const take = pageSize + 1; // +1 to detect next page
 
-    const documents = await prisma.document.findMany({
+    const documents = await prismaRead.document.findMany({
       where,
-      include: {
-        _count: { select: { chunks: true } },
+      select: {
+        id: true,
+        name: true,
+        contentType: true,
+        size: true,
+        status: true,
+        metadata: true,
+        chunkCount: true,
+        createdAt: true,
         ingestionJob: { select: { progress: true, error: true, errorCategory: true } },
       },
       orderBy: { createdAt: sortOrder },
@@ -145,7 +155,6 @@ export async function GET(req: NextRequest) {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
 
-    // Step 7: Format response
     const formattedDocuments = documents.map((doc) => {
       const metadata = (doc.metadata as Record<string, unknown>) || {};
       return {
@@ -156,7 +165,7 @@ export async function GET(req: NextRequest) {
         size: doc.size,
         status: STATUS_MAP[doc.status] || 'pending',
         progress: doc.ingestionJob?.progress,
-        chunkCount: doc._count.chunks,
+        chunkCount: doc.chunkCount,
         createdAt: doc.createdAt.toISOString(),
         errorMessage: doc.ingestionJob?.error || (metadata.error as string) || undefined,
         errorCategory: doc.ingestionJob?.errorCategory ?? undefined,
@@ -233,7 +242,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Step 3: Fetch document
-    const document = await prisma.document.findUnique({
+    const document = await prismaRead.document.findUnique({
       where: { id: documentId },
     });
 
@@ -251,7 +260,7 @@ export async function DELETE(req: NextRequest) {
       (await checkPermission(userId, document.workspaceId, Permission.DELETE_DOCUMENTS));
 
     if (!hasDirectAccess && !hasWorkspaceAccess) {
-      await logAuditEvent({
+      logAuditEvent({
         event: AuditEvent.PERMISSION_DENIED,
         userId,
         workspaceId: document.workspaceId ?? undefined,
@@ -272,6 +281,12 @@ export async function DELETE(req: NextRequest) {
     await prisma.document.delete({
       where: { id: documentId },
     });
+
+    // Invalidate document caches
+    if (document.workspaceId) {
+      revalidateTag(`workspace-docs-${document.workspaceId}`, 'default');
+    }
+    revalidateTag(`user-docs-${userId}`, 'default');
 
     // Step 6: Log deletion
     await logAuditEvent({

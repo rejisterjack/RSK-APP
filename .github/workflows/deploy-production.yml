@@ -19,8 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '20'
-  PNPM_VERSION: '10'
+  BUN_VERSION: "1.2"
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
@@ -49,7 +48,7 @@ jobs:
       - name: Check CI status
         if: steps.wait-for-ci.outputs.conclusion != 'success'
         run: |
-          echo "❌ CI workflow did not pass. Blocking deployment."
+          echo "CI workflow did not pass. Blocking deployment."
           exit 1
 
       - name: Wait for Security Scan
@@ -64,13 +63,13 @@ jobs:
       - name: Check Security Scan status
         if: steps.wait-for-security.outputs.conclusion != 'success'
         run: |
-          echo "❌ Security scan did not pass. Blocking deployment."
+          echo "Security scan did not pass. Blocking deployment."
           exit 1
 
-      - name: Run pnpm audit
+      - name: Run npm audit
         id: audit
         run: |
-          pnpm audit --audit-level high --json > audit-results.json || true
+          npm audit --audit-level high --json > audit-results.json || true
           
           CRITICAL=$(jq '[.advisories[]? | select(.severity == "critical")] | length' audit-results.json 2>/dev/null || echo "0")
           HIGH=$(jq '[.advisories[]? | select(.severity == "high")] | length' audit-results.json 2>/dev/null || echo "0")
@@ -79,12 +78,12 @@ jobs:
           echo "High vulnerabilities: $HIGH"
           
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
-            echo "❌ Security audit failed. Critical: $CRITICAL, High: $HIGH"
+            echo "Security audit failed. Critical: $CRITICAL, High: $HIGH"
             jq -r '.advisories[]? | select(.severity == "critical" or .severity == "high") | "\(.severity): \(.module_name)"' audit-results.json
             exit 1
           fi
           
-          echo "✅ Security audit passed"
+          echo "Security audit passed"
 
       - name: Check for secrets in code
         uses: trufflesecurity/trufflehog@main
@@ -98,7 +97,7 @@ jobs:
         id: gates
         run: |
           echo "passed=true" >> $GITHUB_OUTPUT
-          echo "✅ All security gates passed"
+          echo "All security gates passed"
 
   # ==========================================
   # Pre-deployment Checks
@@ -126,7 +125,7 @@ jobs:
       - name: Require manual approval for production
         if: github.event.inputs.environment == 'production' || github.event_name == 'release'
         run: |
-          echo "⚠️ Production deployment requires manual approval"
+          echo "Production deployment requires manual approval"
           echo "Review the security scan results before proceeding"
 
   # ==========================================
@@ -187,22 +186,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Install Vercel CLI
-        run: pnpm add -g vercel@latest
+        run: bun add -g vercel@latest
 
       - name: Pull Vercel environment variables
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -238,36 +230,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: pnpm db:generate
+        run: bun run db:generate
 
       - name: Run database migrations
-        run: pnpm db:migrate:prod
+        run: bun run db:migrate:prod
         env:
           POSTGRES_PRISMA_URL: ${{ secrets.DATABASE_URL }}
           POSTGRES_URL_NON_POOLING: ${{ secrets.DATABASE_URL_NON_POOLING }}
 
       - name: Verify migrations
         run: |
-          echo "✅ Database migrations completed successfully"
-          # Optional: Run a quick sanity check query
-          # npx prisma db execute --stdin <<EOF
-          # SELECT COUNT(*) FROM "User";
-          # EOF
+          echo "Database migrations completed successfully"
 
   # ==========================================
   # Health Check
@@ -296,7 +277,7 @@ jobs:
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" 2>/dev/null || echo "000")
             
             if [ "$HTTP_CODE" = "200" ]; then
-              echo "✅ Health check passed"
+              echo "Health check passed"
               echo "status=healthy" >> $GITHUB_OUTPUT
               exit 0
             fi
@@ -306,7 +287,7 @@ jobs:
             sleep 10
           done
           
-          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          echo "Health check failed after $MAX_RETRIES attempts"
           echo "status=unhealthy" >> $GITHUB_OUTPUT
           exit 1
 
@@ -322,27 +303,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Run smoke tests
         run: |
           # Run a subset of critical E2E tests as smoke tests
-          pnpm test:e2e --project=chromium --grep "@smoke" || true
+          bun run test:e2e --project=chromium --grep "@smoke" || true
         env:
           PLAYWRIGHT_BASE_URL: ${{ needs.deploy.outputs.url || env.DEPLOYMENT_URL }}
           CI: true
@@ -362,11 +336,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Vercel CLI
-        run: pnpm add -g vercel@latest
+        run: bun add -g vercel@latest
 
       - name: Rollback to previous deployment
         run: |
-          echo "❌ Deployment failed health checks. Initiating rollback..."
+          echo "Deployment failed health checks. Initiating rollback..."
           
           # Get previous deployment
           PREV_DEPLOYMENT=$(vercel list --token=${{ secrets.VERCEL_TOKEN }} --meta githubCommitRef=main 2>/dev/null | grep -E '^\s+[a-zA-Z0-9]+' | head -2 | tail -1 | awk '{print $1}')
@@ -374,19 +348,15 @@ jobs:
           if [ -n "$PREV_DEPLOYMENT" ]; then
             echo "Rolling back to deployment: $PREV_DEPLOYMENT"
             vercel rollback $PREV_DEPLOYMENT --token=${{ secrets.VERCEL_TOKEN }} --yes
-            echo "✅ Rollback completed"
+            echo "Rollback completed"
           else
-            echo "⚠️ Could not find previous deployment for rollback"
+            echo "Could not find previous deployment for rollback"
           fi
         continue-on-error: true
 
       - name: Notify failure
         run: |
-          echo "🚨 Production deployment failed and has been rolled back"
-          # Add Slack/Discord notification here
-          # curl -X POST -H 'Content-type: application/json' \
-          #   --data '{"text":"🚨 Production deployment failed for ${{ github.repository }}"}' \
-          #   ${{ secrets.SLACK_WEBHOOK_URL }}
+          echo "Production deployment failed and has been rolled back"
 
   # ==========================================
   # Post-deployment Notification
@@ -399,10 +369,6 @@ jobs:
     steps:
       - name: Deployment success notification
         run: |
-          echo "🚀 Production deployment successful!"
+          echo "Production deployment successful!"
           echo "URL: ${{ needs.deploy.outputs.url || env.DEPLOYMENT_URL }}"
           echo "Release: ${{ github.event.release.tag_name || 'manual deployment' }}"
-          # Add Slack/Discord notification here
-          # curl -X POST -H 'Content-type: application/json' \
-          #   --data '{"text":"🚀 Production deployment successful: ${{ needs.deploy.outputs.url }}"}' \
-          #   ${{ secrets.SLACK_WEBHOOK_URL }}

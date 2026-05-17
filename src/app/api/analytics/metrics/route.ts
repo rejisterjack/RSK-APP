@@ -17,6 +17,8 @@ import {
 } from '@/lib/security/rate-limiter';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 
+export const dynamic = 'force-dynamic';
+
 // =============================================================================
 // GET Handler
 // =============================================================================

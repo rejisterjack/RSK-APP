@@ -59,14 +59,14 @@ pnpm install`}</Code>
           </p>
           <div className="bg-muted/50 rounded-lg p-4 border border-border text-sm space-y-2">
             <div>
-              <strong>DATABASE_URL</strong> — Get a free PostgreSQL database at{' '}
+              <strong>DATABASE_URL</strong> — Get a free Prisma Postgres database at{' '}
               <a
-                href="https://console.neon.tech"
+                href="https://console.prisma.io"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline"
               >
-                console.neon.tech
+                console.prisma.io
               </a>
             </div>
             <div>
