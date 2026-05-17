@@ -116,7 +116,7 @@
     "elysia": "^1.4.28",
     "fflate": "^0.8.2",
     "framer-motion": "^12.38.0",
-    "i18next": "^25.9.0",
+    "i18next": "^26.2.0",
     "i18next-resources-to-backend": "^1.2.1",
     "inngest": "^3.54.0",
     "js-tiktoken": "^1.0.21",
