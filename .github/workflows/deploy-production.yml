@@ -34,7 +34,7 @@ jobs:
       security_passed: ${{ steps.gates.outputs.passed }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Wait for CI workflow
         uses: fountainhead/action-wait-for-check@v1.2.0
@@ -111,7 +111,7 @@ jobs:
       should_deploy: ${{ steps.check.outputs.should_deploy }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check deployment approval
         id: check
@@ -137,7 +137,7 @@ jobs:
     needs: security-gates
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Generate SBOM with Syft
         uses: anchore/sbom-action@v0
@@ -154,7 +154,7 @@ jobs:
           output-file: sbom.cyclonedx.json
 
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-artifacts
           path: |
@@ -184,7 +184,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -204,7 +204,7 @@ jobs:
 
       - name: Deploy to Vercel
         id: deploy
-        uses: amondnet/vercel-action@v25
+        uses: amondnet/vercel-action@v42
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
@@ -228,7 +228,7 @@ jobs:
       name: production
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -301,7 +301,7 @@ jobs:
     if: needs.health-check.outputs.health_status == 'healthy'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -333,7 +333,7 @@ jobs:
       name: production
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Vercel CLI
         run: bun add -g vercel@latest
