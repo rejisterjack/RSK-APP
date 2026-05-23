@@ -146,7 +146,7 @@ function ResetPasswordContent(): React.ReactElement {
               <Label htmlFor="password" className="text-muted-foreground">
                 New Password
               </Label>
-              <div className="relative">
+              <div className="relative" suppressHydrationWarning>
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="password"
@@ -166,7 +166,7 @@ function ResetPasswordContent(): React.ReactElement {
               <Label htmlFor="confirmPassword" className="text-muted-foreground">
                 Confirm Password
               </Label>
-              <div className="relative">
+              <div className="relative" suppressHydrationWarning>
                 <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="confirmPassword"

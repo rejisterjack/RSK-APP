@@ -10,7 +10,6 @@
  * - Audit logging
  */
 
-import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateText, type LanguageModel, streamText } from 'ai';
 import { type NextRequest, NextResponse } from 'next/server';
@@ -88,7 +87,6 @@ const AI_CALL_TIMEOUT_MS = 60_000;
 const PROBE_TIMEOUT_MS = 3_000;
 
 const defaultConfig = {
-  model: process.env.DEFAULT_MODEL || 'groq/llama-3.3-70b-versatile',
   temperature: 0.7,
   maxTokens: 2048,
   topP: 0.9,
@@ -100,12 +98,7 @@ const defaultConfig = {
   rerank: true,
 };
 
-/**
- * Best OpenRouter free models - tried in order if primary fails
- * IMPLEMENTED: Fallback logic tries each model in order until one succeeds
- */
 const MODEL_FALLBACK_CHAIN = [
-  'groq/llama-3.3-70b-versatile',
   'minimax/minimax-m2.5:free',
   'google/gemma-4-26b-a4b-it:free',
   'liquid/lfm-2.5-1.2b-instruct:free',
@@ -251,7 +244,8 @@ export async function POST(req: NextRequest) {
       config: userConfig,
       stream: shouldStream,
     } = validatedInput;
-    const config = { ...defaultConfig, ...userConfig };
+    const { model: _discardModel, ...safeConfig } = userConfig ?? {};
+    const config = { ...defaultConfig, ...safeConfig };
     const effectiveConversationId = conversationId ?? chatId;
     const userMessage = messages[messages.length - 1].content;
 
@@ -397,13 +391,13 @@ export async function POST(req: NextRequest) {
         messageLength: userMessage.length,
         hasContext: sources.length > 0,
         sourceCount: sources.length,
-        model: config.model,
+        model: MODEL_FALLBACK_CHAIN[0],
       },
     });
 
     if (shouldStream) {
       // Streaming response — use health cache to avoid expensive probes
-      const allModels = [config.model, ...MODEL_FALLBACK_CHAIN.filter((m) => m !== config.model)];
+      const allModels = [...MODEL_FALLBACK_CHAIN];
 
       // If the circuit breaker is open, fail fast
       const { llmCircuitBreaker } = mods.externalServicesMod;
@@ -570,7 +564,7 @@ export async function POST(req: NextRequest) {
       const response = await generateWithFallback(llmMessages, {
         temperature: config.temperature,
         maxTokens: config.maxTokens,
-        primaryModel: config.model,
+        primaryModel: MODEL_FALLBACK_CHAIN[0],
       });
 
       // Extract citations
@@ -787,7 +781,7 @@ export async function PUT(req: NextRequest) {
     const chat = await prisma.chat.create({
       data: {
         title: title || 'New Chat',
-        model: model || defaultConfig.model,
+        model: model || 'openrouter',
         userId,
         workspaceId: resolvedWorkspaceId,
       },
@@ -1189,92 +1183,9 @@ export async function PATCH(req: NextRequest) {
  * Get the appropriate model based on model name using server-side env vars
  */
 function getModel(modelName: string): LanguageModel {
-  // Groq models (prefix: "groq/")
-  if (modelName.startsWith('groq/')) {
-    const groqKey = process.env.GROQ_API_KEY;
-    if (!groqKey) {
-      throw new Error('Groq API key required. Set GROQ_API_KEY environment variable.');
-    }
-    const groq = createOpenAI({
-      baseURL: 'https://api.groq.com/openai/v1',
-      apiKey: groqKey,
-    });
-    return groq(modelName.slice(5)) as unknown as LanguageModel;
-  }
-
-  // NVIDIA NIM models (prefix: "nvidia-nim/")
-  if (modelName.startsWith('nvidia-nim/')) {
-    const nvidiaKey = process.env.NVIDIA_API_KEY;
-    if (!nvidiaKey) {
-      throw new Error('NVIDIA API key required. Set NVIDIA_API_KEY environment variable.');
-    }
-    const nvidia = createOpenAI({
-      baseURL: 'https://integrate.api.nvidia.com/v1',
-      apiKey: nvidiaKey,
-    });
-    return nvidia(modelName.slice(11)) as unknown as LanguageModel;
-  }
-
-  // Cerebras models (prefix: "cerebras/")
-  if (modelName.startsWith('cerebras/')) {
-    const cerebrasKey = process.env.CEREBRAS_API_KEY;
-    if (!cerebrasKey) {
-      throw new Error('Cerebras API key required. Set CEREBRAS_API_KEY environment variable.');
-    }
-    const cerebras = createOpenAI({
-      baseURL: 'https://api.cerebras.ai/v1',
-      apiKey: cerebrasKey,
-    });
-    return cerebras(modelName.slice(9)) as unknown as LanguageModel;
-  }
-
-  // SambaNova models (prefix: "sambanova/")
-  if (modelName.startsWith('sambanova/')) {
-    const sambanovaKey = process.env.SAMBANOVA_API_KEY;
-    if (!sambanovaKey) {
-      throw new Error('SambaNova API key required. Set SAMBANOVA_API_KEY environment variable.');
-    }
-    const sambanova = createOpenAI({
-      baseURL: 'https://api.sambanova.ai/v1',
-      apiKey: sambanovaKey,
-    });
-    return sambanova(modelName.slice(10)) as unknown as LanguageModel;
-  }
-
-  // Mistral models (prefix: "mistral/")
-  if (modelName.startsWith('mistral/')) {
-    const mistralKey = process.env.MISTRAL_API_KEY;
-    if (!mistralKey) {
-      throw new Error('Mistral API key required. Set MISTRAL_API_KEY environment variable.');
-    }
-    const mistral = createOpenAI({
-      baseURL: 'https://api.mistral.ai/v1',
-      apiKey: mistralKey,
-    });
-    return mistral(modelName.slice(8)) as unknown as LanguageModel;
-  }
-
-  // Fireworks AI models (prefixed with "accounts/fireworks/")
-  if (modelName.startsWith('accounts/fireworks/')) {
-    const fireworksKey = env.FIREWORKS_API_KEY;
-    if (!fireworksKey) {
-      throw new Error('Fireworks API key required. Set FIREWORKS_API_KEY environment variable.');
-    }
-    const fireworks = createOpenAI({
-      baseURL: 'https://api.fireworks.ai/inference/v1',
-      apiKey: fireworksKey,
-    });
-    return fireworks(modelName) as unknown as LanguageModel;
-  }
-
-  // OpenRouter models (contains '/' or ends with ':free') - default
   const openrouterKey = env.OPENROUTER_API_KEY;
-  if (openrouterKey) {
-    const openrouter = createOpenRouter({ apiKey: openrouterKey });
-    return openrouter.chat(modelName) as unknown as LanguageModel;
-  }
-
-  throw new Error(`No API key available for model: ${modelName}`);
+  const openrouter = createOpenRouter({ apiKey: openrouterKey });
+  return openrouter.chat(modelName) as unknown as LanguageModel;
 }
 
 /**

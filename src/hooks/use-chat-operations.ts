@@ -17,11 +17,11 @@ interface CreateChatResponse {
 
 export function useCreateChat() {
   return useMutation({
-    mutationFn: async ({ title, model }: { title: string; model: string }) => {
+    mutationFn: async ({ title }: { title: string }) => {
       const data = await apiClient<CreateChatResponse>('/api/chat', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, model }),
+        body: JSON.stringify({ title }),
       });
       if (!data.success) {
         throw new ApiError(data.details || data.error || 'Failed to create chat', 400);

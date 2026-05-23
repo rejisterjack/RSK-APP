@@ -26,29 +26,24 @@ import { useFeatureLevel } from '@/hooks/use-feature-level';
 import { cn } from '@/lib/utils';
 import { useChatContext } from './chat-context';
 import { KeyboardShortcutsTrigger } from './keyboard-shortcuts';
-import { ModelPicker } from './model-picker';
 import { ShareDialog } from './share-dialog';
 
 interface ChatHeaderProps {
-  selectedModel?: string;
   chatId?: string;
   chatTitle?: string;
   isStreaming: boolean;
   isNewChatLoading?: boolean;
   onNewChat?: () => void;
-  onModelChange?: (modelId: string) => void;
   onAgentModeToggle?: (enabled: boolean) => void;
   onToggleMobileSidebar?: () => void;
 }
 
 export const ChatHeader = memo(function ChatHeader({
-  selectedModel = 'groq/llama-3.3-70b-versatile',
   chatId,
   chatTitle,
   isStreaming,
   isNewChatLoading = false,
   onNewChat,
-  onModelChange,
   onAgentModeToggle,
   onToggleMobileSidebar,
 }: ChatHeaderProps) {
@@ -65,9 +60,8 @@ export const ChatHeader = memo(function ChatHeader({
 
   return (
     <header className="flex items-center justify-between border-b border-border/20 relative z-30 h-12 md:h-12 px-2 md:px-3">
-      {/* ── Left section ─────────────────────────────────────────── */}
+      {/* Left section */}
       <div className="flex items-center gap-1 md:gap-2">
-        {/* Mobile hamburger (only on < md) */}
         {onToggleMobileSidebar && (
           <Button
             variant="ghost"
@@ -80,7 +74,6 @@ export const ChatHeader = memo(function ChatHeader({
           </Button>
         )}
 
-        {/* New chat button */}
         {onNewChat && (
           <Button
             variant="default"
@@ -101,24 +94,16 @@ export const ChatHeader = memo(function ChatHeader({
         )}
       </div>
 
-      {/* ── Center section (mobile title, hidden on desktop) ─────── */}
+      {/* Center (mobile title) */}
       <div className="md:hidden flex-1 text-center px-2">
         <p className="text-xs font-medium text-muted-foreground truncate max-w-[140px] mx-auto">
           {chatTitle || 'RAG Chat'}
         </p>
       </div>
 
-      {/* ── Right section ────────────────────────────────────────── */}
+      {/* Right section */}
       <div className="flex items-center gap-1 md:gap-2">
-        {/* Desktop-only: Model picker + Agent mode + Share */}
         <div className="hidden md:flex items-center gap-2">
-          {isFeatureVisible(1) && (
-            <ModelPicker
-              selectedModel={selectedModel}
-              onModelChange={onModelChange || (() => {})}
-              disabled={isStreaming}
-            />
-          )}
           {isFeatureVisible(1) && (
             <AgentModeToggleCompact
               enabled={state.isAgentMode}
@@ -131,9 +116,7 @@ export const ChatHeader = memo(function ChatHeader({
           )}
         </div>
 
-        {/* Right controls group */}
         <div className="flex items-center gap-0.5 md:gap-1 bg-muted/40 p-0.5 md:p-1 rounded-2xl border border-white/5">
-          {/* Desktop-only: Sources inline toggle */}
           <TooltipProvider delayDuration={0}>
             <Button
               variant="ghost"
@@ -156,7 +139,6 @@ export const ChatHeader = memo(function ChatHeader({
 
           <KeyboardShortcutsTrigger />
 
-          {/* More toggle (mobile) */}
           <Button
             variant="ghost"
             size="icon"
@@ -172,7 +154,6 @@ export const ChatHeader = memo(function ChatHeader({
             )}
           </Button>
 
-          {/* Settings dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -193,13 +174,6 @@ export const ChatHeader = memo(function ChatHeader({
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/20" />
               <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/15 focus:text-primary cursor-default transition-colors font-medium">
-                <span className="text-muted-foreground mr-1">Model:</span>{' '}
-                {selectedModel.split('/').pop()?.replace(':free', '') || selectedModel}
-              </DropdownMenuItem>
-              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/15 focus:text-primary cursor-default transition-colors font-medium">
-                <span className="text-muted-foreground mr-1">Temperature:</span> 0.7
-              </DropdownMenuItem>
-              <DropdownMenuItem className="rounded-xl px-3 py-2.5 focus:bg-primary/15 focus:text-primary cursor-default transition-colors font-medium">
                 <span className="text-muted-foreground mr-1">Streaming:</span> Enabled
               </DropdownMenuItem>
               {level < 2 && (
@@ -219,16 +193,9 @@ export const ChatHeader = memo(function ChatHeader({
         </div>
       </div>
 
-      {/* ── Mobile "More" expandable row ─────────────────────────── */}
+      {/* Mobile "More" row */}
       {state.isMobileMoreOpen && (
         <div className="absolute top-full left-0 right-0 glass-panel border-b border-border/20 p-2 flex items-center gap-2 z-40 md:hidden">
-          {isFeatureVisible(1) && (
-            <ModelPicker
-              selectedModel={selectedModel}
-              onModelChange={onModelChange || (() => {})}
-              disabled={isStreaming}
-            />
-          )}
           {isFeatureVisible(1) && (
             <AgentModeToggleCompact
               enabled={state.isAgentMode}

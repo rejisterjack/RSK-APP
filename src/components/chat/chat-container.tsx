@@ -17,7 +17,6 @@ interface ChatContainerProps {
   sources: Source[];
   isStreaming: boolean;
   streamingContent: string;
-  selectedModel?: string;
   chatId?: string;
   chatTitle?: string;
   agentMode?: boolean;
@@ -27,7 +26,6 @@ interface ChatContainerProps {
   onEditMessage?: (id: string, newContent: string) => void;
   onDeleteMessage?: (id: string) => void;
   onNewChat?: () => void;
-  onModelChange?: (modelId: string) => void;
   onAgentModeToggle?: (enabled: boolean) => void;
   onRegenerate?: () => void;
   onFeedback?: (messageId: string, rating: 'UP' | 'DOWN') => void;
@@ -45,7 +43,6 @@ export const ChatContainer = memo(function ChatContainer({
   sources,
   isStreaming,
   streamingContent,
-  selectedModel = 'google/gemini-2.0-flash-exp:free',
   chatId,
   chatTitle,
   agentMode = false,
@@ -55,7 +52,6 @@ export const ChatContainer = memo(function ChatContainer({
   onEditMessage,
   onDeleteMessage,
   onNewChat,
-  onModelChange,
   onAgentModeToggle,
   onRegenerate,
   onFeedback,
@@ -74,7 +70,6 @@ export const ChatContainer = memo(function ChatContainer({
         sources={sources}
         isStreaming={isStreaming}
         streamingContent={streamingContent}
-        selectedModel={selectedModel}
         chatId={chatId}
         chatTitle={chatTitle}
         onSendMessage={onSendMessage}
@@ -83,7 +78,6 @@ export const ChatContainer = memo(function ChatContainer({
         onEditMessage={onEditMessage}
         onDeleteMessage={onDeleteMessage}
         onNewChat={onNewChat}
-        onModelChange={onModelChange}
         onAgentModeToggle={onAgentModeToggle}
         onRegenerate={onRegenerate}
         onFeedback={onFeedback}
@@ -99,7 +93,6 @@ export const ChatContainer = memo(function ChatContainer({
   );
 });
 
-// Inner component that has access to ChatContext
 interface ChatInnerProps
   extends Omit<ChatContainerProps, 'hasMore' | 'isLoading' | 'isNewChatLoading'> {
   hasMore: boolean;
@@ -112,7 +105,6 @@ const ChatInner = memo(function ChatInner({
   sources,
   isStreaming,
   streamingContent,
-  selectedModel,
   chatId,
   chatTitle,
   onSendMessage,
@@ -121,7 +113,6 @@ const ChatInner = memo(function ChatInner({
   onEditMessage,
   onDeleteMessage,
   onNewChat,
-  onModelChange,
   onAgentModeToggle,
   onRegenerate,
   onFeedback,
@@ -140,12 +131,10 @@ const ChatInner = memo(function ChatInner({
     <div
       className={cn(
         'flex h-full w-full overflow-hidden relative text-foreground selection:bg-primary/30',
-        // Mobile: full-width with no padding; Desktop: padded with gap
         'p-0 md:p-2 md:gap-2',
         className
       )}
     >
-      {/* ── Mobile sidebar (Sheet overlay) ─────────────────────────── */}
       {sidebar && (
         <Sheet
           open={state.isMobileSidebarOpen}
@@ -155,44 +144,37 @@ const ChatInner = memo(function ChatInner({
             side="left"
             className="w-[85vw] sm:w-[380px] p-0 border-none glass-heavy shadow-2xl rounded-r-3xl overflow-hidden md:hidden"
           >
-            {/* Accessible title for the sheet */}
             <SheetTitle className="sr-only">Navigation Sidebar</SheetTitle>
             {sidebar}
           </SheetContent>
         </Sheet>
       )}
 
-      {/* ── Desktop sidebar (persistent) ───────────────────────────── */}
       {sidebar && (
         <div className="hidden md:flex w-[280px] shrink-0 flex-col h-full relative z-20 glass-heavy rounded-2xl overflow-hidden border border-white/10 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.3)]">
           {sidebar}
         </div>
       )}
 
-      {/* ── Main chat area ─────────────────────────────────────────── */}
       <section
         aria-label="Chat"
         className={cn(
           'flex-1 min-w-0 h-full relative z-10 flex flex-col',
-          // Desktop: glass card with border
           'md:grid md:glass-heavy md:rounded-2xl md:overflow-hidden md:border md:border-white/10 md:shadow-[0_12px_48px_-12px_rgba(0,0,0,0.4)]'
         )}
         style={{ gridTemplateRows: undefined }}
       >
-        {/* Inner grid for desktop to enforce header/messages/input rows */}
         <div
           className="flex flex-col h-full md:grid"
           style={{ gridTemplateRows: 'auto auto 1fr auto' }}
         >
           <DegradationBanner />
           <ChatHeader
-            selectedModel={selectedModel}
             chatId={chatId}
             chatTitle={chatTitle}
             isStreaming={isStreaming}
             isNewChatLoading={isNewChatLoading}
             onNewChat={onNewChat}
-            onModelChange={onModelChange}
             onAgentModeToggle={onAgentModeToggle}
             onToggleMobileSidebar={() => dispatch({ type: 'SET_MOBILE_SIDEBAR_OPEN', open: true })}
           />
@@ -224,7 +206,6 @@ const ChatInner = memo(function ChatInner({
         </div>
       </section>
 
-      {/* ── Sources Panel (bottom sheet on mobile, right sheet on desktop) ── */}
       <SourcesPanel
         sources={sources}
         isOpen={state.isSourcesPanelOpen}

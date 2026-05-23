@@ -22,16 +22,9 @@ const envSchema = z.object({
   AUTH_URL: z.string().url().optional(),
   NEXTAUTH_URL: z.string().url().optional(),
   OPENROUTER_API_KEY: z.string().min(1, 'OPENROUTER_API_KEY is required'),
-
-  // Optional AI provider keys
-  FIREWORKS_API_KEY: z.string().optional(),
-  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
-  OPENAI_API_KEY: z.string().optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1, 'GOOGLE_GENERATIVE_AI_API_KEY is required'),
   GROQ_API_KEY: z.string().optional(),
-  NVIDIA_API_KEY: z.string().optional(),
-  CEREBRAS_API_KEY: z.string().optional(),
-  SAMBANOVA_API_KEY: z.string().optional(),
-  MISTRAL_API_KEY: z.string().optional(),
+  COHERE_API_KEY: z.string().optional(),
 
   // Optional variables with defaults
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

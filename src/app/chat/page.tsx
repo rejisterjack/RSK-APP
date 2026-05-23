@@ -40,7 +40,6 @@ export default function ChatPage(): React.ReactElement {
   const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
   const [currentChatId, setCurrentChatId] = useState<string | undefined>(undefined);
   const [agentMode, setAgentMode] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('google/gemini-2.0-flash-exp:free');
   const [chatTitle, setChatTitle] = useState('New Chat');
 
   // TanStack Query hooks
@@ -80,7 +79,6 @@ export default function ChatPage(): React.ReactElement {
   } = useChat({
     conversationId: currentChatId,
     agentMode,
-    model: selectedModel,
   });
 
   // On mount: load chat if we have a chatId from URL
@@ -124,7 +122,6 @@ export default function ChatPage(): React.ReactElement {
   const handleNewChat = useCallback(async () => {
     const newChatId = await createChatMutation.mutateAsync({
       title: 'New Chat',
-      model: selectedModel,
     });
     if (newChatId) {
       clearMessages();
@@ -133,7 +130,7 @@ export default function ChatPage(): React.ReactElement {
       setSources([]);
       window.history.replaceState(null, '', `/chat?chatId=${newChatId}`);
     }
-  }, [createChatMutation, clearMessages, selectedModel]);
+  }, [createChatMutation, clearMessages]);
 
   const handleSendMessage = useCallback(
     async (content: string, files?: File[]) => {
@@ -146,7 +143,6 @@ export default function ChatPage(): React.ReactElement {
       if (!chatId) {
         const newChatId = await createChatMutation.mutateAsync({
           title: 'New Chat',
-          model: selectedModel,
         });
         if (newChatId) {
           chatId = newChatId;
@@ -161,15 +157,7 @@ export default function ChatPage(): React.ReactElement {
       await sendMessage(content, undefined, chatId);
       recordMessage();
     },
-    [
-      sendMessage,
-      handleUpload,
-      currentChatId,
-      createChatMutation,
-      clearMessages,
-      selectedModel,
-      recordMessage,
-    ]
+    [sendMessage, handleUpload, currentChatId, createChatMutation, clearMessages, recordMessage]
   );
 
   // Handle pre-filled query from onboarding (e.g. /chat?q=What+is+RAG?)
@@ -244,10 +232,8 @@ export default function ChatPage(): React.ReactElement {
         isStreaming={isStreaming}
         streamingContent={streamingContent}
         agentMode={agentMode}
-        selectedModel={selectedModel}
         chatId={currentChatId}
         chatTitle={chatTitle}
-        onModelChange={setSelectedModel}
         onSendMessage={handleSendMessage}
         onCancelStreaming={stop}
         onLoadMore={loadMore}
