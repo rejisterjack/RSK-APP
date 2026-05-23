@@ -1,4 +1,4 @@
-import { Check, ExternalLink, Github, Mail, Sparkles, Zap } from 'lucide-react';
+import { Building2, Check, Cloud, ExternalLink, Github, Mail, Sparkles, Zap } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +38,19 @@ const proFeatures = [
   'Priority support & SLA',
 ];
 
+const cloudFeatures = [
+  'Everything in Pro, plus:',
+  'Fully managed — no cloning, no deploying, no DevOps',
+  'Sign up and start chatting in 30 seconds',
+  'Enterprise SSO (SAML, OIDC) & SCIM provisioning',
+  'SOC 2 Type II & GDPR compliance',
+  '99.9% uptime SLA with dedicated infrastructure',
+  'Unlimited workspaces, users, and documents',
+  'Custom data residency (US, EU, APAC)',
+  'Dedicated support engineer & onboarding',
+  'Volume discounts for large teams',
+];
+
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -55,15 +68,14 @@ export default function PricingPage() {
           </span>
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-          RAG Starter Kit is not a SaaS product. It&apos;s an MIT-licensed codebase you clone,
-          customize, and deploy on your own infrastructure. You own the code, the data, and the
-          deployment — always.
+          Self-host for free with the MIT-licensed codebase, or let us handle everything with Cloud.
+          Your data, your rules — either way.
         </p>
       </div>
 
-      {/* Two-Tier Pricing */}
-      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-20">
-        <div className="grid gap-8 md:grid-cols-2">
+      {/* Three-Tier Pricing */}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-20">
+        <div className="grid gap-8 lg:grid-cols-3 md:grid-cols-2">
           {/* Free Tier */}
           <div className="rounded-2xl border-2 border-green-500/30 bg-card p-8 flex flex-col relative shadow-[0_0_60px_-15px_rgba(34,197,94,0.2)]">
             <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
@@ -172,6 +184,63 @@ export default function PricingPage() {
               </p>
             </div>
           </div>
+
+          {/* Cloud Tier */}
+          <div className="rounded-2xl border border-amber-500/30 bg-card p-8 flex flex-col relative shadow-[0_0_60px_-15px_rgba(245,158,11,0.15)] md:col-span-2 lg:col-span-1">
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+              <Badge className="text-xs font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-amber-500 text-white border-0">
+                <Cloud className="mr-1.5 h-3.5 w-3.5" />
+                Coming Soon
+              </Badge>
+            </div>
+
+            <div className="mb-6 mt-2">
+              <h2 className="text-2xl font-bold text-foreground mb-2">Cloud</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Fully managed RAG platform. Sign up, upload your docs, and start chatting. No
+                infrastructure to manage, ever.
+              </p>
+            </div>
+
+            <div className="mb-8">
+              <div className="flex items-end gap-2">
+                <span className="text-5xl font-black text-foreground">Cloud</span>
+                <span className="text-muted-foreground pb-1">/ coming soon</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Managed hosting, SSO, compliance, dedicated support
+              </p>
+            </div>
+
+            <ul className="space-y-3 mb-8 flex-grow">
+              {cloudFeatures.map((f, i) => (
+                <li key={f} className="flex items-start gap-2.5 text-sm">
+                  {i === 0 ? (
+                    <Check className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                  ) : (
+                    <Building2 className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  )}
+                  <span className="text-muted-foreground">{f}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="space-y-3 mt-auto">
+              <Button
+                asChild
+                variant="outline"
+                className="w-full rounded-xl h-11 border-amber-500/40 text-amber-600 hover:bg-amber-500/10"
+              >
+                <Link href="mailto:hello@ragstarterkit.com?subject=Cloud%20Tier%20Interest">
+                  <Mail className="mr-2 h-4 w-4" />
+                  Join the Waitlist
+                </Link>
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                Be the first to know when Cloud launches
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -239,6 +308,10 @@ export default function PricingPage() {
             {
               q: 'Is there a hosted demo I can try?',
               a: 'Yes — click "Try the live demo first" above. It\'s a fully functional instance pre-loaded with project documentation. No sign-up required. Rate-limited to 20 requests per 15 minutes.',
+            },
+            {
+              q: 'What is Cloud?',
+              a: 'Cloud is a fully managed version of RAG Starter Kit. No cloning, no deploying, no DevOps. You sign up, create a workspace, upload your documents, and start chatting. It includes enterprise features like SSO, SOC 2 compliance, dedicated infrastructure, and custom data residency. Currently in development — join the waitlist to be notified.',
             },
           ].map(({ q, a }) => (
             <div key={q} className="border-b border-border/50 pb-8">

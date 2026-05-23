@@ -310,7 +310,7 @@ Returns semantically similar chunks ranked by relevance.`,
   parameters: SemanticSearchParamsSchema,
   execute: async (params) => {
     try {
-      const { query, workspaceId, threshold = 0.7, topK = 5 } = params;
+      const { query, workspaceId, threshold = 0.5, topK = 5 } = params;
 
       // Generate embedding for the query
       const queryEmbedding = await generateQueryEmbedding(query);

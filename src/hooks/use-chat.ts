@@ -305,18 +305,32 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
           const effectiveChatId = chatIdOverride || conversationIdRef.current;
 
+          // Build request body — include agentConfig when using agent endpoint
+          const requestBody: Record<string, unknown> = {
+            messages: [{ role: 'user', content: trimmedContent }],
+            conversationId: effectiveChatId,
+            config: {
+              model: getSelectedModel() || modelRef.current || undefined,
+            },
+            stream: true,
+          };
+
+          if (agentMode) {
+            try {
+              const stored = localStorage.getItem('agent-settings');
+              if (stored) {
+                requestBody.agentConfig = JSON.parse(stored);
+              }
+            } catch {
+              // Ignore parse errors — agent route has defaults
+            }
+          }
+
           const response = await fetch(endpoint, {
             method: 'POST',
             credentials: 'include',
             headers,
-            body: JSON.stringify({
-              messages: [{ role: 'user', content: trimmedContent }],
-              conversationId: effectiveChatId,
-              config: {
-                model: getSelectedModel() || modelRef.current || undefined,
-              },
-              stream: true,
-            }),
+            body: JSON.stringify(requestBody),
             signal: abortControllerRef.current.signal,
           });
 

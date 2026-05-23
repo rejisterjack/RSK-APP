@@ -300,9 +300,10 @@ export function ConversationHistoryList({
               const isConfirmingDelete = conversation.id === deleteConfirmId;
 
               return (
-                <button
+                // biome-ignore lint/a11y/useSemanticElements: must use div (not button) because ConversationActions renders a nested DropdownMenu trigger button
+                <div
                   key={conversation.id}
-                  type="button"
+                  role="button"
                   tabIndex={0}
                   className={cn(
                     'group relative flex items-start gap-2 rounded-xl px-2.5 py-2 transition-colors text-left w-full cursor-pointer',
@@ -413,7 +414,7 @@ export function ConversationHistoryList({
                       </Button>
                     </div>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>

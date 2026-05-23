@@ -67,7 +67,7 @@ const defaultConfig: RAGConfig = {
   chunkSize: 1000,
   chunkOverlap: 200,
   topK: 5,
-  similarityThreshold: 0.7,
+  similarityThreshold: 0.5,
   temperature: 0.7,
   maxTokens: 2000,
   model: 'auto', // Dynamic — resolved at call time via model discovery
@@ -649,6 +649,9 @@ async function handleCalculation(
     effectiveConversationId,
     config,
     agentConfig,
+    shouldStream,
+    rateLimitResult,
+    requestId,
     agentMemory,
     analytics,
   } = params;
@@ -711,6 +714,26 @@ async function handleCalculation(
     timestamp: new Date(),
   });
 
+  if (shouldStream) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(result.answer));
+        controller.close();
+      },
+    });
+    const response = new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Request-Id': requestId,
+        'X-Strategy': 'calculate',
+        'X-Model-Used': config.model,
+      },
+    });
+    addRateLimitHeaders(response.headers, rateLimitResult);
+    return response;
+  }
+
   return NextResponse.json({
     success: true,
     data: {
@@ -737,6 +760,9 @@ async function handleWebSearch(
     effectiveConversationId,
     config,
     agentConfig,
+    shouldStream,
+    rateLimitResult,
+    requestId,
     agentMemory,
     analytics,
   } = params;
@@ -800,6 +826,26 @@ async function handleWebSearch(
     terminationReason: result.terminationReason,
     timestamp: new Date(),
   });
+
+  if (shouldStream) {
+    const encoder = new TextEncoder();
+    const webStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(result.answer));
+        controller.close();
+      },
+    });
+    const webResponse = new Response(webStream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Request-Id': requestId,
+        'X-Strategy': 'web_search',
+        'X-Model-Used': config.model,
+      },
+    });
+    addRateLimitHeaders(webResponse.headers, rateLimitResult);
+    return webResponse;
+  }
 
   return NextResponse.json({
     success: true,
