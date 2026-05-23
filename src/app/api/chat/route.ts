@@ -21,6 +21,8 @@ import {
 import { modelHealthCache } from '@/lib/ai/model-health-cache';
 import { buildSystemPromptWithContext } from '@/lib/ai/prompts/templates';
 import { bufferUsageRecord } from '@/lib/analytics/usage-buffer';
+import { checkBodySize } from '@/lib/api/middleware';
+import { wrapStreamWithErrorFrame } from '@/lib/api/stream-error-wrapper';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
 import { prisma, prismaRead } from '@/lib/db';
@@ -199,6 +201,9 @@ export async function POST(req: NextRequest) {
 
     // Step 4: Parse and validate request body
 
+    const bodySizeCheck = checkBodySize(req, 1_000_000);
+    if (bodySizeCheck) return bodySizeCheck;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -290,6 +295,11 @@ export async function POST(req: NextRequest) {
       (async () => {
         try {
           if (await mods.degradationMod.isFeatureDegraded('vector_search')) {
+            return { sources: [], degraded: true, error: null };
+          }
+          // Fast-fail if Qdrant circuit breaker is OPEN
+          const { qdrantCircuitBreaker } = mods.externalServicesMod;
+          if (qdrantCircuitBreaker.getState() === 'OPEN') {
             return { sources: [], degraded: true, error: null };
           }
           const { withSpan } = mods.tracingMod;
@@ -540,7 +550,7 @@ export async function POST(req: NextRequest) {
         similarity: s.similarity,
       }));
 
-      const response = result.toTextStreamResponse({
+      const rawResponse = result.toTextStreamResponse({
         headers: {
           'X-Message-Sources': JSON.stringify(sourcesMetadata),
           'X-Model-Used': usedModel,
@@ -556,6 +566,8 @@ export async function POST(req: NextRequest) {
           ...(vectorSearchDegraded ? { 'X-Degraded-Features': 'vector_search' } : {}),
         },
       });
+
+      const response = wrapStreamWithErrorFrame(rawResponse, () => streamError);
 
       // Add rate limit headers
       addRateLimitHeaders(response.headers, rateLimitResult);
@@ -751,6 +763,9 @@ export async function PUT(req: NextRequest) {
     }
 
     // Parse request body
+    const bodySizeCheckPut = checkBodySize(req, 1_000_000);
+    if (bodySizeCheckPut) return bodySizeCheckPut;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -1068,6 +1083,9 @@ export async function PATCH(req: NextRequest) {
     const workspaceId = session.user.workspaceId;
 
     // Parse request body
+    const bodySizeCheckPatch = checkBodySize(req, 1_000_000);
+    if (bodySizeCheckPatch) return bodySizeCheckPatch;
+
     let body: unknown;
     try {
       body = await req.json();

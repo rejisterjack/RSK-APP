@@ -16,6 +16,8 @@ import {
   resolveModel as resolveDynamicModel,
 } from '@/lib/ai/model-discovery';
 import { modelHealthCache } from '@/lib/ai/model-health-cache';
+import { checkBodySize } from '@/lib/api/middleware';
+import { wrapStreamWithErrorFrame } from '@/lib/api/stream-error-wrapper';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
@@ -171,6 +173,9 @@ export async function POST(req: Request) {
     }
 
     // Step 3: Parse and validate request
+    const bodySizeCheck = checkBodySize(req, 1_000_000);
+    if (bodySizeCheck) return bodySizeCheck;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -267,15 +272,18 @@ export async function POST(req: Request) {
       );
     }
 
+    let streamError: string | null = null;
+
     const result = streamText({
       model: resolvedModel,
       messages,
       temperature: 0.5,
       maxTokens: 1500,
       onError: (error) => {
+        streamError = error instanceof Error ? error.message : String(error);
         logger.error('Product chat stream error', {
           model: usedModel,
-          error: error instanceof Error ? error.message : String(error),
+          error: streamError,
         });
       },
       onFinish: async (completion) => {
@@ -293,12 +301,14 @@ export async function POST(req: Request) {
       },
     });
 
-    const response = result.toTextStreamResponse({
+    const rawResponse = result.toTextStreamResponse({
       headers: {
         'X-Model-Used': usedModel,
         'X-RAG-Bot-Version': '1.0.0',
       },
     });
+
+    const response = wrapStreamWithErrorFrame(rawResponse, () => streamError);
 
     addRateLimitHeaders(response.headers, rateLimitResult);
     return response;

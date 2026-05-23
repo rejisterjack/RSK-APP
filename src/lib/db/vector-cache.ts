@@ -417,6 +417,10 @@ export class MemoryCacheProvider implements CacheProvider {
   }
 
   async set(key: string, value: string, ttlSeconds = 3600): Promise<void> {
+    // Evict expired entries every 100 inserts to prevent unbounded growth
+    if (this.cache.size > 0 && this.cache.size % 100 === 0) {
+      this.cleanup();
+    }
     this.cache.set(key, {
       value,
       expires: Date.now() + ttlSeconds * 1000,
@@ -437,6 +441,10 @@ export class MemoryCacheProvider implements CacheProvider {
   }
 
   async setBuffer(key: string, value: Buffer, ttlSeconds = 3600): Promise<void> {
+    // Evict expired entries every 100 inserts to prevent unbounded growth
+    if (this.bufferCache.size > 0 && this.bufferCache.size % 100 === 0) {
+      this.cleanup();
+    }
     this.bufferCache.set(key, {
       value,
       expires: Date.now() + ttlSeconds * 1000,

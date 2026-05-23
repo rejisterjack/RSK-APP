@@ -9,6 +9,7 @@ export const qdrant =
   new QdrantClient({
     url: process.env.QDRANT_URL,
     apiKey: process.env.QDRANT_API_KEY,
+    timeout: 10_000,
   });
 
 if (process.env.NODE_ENV !== 'production') {
@@ -17,8 +18,13 @@ if (process.env.NODE_ENV !== 'production') {
 
 export async function checkQdrantHealth(): Promise<boolean> {
   try {
-    await qdrant.getCollections();
-    return true;
+    const result = await Promise.race([
+      qdrant.getCollections(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Qdrant health check timeout')), 5_000)
+      ),
+    ]);
+    return Array.isArray((result as { collections: unknown[] }).collections);
   } catch {
     return false;
   }

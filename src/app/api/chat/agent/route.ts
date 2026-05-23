@@ -14,6 +14,8 @@ import { createOpenAI, openai } from '@ai-sdk/openai';
 import { type LanguageModel, streamText } from 'ai';
 import { NextResponse } from 'next/server';
 import { createOllama } from 'ollama-ai-provider';
+import { checkBodySize } from '@/lib/api/middleware';
+import { wrapStreamWithErrorFrame } from '@/lib/api/stream-error-wrapper';
 
 const fireworks = createOpenAI({
   baseURL: 'https://api.fireworks.ai/inference/v1',
@@ -198,6 +200,9 @@ export async function POST(req: Request) {
 
     let body: unknown;
     try {
+      const bodySizeCheck = checkBodySize(req, 1_000_000);
+      if (bodySizeCheck) return bodySizeCheck;
+
       body = await req.json();
     } catch (error: unknown) {
       logger.debug('Invalid JSON body in agent chat request', {
@@ -514,15 +519,17 @@ ${memoryContext ? `\nContext:\n${memoryContext}` : ''}`,
   const queryStartTime = Date.now();
 
   if (shouldStream) {
+    let streamError: string | null = null;
     const result = streamText({
       model: await getModel(config.model),
       messages: llmMessages,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
       onError: (error) => {
+        streamError = error instanceof Error ? error.message : String(error);
         logger.error('Agent stream error', {
           model: config.model,
-          error: error instanceof Error ? error.message : String(error),
+          error: streamError,
         });
       },
       onFinish: async (completion) => {
@@ -564,12 +571,15 @@ ${memoryContext ? `\nContext:\n${memoryContext}` : ''}`,
       },
     });
 
-    const response = result.toTextStreamResponse({
-      headers: {
-        'X-Request-Id': requestId,
-        'X-Strategy': 'direct_answer',
-      },
-    });
+    const response = wrapStreamWithErrorFrame(
+      result.toTextStreamResponse({
+        headers: {
+          'X-Request-Id': requestId,
+          'X-Strategy': 'direct_answer',
+        },
+      }),
+      () => streamError
+    );
     addRateLimitHeaders(response.headers, rateLimitResult);
     return response;
   } else {
@@ -864,11 +874,19 @@ async function handleDirectRetrieval(params: HandlerParams): Promise<Response> {
   }
 
   if (shouldStream) {
+    let streamError: string | null = null;
     const result = streamText({
       model: await getModel(config.model),
       messages: llmMessages,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      onError: (error) => {
+        streamError = error instanceof Error ? error.message : String(error);
+        logger.error('Agent direct retrieval stream error', {
+          model: config.model,
+          error: streamError,
+        });
+      },
       onFinish: async (completion) => {
         citationHandler.extractCitations(completion.text, citationMap);
 
@@ -919,13 +937,16 @@ async function handleDirectRetrieval(params: HandlerParams): Promise<Response> {
       similarity: s.similarity,
     }));
 
-    const response = result.toTextStreamResponse({
-      headers: {
-        'X-Request-Id': requestId,
-        'X-Strategy': 'direct_retrieval',
-        'X-Message-Sources': JSON.stringify(sourcesMetadata),
-      },
-    });
+    const response = wrapStreamWithErrorFrame(
+      result.toTextStreamResponse({
+        headers: {
+          'X-Request-Id': requestId,
+          'X-Strategy': 'direct_retrieval',
+          'X-Message-Sources': JSON.stringify(sourcesMetadata),
+        },
+      }),
+      () => streamError
+    );
     addRateLimitHeaders(response.headers, rateLimitResult);
     return response;
   } else {

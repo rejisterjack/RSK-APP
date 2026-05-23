@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { checkBodySize } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { generateRAGResponse } from '@/lib/rag/engine';
 import { estimateMessageTokens } from '@/lib/rag/token-budget';
@@ -79,6 +80,9 @@ export async function POST(req: NextRequest) {
         }
       );
     }
+
+    const bodySizeCheck = checkBodySize(req, 1_000_000);
+    if (bodySizeCheck) return bodySizeCheck;
 
     let body: unknown;
     try {

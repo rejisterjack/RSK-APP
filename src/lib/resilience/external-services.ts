@@ -39,3 +39,12 @@ export const storageCircuitBreaker = new CircuitBreaker({
     markFeatureDegraded('file_upload', 60_000).catch(() => {});
   },
 });
+
+export const qdrantCircuitBreaker = new CircuitBreaker({
+  failureThreshold: 5,
+  resetTimeoutMs: 60_000,
+  halfOpenMaxCalls: 1,
+  onOpen: () => {
+    markFeatureDegraded('vector_search', 120_000).catch(() => {});
+  },
+});

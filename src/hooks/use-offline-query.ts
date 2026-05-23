@@ -102,6 +102,13 @@ export function useOfflineQuery<T>(options: UseOfflineQueryOptions<T>): UseOffli
   const mountedRef = useRef(true);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  // Keep a ref to data so fetchData doesn't need data in its dep array
+  const dataRef = useRef<T | undefined>(undefined);
+  // Stabilize callbacks so they don't cause fetchData to be recreated
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   // Compute freshness
   const freshness: DataFreshness = computeFreshness(fetchedAt, ttl, isRefreshing);
@@ -113,13 +120,14 @@ export function useOfflineQuery<T>(options: UseOfflineQueryOptions<T>): UseOffli
       const networkData = await fetcherRef.current();
       if (!mountedRef.current) return;
 
+      dataRef.current = networkData;
       setData(networkData);
       setIsFromCache(false);
       setFetchedAt(Date.now());
       setError(null);
 
       await apiCache.put(key, networkData, ttl);
-      onSuccess?.(networkData);
+      onSuccessRef.current?.(networkData);
     } catch {
       // Background revalidation failure is silent
     } finally {
@@ -127,7 +135,7 @@ export function useOfflineQuery<T>(options: UseOfflineQueryOptions<T>): UseOffli
         setIsRefreshing(false);
       }
     }
-  }, [key, ttl, onSuccess]);
+  }, [key, ttl]);
 
   // Core fetch logic
   const fetchData = useCallback(
@@ -147,6 +155,7 @@ export function useOfflineQuery<T>(options: UseOfflineQueryOptions<T>): UseOffli
 
         if (cached) {
           const cachedData = cached.data as T;
+          dataRef.current = cachedData;
           setData(cachedData);
           setIsFromCache(true);
           setFetchedAt(cached.cachedAt);
@@ -186,6 +195,7 @@ export function useOfflineQuery<T>(options: UseOfflineQueryOptions<T>): UseOffli
         if (!mountedRef.current) return;
 
         // Update state
+        dataRef.current = networkData;
         setData(networkData);
         setError(null);
         setIsFromCache(false);
@@ -194,20 +204,21 @@ export function useOfflineQuery<T>(options: UseOfflineQueryOptions<T>): UseOffli
         // Cache the result
         await apiCache.put(key, networkData, ttl);
 
-        onSuccess?.(networkData);
+        onSuccessRef.current?.(networkData);
       } catch (err) {
         if (!mountedRef.current) return;
 
         const fetchError = err instanceof Error ? err : new Error('Fetch failed');
         setError(fetchError);
-        onError?.(fetchError);
+        onErrorRef.current?.(fetchError);
 
         // If we have stale data, keep showing it
-        if (!data) {
+        if (!dataRef.current) {
           // Try to load from cache as fallback
           const cached = await apiCache.get(key);
           if (cached) {
             setData(cached.data as T);
+            dataRef.current = cached.data as T;
             setIsFromCache(true);
             setFetchedAt(cached.cachedAt);
           }
@@ -220,7 +231,7 @@ export function useOfflineQuery<T>(options: UseOfflineQueryOptions<T>): UseOffli
         }
       }
     },
-    [key, ttl, staleWhileRevalidate, enabled, onSuccess, onError, data, revalidateInBackground]
+    [key, ttl, staleWhileRevalidate, enabled, revalidateInBackground]
   );
 
   // Refetch function

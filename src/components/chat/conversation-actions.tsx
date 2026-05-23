@@ -62,54 +62,54 @@ export function ConversationActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="w-48 rounded-xl border border-border/30 shadow-lg p-1"
+        className="w-48 rounded-xl border border-white/10 bg-[#1a1a2e] shadow-2xl backdrop-blur-xl p-1"
       >
         <DropdownMenuItem
-          className="rounded-lg px-3 py-2 text-sm cursor-pointer gap-2"
+          className="rounded-lg px-3 py-2 text-sm cursor-pointer gap-2 focus:bg-white/8"
           disabled={isExporting}
           onClick={() => onExportMarkdown(conversationId, title)}
         >
           {isExporting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <FileText className="h-4 w-4" />
+            <FileText className="h-3.5 w-3.5" />
           )}
           Export as Markdown
         </DropdownMenuItem>
 
         <DropdownMenuItem
-          className="rounded-lg px-3 py-2 text-sm cursor-pointer gap-2"
+          className="rounded-lg px-3 py-2 text-sm cursor-pointer gap-2 focus:bg-white/8"
           disabled={isExporting}
           onClick={() => onExportJson(conversationId, title)}
         >
           {isExporting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <FileJson className="h-4 w-4" />
+            <FileJson className="h-3.5 w-3.5" />
           )}
           Export as JSON
         </DropdownMenuItem>
 
         {isShared && shareToken && (
           <>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator className="bg-white/8 my-1" />
             <DropdownMenuItem
-              className="rounded-lg px-3 py-2 text-sm cursor-pointer gap-2"
+              className="rounded-lg px-3 py-2 text-sm cursor-pointer gap-2 focus:bg-white/8"
               onClick={() => onCopyShareLink(shareToken)}
             >
-              <ClipboardCopy className="h-4 w-4" />
+              <ClipboardCopy className="h-3.5 w-3.5" />
               Copy share link
             </DropdownMenuItem>
           </>
         )}
 
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-white/8 my-1" />
 
         <DropdownMenuItem
           className="rounded-lg px-3 py-2 text-sm cursor-pointer gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
           onClick={onDelete}
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
           Delete conversation
         </DropdownMenuItem>
       </DropdownMenuContent>

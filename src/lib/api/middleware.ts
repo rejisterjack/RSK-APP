@@ -465,3 +465,24 @@ export function createPublicRoute(
 
   return builder;
 }
+
+/**
+ * Check request body size against a limit using the Content-Length header.
+ * Returns a 413 response if the body exceeds the limit, or null if OK.
+ */
+export function checkBodySize(req: NextRequest | Request, maxBytes: number): NextResponse | null {
+  const contentLength = parseInt(req.headers.get('content-length') || '0', 10);
+  if (contentLength > 0 && contentLength > maxBytes) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'PAYLOAD_TOO_LARGE',
+          message: `Request body exceeds ${(maxBytes / 1024 / 1024).toFixed(1)}MB limit`,
+        },
+      },
+      { status: 413 }
+    );
+  }
+  return null;
+}
