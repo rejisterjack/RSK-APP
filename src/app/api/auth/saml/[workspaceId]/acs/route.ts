@@ -22,9 +22,6 @@ import {
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { createDefaultWorkspace } from '@/lib/workspace/workspace';
-
-export const dynamic = 'force-dynamic';
-
 /**
  * POST handler for SAML ACS
  */

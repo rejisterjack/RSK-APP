@@ -9,9 +9,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { lookupDomainCached } from '@/lib/auth/domain-routing';
 import { logger } from '@/lib/logger';
-
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     const searchParams = request.nextUrl.searchParams;

@@ -13,9 +13,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { generateSPMetadata, getSamlUrls, type SPMetadataConfig } from '@/lib/auth/saml/config';
 import { getWorkspaceSamlConfig } from '@/lib/auth/saml/provider';
 import { logger } from '@/lib/logger';
-
-export const dynamic = 'force-dynamic';
-
 /**
  * GET handler for SP metadata
  */

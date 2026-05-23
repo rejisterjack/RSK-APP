@@ -1,5 +1,5 @@
 import { hash } from 'bcryptjs';
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { emailService } from '@/lib/notifications/email';
 import { revokeAllUserSessions } from '@/lib/security/session-store';
+import { withIpRateLimit } from '@/lib/security/with-ip-rate-limit';
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, 'Reset token is required'),
@@ -19,7 +20,7 @@ const resetPasswordSchema = z.object({
     .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
 });
 
-export async function POST(req: Request) {
+async function handler(req: NextRequest) {
   try {
     let body: unknown;
     try {
@@ -113,3 +114,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withIpRateLimit(handler);

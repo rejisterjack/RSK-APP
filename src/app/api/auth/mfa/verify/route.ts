@@ -7,13 +7,14 @@ import { z } from 'zod';
 
 import { prisma } from '@/lib/db';
 import { removeUsedBackupCode, verifyBackupCode, verifyTotpCode } from '@/lib/security/mfa';
+import { withIpRateLimit } from '@/lib/security/with-ip-rate-limit';
 
 const verifySchema = z.object({
   code: z.string().min(6).max(8),
   userId: z.string(),
 });
 
-export async function POST(req: NextRequest) {
+async function handler(req: NextRequest) {
   let body: unknown;
   try {
     body = await req.json();
@@ -69,3 +70,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ error: 'Invalid code' }, { status: 400 });
 }
+
+export const POST = withIpRateLimit(handler);

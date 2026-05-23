@@ -11,9 +11,6 @@ import { prisma } from '@/lib/db';
 import { type GitHubRepo, listUserRepos } from '@/lib/integrations/github';
 import { logger } from '@/lib/logger';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
-
-export const dynamic = 'force-dynamic';
-
 // =============================================================================
 // GET /api/integrations/github/repos - List user's repositories
 // =============================================================================

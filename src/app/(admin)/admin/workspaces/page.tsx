@@ -1,6 +1,5 @@
+import { connection } from 'next/server';
 import { Suspense } from 'react';
-
-export const dynamic = 'force-dynamic';
 
 import { WorkspaceLimitsForm } from '@/components/admin/workspaces/workspace-limits-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -124,6 +123,7 @@ function formatBytes(bytes: number): string {
 // =============================================================================
 
 async function WorkspacesContent() {
+  await connection();
   const workspaces = await getWorkspacesWithUsage();
 
   if (workspaces.length === 0) {

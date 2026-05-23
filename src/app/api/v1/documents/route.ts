@@ -47,9 +47,6 @@ import {
   parsePaginationParams,
   validatePaginationParams,
 } from '@/lib/db/cursor-pagination';
-
-export const dynamic = 'force-dynamic';
-
 /**
  * GET /api/v1/documents
  * List documents with cursor-based pagination and filtering

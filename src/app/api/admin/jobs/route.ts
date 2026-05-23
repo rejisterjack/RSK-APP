@@ -7,9 +7,6 @@
 import { NextResponse } from 'next/server';
 import { withApiAuth } from '@/lib/auth';
 import { prismaRead } from '@/lib/db';
-
-export const dynamic = 'force-dynamic';
-
 export const GET = withApiAuth(async (req) => {
   try {
     const { searchParams } = new URL(req.url);

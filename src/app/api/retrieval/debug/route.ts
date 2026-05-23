@@ -19,9 +19,6 @@ import { NextResponse } from 'next/server';
 import { generateEmbedding } from '@/lib/ai';
 import { auth } from '@/lib/auth';
 import { getServerSession } from '@/lib/auth/session';
-
-export const dynamic = 'force-dynamic';
-
 export async function GET(req: Request) {
   // Gate on RETRIEVAL_DEBUG env var
   if (process.env.RETRIEVAL_DEBUG !== 'true') {
@@ -74,11 +71,11 @@ export async function GET(req: Request) {
   const qdrantResults = await searchSimilar(embedding, { filter: qdrantFilter, topK: limitParam });
   const chunks: ChunkRow[] = qdrantResults.map((point) => ({
     id: String(point.id),
-    content: (point.payload as Record<string, unknown>)?.content as string ?? '',
-    documentId: (point.payload as Record<string, unknown>)?.documentId as string ?? '',
-    index: (point.payload as Record<string, unknown>)?.index as number ?? 0,
+    content: ((point.payload as Record<string, unknown>)?.content as string) ?? '',
+    documentId: ((point.payload as Record<string, unknown>)?.documentId as string) ?? '',
+    index: ((point.payload as Record<string, unknown>)?.index as number) ?? 0,
     similarity: point.score ?? 0,
-    documentName: (point.payload as Record<string, unknown>)?.documentName as string ?? '',
+    documentName: ((point.payload as Record<string, unknown>)?.documentName as string) ?? '',
   }));
   timings.vector_search_ms = Date.now() - searchStart;
 

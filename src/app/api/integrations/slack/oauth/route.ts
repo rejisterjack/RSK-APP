@@ -10,8 +10,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
-export const dynamic = 'force-dynamic';
-
 // Slack OAuth scopes required for the integration
 const SLACK_SCOPES = ['commands', 'chat:write', 'users:read'];
 

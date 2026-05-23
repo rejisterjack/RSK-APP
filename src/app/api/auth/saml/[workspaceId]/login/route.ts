@@ -10,9 +10,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { SamlError } from '@/lib/auth/saml/config';
 import { getWorkspaceSamlConfig, initiateLogin } from '@/lib/auth/saml/provider';
-
-export const dynamic = 'force-dynamic';
-
 /**
  * GET handler for SAML login initiation
  */

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import Link from 'next/link';
+import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 
@@ -13,9 +14,28 @@ interface ErrorProps {
 // biome-ignore lint/suspicious/noShadowRestrictedNames: Next.js error page convention
 export default function Error({ error, reset }: ErrorProps): React.ReactElement {
   useEffect(() => {
-    // Log to error reporting service in production
-    if (process.env.NODE_ENV === 'production' && error.digest) {
-      console.error(`Error digest: ${error.digest}`);
+    if (process.env.NODE_ENV === 'production') {
+      if (process.env.SENTRY_DSN) {
+        Sentry.captureException(error, {
+          tags: { digest: error.digest },
+        });
+      }
+
+      try {
+        const payload = {
+          message: error.message,
+          digest: error.digest,
+          url: window.location.href,
+          timestamp: new Date().toISOString(),
+        };
+
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(
+            '/api/error-report',
+            new Blob([JSON.stringify(payload)], { type: 'application/json' })
+          );
+        }
+      } catch {}
     }
   }, [error]);
 
@@ -27,7 +47,9 @@ export default function Error({ error, reset }: ErrorProps): React.ReactElement 
         <h1 className="text-6xl font-bold text-destructive">Error</h1>
         <h2 className="mt-4 text-2xl font-semibold">Something went wrong</h2>
         <p className="mt-2 text-muted-foreground">
-          {isDev ? (error.message || 'An unexpected error occurred.') : 'An unexpected error occurred. Please try again.'}
+          {isDev
+            ? error.message || 'An unexpected error occurred.'
+            : 'An unexpected error occurred. Please try again.'}
         </p>
         {error.digest && (
           <p className="mt-1 text-xs text-muted-foreground/60">Error ID: {error.digest}</p>

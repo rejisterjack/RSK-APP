@@ -58,7 +58,7 @@ export interface UseConnectivityReturn {
 export function useConnectivity(): UseConnectivityReturn {
   const [info, setInfo] = useState<ConnectivityInfo>({
     state: 'online',
-    lastStateChange: Date.now(),
+    lastStateChange: 0,
     isDegraded: false,
   });
   const [stateDuration, setStateDuration] = useState('');
@@ -66,6 +66,9 @@ export function useConnectivity(): UseConnectivityReturn {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Set real timestamp on mount
+    setInfo((prev) => ({ ...prev, lastStateChange: Date.now() }));
 
     // Start monitoring
     startConnectivityMonitoring();
@@ -82,6 +85,8 @@ export function useConnectivity(): UseConnectivityReturn {
 
   // Update duration timer
   useEffect(() => {
+    if (!info.lastStateChange) return;
+
     const updateDuration = () => {
       const elapsed = Date.now() - info.lastStateChange;
       setStateDuration(formatDuration(elapsed));

@@ -4,8 +4,6 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
-export const dynamic = 'force-dynamic';
-
 interface RouteParams {
   params: Promise<{ id: string }>;
 }

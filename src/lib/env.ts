@@ -15,10 +15,12 @@ import { z } from 'zod';
 const envSchema = z.object({
   // Required variables
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  NEXTAUTH_SECRET: z
-    .string()
-    .min(32, 'NEXTAUTH_SECRET must be at least 32 characters (generate: openssl rand -base64 32)'),
-  NEXTAUTH_URL: z.string().url('NEXTAUTH_URL must be a valid URL'),
+  // NextAuth v5 uses AUTH_SECRET; NEXTAUTH_SECRET is the legacy name.
+  // At least one must be set with 32+ characters.
+  AUTH_SECRET: z.string().optional(),
+  NEXTAUTH_SECRET: z.string().optional(),
+  AUTH_URL: z.string().url().optional(),
+  NEXTAUTH_URL: z.string().url().optional(),
   OPENROUTER_API_KEY: z.string().min(1, 'OPENROUTER_API_KEY is required'),
 
   // Optional AI provider keys
@@ -36,25 +38,9 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   PORT: z.coerce.number().default(3000),
 
-  // Redis configuration — required in production for rate limiting persistence.
-  // In development, an in-memory fallback is used automatically.
-  UPSTASH_REDIS_REST_URL: z
-    .string()
-    .optional()
-    .refine(
-      (val) => process.env.NODE_ENV !== 'production' || (val !== undefined && val.length > 0),
-      {
-        message:
-          'UPSTASH_REDIS_REST_URL is required in production (prevents in-memory rate limit fallback)',
-      }
-    ),
-  UPSTASH_REDIS_REST_TOKEN: z
-    .string()
-    .optional()
-    .refine(
-      (val) => process.env.NODE_ENV !== 'production' || (val !== undefined && val.length > 0),
-      { message: 'UPSTASH_REDIS_REST_TOKEN is required in production' }
-    ),
+  // Redis configuration
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 
   // Storage configuration (Cloudinary for production, local filesystem fallback for dev)
   CLOUDINARY_URL: z.string().optional(),
@@ -80,7 +66,11 @@ const envSchema = z.object({
   OLLAMA_BASE_URL: z.string().optional(),
 
   // Qdrant vector database
-  QDRANT_URL: z.string().url('QDRANT_URL must be a valid URL').optional().default('http://localhost:6333'),
+  QDRANT_URL: z
+    .string()
+    .url('QDRANT_URL must be a valid URL')
+    .optional()
+    .default('http://localhost:6333'),
   QDRANT_API_KEY: z.string().optional(),
 
   // Embedding configuration — dimensions must match the Qdrant collection vector size.
@@ -108,19 +98,8 @@ const envSchema = z.object({
   // Database pool sizing
   DB_POOL_MAX: z.coerce.number().optional(),
 
-  // Encryption key for sensitive data at rest (min 32 chars)
-  // Required in production for encrypting SAML keys, webhook secrets, etc.
-  ENCRYPTION_MASTER_KEY: z
-    .string()
-    .min(
-      32,
-      'ENCRYPTION_MASTER_KEY must be at least 32 characters (generate: openssl rand -base64 32)'
-    )
-    .optional()
-    .refine(
-      (val) => process.env.NODE_ENV !== 'production' || (val !== undefined && val.length >= 32),
-      { message: 'ENCRYPTION_MASTER_KEY is required in production' }
-    ),
+  // Encryption key for sensitive data at rest
+  ENCRYPTION_MASTER_KEY: z.string().optional(),
 });
 
 // =============================================================================
@@ -135,7 +114,37 @@ type EnvSchema = z.infer<typeof envSchema>;
 
 function validateEnv(): EnvSchema {
   try {
-    return envSchema.parse(process.env);
+    const parsed = envSchema.parse(process.env);
+
+    // Cross-field validation: at least one auth secret must be 32+ chars
+    const authSecret = parsed.AUTH_SECRET || parsed.NEXTAUTH_SECRET;
+    if (!authSecret || authSecret.length < 32) {
+      throw new Error(
+        'AUTH_SECRET or NEXTAUTH_SECRET must be at least 32 characters. Generate: openssl rand -base64 32'
+      );
+    }
+
+    // At least one URL must be set
+    if (!parsed.AUTH_URL && !parsed.NEXTAUTH_URL) {
+      throw new Error('AUTH_URL or NEXTAUTH_URL must be set to a valid URL');
+    }
+
+    // Production-only checks
+    if (parsed.NODE_ENV === 'production') {
+      if (!parsed.UPSTASH_REDIS_REST_URL) {
+        throw new Error('UPSTASH_REDIS_REST_URL is required in production');
+      }
+      if (!parsed.UPSTASH_REDIS_REST_TOKEN) {
+        throw new Error('UPSTASH_REDIS_REST_TOKEN is required in production');
+      }
+      if (!parsed.ENCRYPTION_MASTER_KEY || parsed.ENCRYPTION_MASTER_KEY.length < 32) {
+        throw new Error(
+          'ENCRYPTION_MASTER_KEY is required in production (min 32 chars). Generate: openssl rand -base64 32'
+        );
+      }
+    }
+
+    return parsed;
   } catch (error) {
     if (error instanceof z.ZodError) {
       // biome-ignore lint/suspicious/noConsole: Intentional error logging at startup

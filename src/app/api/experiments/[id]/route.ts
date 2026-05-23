@@ -5,8 +5,6 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { canManageWorkspace } from '@/lib/workspace/permissions';
 
-export const dynamic = 'force-dynamic';
-
 interface ExperimentVariant {
   id: string;
   name: string;

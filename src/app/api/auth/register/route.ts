@@ -1,5 +1,5 @@
 import { hash } from 'bcryptjs';
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
@@ -8,13 +8,14 @@ import { logger } from '@/lib/logger';
 import { emailService } from '@/lib/notifications/email';
 import { formatValidationErrors, validateRegisterUserInput } from '@/lib/security/input-validator';
 import { checkApiRateLimit, getRateLimitIdentifier } from '@/lib/security/rate-limiter';
+import { withIpRateLimit } from '@/lib/security/with-ip-rate-limit';
 import { createDefaultWorkspace, getAppUrl } from '@/lib/workspace/workspace';
 
 /**
  * POST /api/auth/register
  * Register a new user with email and password
  */
-export async function POST(req: Request) {
+async function handler(req: NextRequest) {
   try {
     const rateLimitIdentifier = getRateLimitIdentifier(req);
     const rateLimitResult = await checkApiRateLimit(rateLimitIdentifier, 'register');
@@ -122,3 +123,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withIpRateLimit(handler);

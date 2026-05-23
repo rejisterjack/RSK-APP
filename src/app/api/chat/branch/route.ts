@@ -21,9 +21,6 @@ import {
   getConversationTree,
   listBranches,
 } from '@/lib/rag/conversation-branch';
-
-export const dynamic = 'force-dynamic';
-
 // =============================================================================
 // POST - Create new branch
 // =============================================================================

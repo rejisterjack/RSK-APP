@@ -15,9 +15,6 @@ import { auth, signOut } from '@/lib/auth';
 import { SamlError } from '@/lib/auth/saml/config';
 import { getWorkspaceSamlConfig, processLogoutResponse } from '@/lib/auth/saml/provider';
 import { logger } from '@/lib/logger';
-
-export const dynamic = 'force-dynamic';
-
 /**
  * POST handler for IdP-initiated SLO
  * IdP sends a LogoutRequest to this endpoint

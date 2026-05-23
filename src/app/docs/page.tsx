@@ -1,8 +1,5 @@
 import Link from 'next/link';
 
-// ISR: documentation rarely changes — revalidate daily (purge via deploy webhook)
-export const revalidate = 86400;
-
 const sections = [
   {
     title: 'Getting Started',

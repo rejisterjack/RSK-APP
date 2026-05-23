@@ -11,8 +11,8 @@
  * - Audit logging
  */
 
-import { type NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
+import { type NextRequest, NextResponse } from 'next/server';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
 import { prisma, prismaRead } from '@/lib/db';
@@ -23,8 +23,6 @@ import {
   getRateLimitIdentifier,
 } from '@/lib/security/rate-limiter';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
-
-export const dynamic = 'force-dynamic';
 
 // Document status mapping from DB to UI
 const STATUS_MAP: Record<string, 'pending' | 'processing' | 'completed' | 'error'> = {

@@ -40,8 +40,6 @@ import {
 } from '@/lib/security/rate-limiter';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 
-export const dynamic = 'force-dynamic';
-
 // Lazy-loaded modules to reduce cold-start time.
 // These are heavy and only needed inside the handler body.
 async function loadModules() {

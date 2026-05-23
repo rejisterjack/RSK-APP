@@ -38,7 +38,7 @@ interface EngagementMetrics {
 
 function getMetrics(): EngagementMetrics {
   if (typeof window === 'undefined') {
-    return { pageViews: 0, sessionStart: Date.now(), interactions: 0, promptShown: false };
+    return { pageViews: 0, sessionStart: 0, interactions: 0, promptShown: false };
   }
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) {
@@ -48,7 +48,7 @@ function getMetrics(): EngagementMetrics {
       // corrupted
     }
   }
-  return { pageViews: 0, sessionStart: Date.now(), interactions: 0, promptShown: false };
+  return { pageViews: 0, sessionStart: 0, interactions: 0, promptShown: false };
 }
 
 function saveMetrics(metrics: EngagementMetrics): void {
@@ -74,6 +74,7 @@ export function SmartInstallPrompt({
     if (typeof window === 'undefined') return;
 
     const m = getMetrics();
+    if (!m.sessionStart) m.sessionStart = Date.now();
     m.pageViews += 1;
     saveMetrics(m);
     setMetrics(m);

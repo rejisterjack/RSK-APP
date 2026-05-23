@@ -2,14 +2,13 @@ import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { headers } from 'next/headers';
+import { Suspense } from 'react';
 import { Navbar } from '@/components/navbar';
+import { NonceScripts } from '@/components/nonce-scripts';
 import { Providers } from '@/components/providers';
-import { PWAScripts } from '@/components/pwa/pwa-scripts';
 import { StructuredData } from '@/components/seo';
 import { NavigationProgress } from '@/components/ui/navigation-progress';
 import { Toaster } from '@/components/ui/toaster';
-import { CsrfTokenScript } from '@/lib/security/csrf';
 import '@/styles/globals.css';
 
 const geistSans = Geist({
@@ -138,13 +137,7 @@ interface RootLayoutProps {
   children: React.ReactNode;
 }
 
-export default async function RootLayout({
-  children,
-}: RootLayoutProps): Promise<React.ReactElement> {
-  // Get nonce from headers (set by middleware)
-  const headersList = await headers();
-  const nonce = headersList.get('x-nonce') ?? '';
-
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -191,9 +184,13 @@ export default async function RootLayout({
         </a>
         <div className="vibrant-bg" />
         <Providers>
-          <NavigationProgress />
+          <Suspense>
+            <NavigationProgress />
+          </Suspense>
           <div className="fixed inset-0 grid grid-rows-[auto_1fr] overflow-hidden">
-            <Navbar />
+            <Suspense>
+              <Navbar />
+            </Suspense>
             <main id="main-content" className="min-h-0 overflow-y-auto" tabIndex={-1}>
               {children}
             </main>
@@ -201,10 +198,10 @@ export default async function RootLayout({
           <Toaster />
         </Providers>
         <StructuredData />
-        {/* PWA Scripts - Service Worker Registration */}
-        <PWAScripts nonce={nonce} />
-        {/* CSRF Token Initialization */}
-        <CsrfTokenScript nonce={nonce} />
+        {/* PWA Scripts & CSRF — wrapped in Suspense because they read headers() at runtime */}
+        <Suspense fallback={null}>
+          <NonceScripts />
+        </Suspense>
         {/* Vercel Analytics & Core Web Vitals */}
         <SpeedInsights />
         <Analytics />

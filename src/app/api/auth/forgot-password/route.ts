@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
@@ -6,13 +6,14 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { emailService } from '@/lib/notifications/email';
 import { checkApiRateLimit, getRateLimitIdentifier } from '@/lib/security/rate-limiter';
+import { withIpRateLimit } from '@/lib/security/with-ip-rate-limit';
 import { getAppUrl } from '@/lib/workspace/workspace';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Invalid email address'),
 });
 
-export async function POST(req: Request) {
+async function handler(req: NextRequest) {
   try {
     // Rate limit
     const identifier = getRateLimitIdentifier(req);
@@ -106,3 +107,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withIpRateLimit(handler);

@@ -9,8 +9,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
-export const dynamic = 'force-dynamic';
-
 interface SlackOAuthResponse {
   ok: boolean;
   access_token?: string;

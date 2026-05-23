@@ -10,8 +10,6 @@ import { prisma } from '@/lib/db';
 import { SlackIntegration } from '@/lib/integrations/slack';
 import { logger } from '@/lib/logger';
 
-export const dynamic = 'force-dynamic';
-
 // Slack event types
 interface SlackEvent {
   type: string;

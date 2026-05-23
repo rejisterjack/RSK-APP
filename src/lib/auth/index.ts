@@ -349,8 +349,9 @@ const {
         if (jti) {
           const revoked = await isSessionRevokedCached(jti);
           if (revoked) {
-            // Return an empty session to force re-authentication
-            return {} as typeof session;
+            // Force re-authentication by returning a session with no user
+            const emptySession = { ...session, user: { id: '', role: 'USER' } };
+            return emptySession as typeof session;
           }
         }
 

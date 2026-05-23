@@ -107,4 +107,21 @@ class LoggerAdapter {
 }
 
 export const logger = new LoggerAdapter(pinoInstance);
+
+// ---------------------------------------------------------------------------
+// Production process-level error handlers
+// ---------------------------------------------------------------------------
+
+if (process.env.NODE_ENV === 'production') {
+  process.on('uncaughtException', (err) => {
+    pinoInstance.fatal({ err }, 'Uncaught exception — process will exit');
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    pinoInstance.fatal({ reason }, 'Unhandled promise rejection — process will exit');
+    process.exit(1);
+  });
+}
+
 export default logger;

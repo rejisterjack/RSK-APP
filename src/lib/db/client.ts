@@ -42,17 +42,20 @@ function extendWithSlowQueryMiddleware<T extends PrismaClient>(client: T): T {
     query: {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
-          const start = Date.now();
+          const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+          const start = isBuildPhase ? 0 : Date.now();
           const result = await query(args);
-          const durationMs = Date.now() - start;
 
-          if (durationMs > 1000) {
-            logger.warn('Slow Prisma query', {
-              model,
-              operation,
-              durationMs,
-              ...(env.NODE_ENV === 'development' && { args }),
-            });
+          if (!isBuildPhase) {
+            const durationMs = Date.now() - start;
+            if (durationMs > 1000) {
+              logger.warn('Slow Prisma query', {
+                model,
+                operation,
+                durationMs,
+                ...(env.NODE_ENV === 'development' && { args }),
+              });
+            }
           }
 
           return result;
@@ -74,6 +77,24 @@ export const prisma = extendWithSlowQueryMiddleware(basePrisma);
 
 if (env.NODE_ENV !== 'production') {
   g._prismaClient = basePrisma;
+}
+
+// ---------------------------------------------------------------------------
+// Graceful shutdown — database disconnect is registered via src/lib/shutdown.ts
+// ---------------------------------------------------------------------------
+
+export async function disconnectDatabase(): Promise<void> {
+  try {
+    await basePrisma.$disconnect();
+    if (READ_REPLICA_URL) {
+      const readBase = (globalThis as GlobalWithPrisma)._prismaReadClient;
+      if (readBase) await readBase.$disconnect();
+    }
+  } catch (err) {
+    logger.error('Error during database disconnect', {
+      error: err instanceof Error ? err.message : 'Unknown',
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

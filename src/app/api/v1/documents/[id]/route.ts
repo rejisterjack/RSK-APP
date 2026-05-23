@@ -23,8 +23,6 @@ import { auth } from '@/lib/auth';
 import { getServerSession } from '@/lib/auth/session';
 import { prisma } from '@/lib/db';
 
-export const dynamic = 'force-dynamic';
-
 interface RouteContext {
   params: Promise<{ id: string }>;
 }

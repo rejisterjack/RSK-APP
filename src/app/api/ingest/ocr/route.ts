@@ -25,8 +25,6 @@ import {
 import { assertSafeUrl } from '@/lib/security/ssrf-protection';
 import { checkPermission, Permission } from '@/lib/workspace/permissions';
 
-export const dynamic = 'force-dynamic';
-
 // Lazy-loaded — tesseract.js and sharp are heavy (only needed when actually running OCR)
 async function ocr() {
   return await import('@/lib/rag/ingestion/parsers/ocr');

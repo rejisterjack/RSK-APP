@@ -3,7 +3,7 @@ import NextAuth from 'next-auth';
 import { authConfig } from '@/lib/auth/auth.config';
 
 // =============================================================================
-// Edge-Safe Env Access
+// Env Access
 // =============================================================================
 
 const env = {
@@ -72,19 +72,25 @@ function getCorsHeaders(req: Request) {
 // Response Helper
 // =============================================================================
 
-function withRequestId(response: NextResponse, requestId: string): NextResponse {
+function withRequestId(
+  response: NextResponse,
+  requestId: string,
+  startTime?: number
+): NextResponse {
   response.headers.set('X-Request-ID', requestId);
+  if (startTime) {
+    response.headers.set('X-Response-Time', `${Date.now() - startTime}ms`);
+  }
   return response;
 }
 
 // =============================================================================
-// Middleware
+// Proxy
 // =============================================================================
 
-// Edge-compatible auth instance for JWT decoding in middleware
 const { auth } = NextAuth(authConfig);
 
-export default auth(async function middleware(req) {
+export default auth(async function proxy(req) {
   const { nextUrl } = req;
   const { pathname } = nextUrl;
 
@@ -95,6 +101,7 @@ export default auth(async function middleware(req) {
 
   try {
     const requestId = req.headers.get('X-Request-ID') ?? crypto.randomUUID();
+    const startTime = Date.now();
 
     // Only generate CSP nonce for HTML pages (API routes don't render inline scripts)
     const isHtmlRequest = !pathname.startsWith('/api/');
@@ -115,7 +122,7 @@ export default auth(async function middleware(req) {
     // CORS preflight
     if (req.method === 'OPTIONS') {
       const response = new NextResponse(null, { status: 204, headers: getCorsHeaders(req) });
-      return withRequestId(response, requestId);
+      return withRequestId(response, requestId, startTime);
     }
 
     // Public routes
@@ -137,39 +144,13 @@ export default auth(async function middleware(req) {
         }
       }
 
-      return withRequestId(response, requestId);
+      return withRequestId(response, requestId, startTime);
     }
 
     // Check if route requires auth
     const requiresAuth =
       PROTECTED_API_ROUTES.some((route) => pathname.startsWith(route)) ||
       pathname.startsWith('/chat');
-
-    // Rate limiting for ALL unauthenticated API requests (including API key requests)
-    if (!isLoggedIn && pathname.startsWith('/api/')) {
-      const { checkIPRateLimit } = await import('@/lib/security/ip-rate-limiter-edge');
-      const ipResult = await checkIPRateLimit(req);
-
-      if (!ipResult.allowed) {
-        const response = NextResponse.json(
-          {
-            error: 'Rate limit exceeded',
-            code: 'RATE_LIMIT',
-            requiresCaptcha: ipResult.requiresCaptcha,
-            isBlocked: ipResult.isBlocked,
-            resetAt: new Date(ipResult.resetTime).toISOString(),
-          },
-          {
-            status: 429,
-            headers: {
-              ...getCorsHeaders(req),
-              'Retry-After': Math.ceil((ipResult.resetTime - Date.now()) / 1000).toString(),
-            },
-          }
-        );
-        return withRequestId(response, requestId);
-      }
-    }
 
     // API key header: validate format, then forward for downstream key verification
     // Rate limiting has already been applied above
@@ -180,7 +161,7 @@ export default auth(async function middleware(req) {
           { error: 'Invalid API key format', code: 'INVALID_API_KEY' },
           { status: 401, headers: getCorsHeaders(req) }
         );
-        return withRequestId(response, requestId);
+        return withRequestId(response, requestId, startTime);
       }
 
       const headers = new Headers(req.headers);
@@ -192,7 +173,7 @@ export default auth(async function middleware(req) {
       for (const [k, v] of Object.entries(getCorsHeaders(req))) {
         response.headers.set(k, v);
       }
-      return withRequestId(response, requestId);
+      return withRequestId(response, requestId, startTime);
     }
 
     // Redirect unauthenticated users
@@ -202,7 +183,7 @@ export default auth(async function middleware(req) {
           { error: 'Unauthorized', code: 'UNAUTHORIZED' },
           { status: 401, headers: getCorsHeaders(req) }
         );
-        return withRequestId(response, requestId);
+        return withRequestId(response, requestId, startTime);
       }
 
       const loginUrl = new URL('/login', nextUrl);
@@ -219,7 +200,7 @@ export default auth(async function middleware(req) {
           { error: 'Forbidden', code: 'FORBIDDEN' },
           { status: 403, headers: getCorsHeaders(req) }
         );
-        return withRequestId(response, requestId);
+        return withRequestId(response, requestId, startTime);
       }
       return withRequestId(NextResponse.redirect(new URL('/', nextUrl)), requestId);
     }
@@ -248,22 +229,21 @@ export default auth(async function middleware(req) {
 
     return withRequestId(response, requestId);
   } catch (_error) {
-    // Let auth routes pass through on middleware failure — the auth handler will deal with it
+    // Let auth routes pass through on proxy failure
     if (pathname?.startsWith('/api/auth/')) {
       return NextResponse.next();
     }
 
-    if (env.NODE_ENV === 'development') {
-    }
-
     if (pathname?.startsWith('/api/')) {
       return NextResponse.json(
-        { error: { code: 'MIDDLEWARE_ERROR', message: 'Request could not be processed' } },
+        { error: { code: 'PROXY_ERROR', message: 'Request could not be processed' } },
         { status: 500 }
       );
     }
 
-    return NextResponse.redirect(new URL('/login', req.nextUrl));
+    // For page routes, pass through instead of redirecting to login.
+    // The page's own server-side auth check will handle unauthorized access.
+    return NextResponse.next();
   }
 });
 
@@ -272,11 +252,9 @@ export default auth(async function middleware(req) {
 // =============================================================================
 
 function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: string): void {
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-XSS-Protection', '0');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  // Static headers (X-Frame-Options, X-Content-Type-Options, etc.) are set in next.config.ts
+  // Only dynamic headers that require per-request nonce/values remain here
+
   response.headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
 
   const n = nonce ?? '';
@@ -325,6 +303,7 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
     "font-src 'self' https://cdn.jsdelivr.net",
     `connect-src https://api.github.com ${connectSrc}`,
     "object-src 'none'",
+    "frame-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "worker-src 'self' blob:",
@@ -352,14 +331,9 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
   if (env.NODE_ENV === 'production') {
     response.headers.set(
       'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains; preload'
+      'max-age=63072000; includeSubDomains; preload'
     );
   }
-
-  response.headers.set(
-    'Permissions-Policy',
-    'camera=(), microphone=(self), geolocation=(), interest-cohort=()'
-  );
 }
 
 // =============================================================================

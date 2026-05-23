@@ -218,11 +218,16 @@ class UpstashRateLimiter implements RateLimiterBackend {
   private ratelimit: unknown = null;
   private limits = new Map<string, unknown>();
   private redis: unknown = null;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
+    this.initPromise = this.init();
+  }
+
+  private async init(): Promise<void> {
     try {
-      const { Ratelimit } = require('@upstash/ratelimit');
-      const { Redis } = require('@upstash/redis');
+      const { Ratelimit } = await import('@upstash/ratelimit');
+      const { Redis } = await import('@upstash/redis');
 
       const redis = new Redis({
         url: env.UPSTASH_REDIS_REST_URL || '',
@@ -239,6 +244,11 @@ class UpstashRateLimiter implements RateLimiterBackend {
   }
 
   async checkLimit(identifier: string, config: RateLimitConfig): Promise<RateLimitResult> {
+    if (this.initPromise) {
+      await this.initPromise;
+      this.initPromise = null;
+    }
+
     if (!this.ratelimit || !this.redis) {
       return dbLimiter.checkLimit(identifier, config);
     }

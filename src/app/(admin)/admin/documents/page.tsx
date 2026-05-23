@@ -1,5 +1,6 @@
 import { CheckCircle2, Clock, FileText, Loader2, Search, XCircle } from 'lucide-react';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 
 import { DeleteButton, ReingestButton } from '@/components/admin/documents/document-actions';
@@ -13,8 +14,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { prismaRead } from '@/lib/db';
-
-export const dynamic = 'force-dynamic';
 
 // =============================================================================
 // Types
@@ -262,6 +261,7 @@ interface PageProps {
 export default async function AdminDocumentsPage({
   searchParams,
 }: PageProps): Promise<React.ReactElement> {
+  await connection();
   const params = await searchParams;
   const statusFilter = params.status;
 

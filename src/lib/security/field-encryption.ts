@@ -32,12 +32,13 @@ const AZURE_KEY_NAME = process.env.AZURE_KEY_NAME;
 const GCP_KMS_KEY_NAME = process.env.GCP_KMS_KEY_NAME;
 
 // Master key from environment (used for local key derivation)
-const MASTER_KEY = process.env.ENCRYPTION_MASTER_KEY || process.env.NEXTAUTH_SECRET;
+// In production, env.ts validates ENCRYPTION_MASTER_KEY >= 32 chars.
+const MASTER_KEY = process.env.ENCRYPTION_MASTER_KEY;
 
 // Validate configuration
 if (KMS_PROVIDER === 'local' && !MASTER_KEY) {
   throw new Error(
-    'ENCRYPTION_MASTER_KEY or NEXTAUTH_SECRET environment variable must be set for local field-level encryption'
+    'ENCRYPTION_MASTER_KEY environment variable must be set for local field-level encryption (min 32 chars)'
   );
 }
 

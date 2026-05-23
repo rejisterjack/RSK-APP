@@ -16,6 +16,10 @@ const withMDX = createMDX({
 });
 
 const nextConfig: NextConfig = {
+	output: 'standalone',
+
+	compress: true,
+
 	pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
 
 	cacheComponents: true,
@@ -24,6 +28,7 @@ const nextConfig: NextConfig = {
 		resolveAlias: {
 			nodemailer: './src/lib/empty-module.ts',
 			pdf2pic: './src/lib/empty-module.ts',
+			'file-type': './src/lib/empty-module.ts',
 		},
 	},
 
@@ -136,6 +141,19 @@ const nextConfig: NextConfig = {
 
 	async headers(): Promise<Header[]> {
 		return [
+			{
+				source: "/:path*",
+				headers: [
+					{ key: "X-Frame-Options", value: "DENY" },
+					{ key: "X-Content-Type-Options", value: "nosniff" },
+					{ key: "X-XSS-Protection", value: "0" },
+					{ key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+					{ key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+					{ key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+					{ key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+					{ key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), browsing-topics=(), interest-cohort=()" },
+				],
+			},
 			{
 				source: "/api/:path*",
 				headers: [

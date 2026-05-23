@@ -1,6 +1,5 @@
+import { connection } from 'next/server';
 import { Suspense } from 'react';
-
-export const dynamic = 'force-dynamic';
 
 import { AdminDashboardStats } from '@/components/admin/admin-dashboard-stats';
 import { DashboardSkeleton } from '@/components/admin/dashboard-skeleton';
@@ -14,6 +13,8 @@ import { prisma } from '@/lib/db';
 // =============================================================================
 
 async function getDashboardStats() {
+  await connection();
+
   const [
     totalUsers,
     totalWorkspaces,

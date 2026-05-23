@@ -3,9 +3,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
-// ISR: pricing rarely changes — revalidate every 24 hours
-export const revalidate = 86400;
-
 export const metadata: Metadata = {
   title: 'Pricing — RAG Starter Kit',
   description:

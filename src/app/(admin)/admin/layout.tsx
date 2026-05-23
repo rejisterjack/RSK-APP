@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { connection } from 'next/server';
 import { AdminNav } from '@/components/admin/admin-nav';
 import { ErrorBoundary } from '@/components/error/error-boundary';
 import { requireAdmin } from '@/lib/auth';
@@ -15,6 +16,8 @@ interface AdminLayoutProps {
 }
 
 export default async function AdminLayout({ children }: AdminLayoutProps) {
+  await connection();
+
   try {
     await requireAdmin();
   } catch (error: unknown) {

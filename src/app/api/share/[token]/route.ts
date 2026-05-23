@@ -8,9 +8,6 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db/client';
 import { logger } from '@/lib/logger';
 import { checkApiRateLimit } from '@/lib/security/rate-limiter';
-
-export const dynamic = 'force-dynamic';
-
 /**
  * GET /api/share/[token]
  * Get a shared chat by token
