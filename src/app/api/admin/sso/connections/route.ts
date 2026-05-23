@@ -105,7 +105,7 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     // Build the ACS URL
-    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:7392';
     const spAcsUrl = `${baseUrl}/api/auth/saml/${workspaceId}/acs`;
 
     // Create the connection

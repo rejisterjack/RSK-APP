@@ -312,7 +312,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               messages: [{ role: 'user', content: trimmedContent }],
               conversationId: effectiveChatId,
               config: {
-                model: modelRef.current || 'google/gemini-2.0-flash-exp:free',
+                // Model selection is handled server-side via dynamic discovery
               },
               stream: true,
             }),
@@ -463,9 +463,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
             onFinishRef.current?.(assistantMessage);
           } else {
-            // Stream ended with no content — likely a model provider error
+            // Stream ended with no content — the model provider returned an empty response.
+            // This is typically caused by rate-limiting (429) on free-tier models.
+            const modelUsed = response.headers.get('X-Model-Used') || 'unknown';
             throw new Error(
-              'The AI model returned no response. Verify your API key is valid and has remaining quota.'
+              `The AI model (${modelUsed}) returned no response. ` +
+                'This is usually caused by temporary rate-limiting on free models. Please try again in a moment.'
             );
           }
         } catch (err) {

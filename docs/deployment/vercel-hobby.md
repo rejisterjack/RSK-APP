@@ -74,7 +74,7 @@ All components are managed services with free tiers. No Docker, containers, or s
 
 ```bash
 # Install Vercel CLI
-pnpm i -g vercel
+bun i -g vercel
 
 # Login
 vercel login
@@ -109,7 +109,7 @@ After the first deployment, run migrations to create the database tables:
 vercel env pull .env.local
 
 # Run migrations
-pnpm db:migrate:prod
+bun db:migrate:prod
 ```
 
 ## Step 4: Connect Inngest

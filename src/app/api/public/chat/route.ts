@@ -166,7 +166,7 @@ export async function POST(req: Request) {
       history,
       config: {
         ...config,
-        model: config?.model || 'gpt-4o-mini',
+        model: config?.model || 'auto', // Dynamic — resolved via model discovery
         temperature: config?.temperature ?? 0.7,
         maxTokens: config?.maxTokens ?? 2000,
         topK: config?.topK ?? 5,

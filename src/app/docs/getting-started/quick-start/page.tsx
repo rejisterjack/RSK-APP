@@ -48,7 +48,7 @@ export default function QuickStartPage() {
         <Step number={1} title="Clone and install">
           <Code>{`git clone https://github.com/nicholasgriffintn/rag-starter-kit.git my-rag-app
 cd my-rag-app
-pnpm install`}</Code>
+bun install`}</Code>
         </Step>
 
         <Step number={2} title="Set environment variables">
@@ -75,7 +75,7 @@ pnpm install`}</Code>
             </div>
             <div>
               <strong>NEXTAUTH_URL</strong> — Use{' '}
-              <code className="bg-card px-1.5 py-0.5 rounded">http://localhost:3000</code>
+              <code className="bg-card px-1.5 py-0.5 rounded">http://localhost:7392</code>
             </div>
             <div>
               <strong>OPENROUTER_API_KEY</strong> — Get a free key at{' '}
@@ -99,16 +99,16 @@ pnpm install`}</Code>
         </Step>
 
         <Step number={4} title="Start the development server">
-          <Code>{`pnpm dev`}</Code>
+          <Code>{`bun dev`}</Code>
           <p className="text-muted-foreground">
             Open{' '}
             <a
-              href="http://localhost:3000"
+              href="http://localhost:7392"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
             >
-              http://localhost:3000
+              http://localhost:7392
             </a>{' '}
             and create an account.
           </p>

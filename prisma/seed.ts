@@ -80,7 +80,7 @@ Entirely free for self-hosted deployments. Uses OpenRouter free-tier models for 
 ## Prerequisites
 
 - Node.js 20 or higher
-- pnpm 9 or higher
+- bun 9 or higher
 - A free OpenRouter API key (https://openrouter.ai/keys)
 - A free Google AI Studio API key (https://aistudio.google.com/app/apikey)
 
@@ -102,25 +102,25 @@ Open .env and set these required variables:
 \`\`\`
 DATABASE_URL=postgresql://...         # Your PostgreSQL connection string
 NEXTAUTH_SECRET=...                    # Generate: openssl rand -base64 32
-NEXTAUTH_URL=http://localhost:3000     # Your app URL
+NEXTAUTH_URL=http://localhost:7392     # Your app URL
 OPENROUTER_API_KEY=sk-or-...           # From openrouter.ai/keys
 \`\`\`
 
 ## Step 3: Install Dependencies and Run Migrations
 
 \`\`\`bash
-pnpm install
-pnpm db:migrate
-pnpm db:seed        # Load demo data
+bun install
+bun db:migrate
+bun db:seed        # Load demo data
 \`\`\`
 
 ## Step 4: Start the Development Server
 
 \`\`\`bash
-pnpm dev
+bun dev
 \`\`\`
 
-Open http://localhost:3000 in your browser.
+Open http://localhost:7392 in your browser.
 
 ## Step 5: Upload Your First Document
 
@@ -549,7 +549,7 @@ async function main() {
             {
               role: 'ASSISTANT',
               content:
-                'Setup takes under 10 minutes:\n\n1. **Clone the repo** — `git clone https://github.com/rejisterjack/rag-starter-kit.git`\n2. **Get 2 free API keys** — OpenRouter (for chat) and Google AI Studio (for embeddings). Both are free.\n3. **Copy `.env.example` to `.env`** and paste your keys\n4. **Run `pnpm install && pnpm dev`**\n5. **Open http://localhost:3000**\n\nThe only required environment variables are `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and `OPENROUTER_API_KEY`. Everything else has sensible defaults or optional fallbacks.\n\nFor deployment to production, click the "Deploy to Vercel" button in the README and set those same four variables in the Vercel dashboard.',
+                'Setup takes under 10 minutes:\n\n1. **Clone the repo** — `git clone https://github.com/rejisterjack/rag-starter-kit.git`\n2. **Get 2 free API keys** — OpenRouter (for chat) and Google AI Studio (for embeddings). Both are free.\n3. **Copy `.env.example` to `.env`** and paste your keys\n4. **Run `bun install && bun dev`**\n5. **Open http://localhost:7392**\n\nThe only required environment variables are `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, and `OPENROUTER_API_KEY`. Everything else has sensible defaults or optional fallbacks.\n\nFor deployment to production, click the "Deploy to Vercel" button in the README and set those same four variables in the Vercel dashboard.',
               sources: JSON.stringify([
                 {
                   documentName: 'Getting Started Guide',

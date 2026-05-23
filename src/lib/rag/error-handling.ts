@@ -34,7 +34,7 @@ export interface ErrorContext {
 export type ErrorHandler = (error: LLMError, context: ErrorContext) => Promise<boolean>; // Return true to retry
 
 const DEFAULT_FALLBACK_CONFIG: FallbackConfig = {
-  primaryModel: 'gpt-4o-mini',
+  primaryModel: 'auto',
   fallbackModels: ['gpt-4o', 'gpt-3.5-turbo'],
   maxRetries: 3,
   retryDelayMs: 1000,

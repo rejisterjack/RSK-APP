@@ -42,5 +42,14 @@ export async function register() {
         error instanceof Error ? error.message : String(error)
       );
     }
+
+    // Trigger initial model discovery (non-blocking)
+    // Discovers available free models on OpenRouter and probes them
+    import('./src/lib/ai/model-discovery')
+      .then(({ refreshDiscovery }) => refreshDiscovery())
+      .catch(() => {
+        // Discovery failed — hardcoded fallback will be used
+        console.warn('[MODEL DISCOVERY] Initial discovery failed, using hardcoded fallback');
+      });
   }
 }

@@ -189,7 +189,7 @@ CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at A
 
 ```bash
 # Database performance tests
-pnpm vitest run tests/performance/database.test.ts
+bun vitest run tests/performance/database.test.ts
 
 # Load tests (k6)
 k6 run tests/performance/load.test.ts

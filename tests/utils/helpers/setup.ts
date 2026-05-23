@@ -16,7 +16,7 @@ afterEach(() => {
 beforeAll(() => {
   // Add any global test setup here
   // e.g., mocking environment variables
-  process.env.NEXTAUTH_URL = 'http://localhost:3000';
+  process.env.NEXTAUTH_URL = 'http://localhost:7392';
   process.env.NEXTAUTH_SECRET = 'test-secret';
 });
 
@@ -76,7 +76,7 @@ export function getMockNextAuthSession(): unknown {
 export function createMockRequest(
   options: { method?: string; url?: string; body?: unknown; headers?: Record<string, string> } = {}
 ): Request {
-  const { method = 'GET', url = 'http://localhost:3000/api/test', body, headers = {} } = options;
+  const { method = 'GET', url = 'http://localhost:7392/api/test', body, headers = {} } = options;
 
   return new Request(url, {
     method,

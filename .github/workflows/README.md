@@ -15,8 +15,8 @@ Comprehensive CI pipeline with parallel jobs:
 - **Security Audit**: npm audit for vulnerabilities
 
 **Features**:
-- Uses Node.js 20 and pnpm 10
-- pnpm dependency caching
+- Uses Node.js 20 and bun 10
+- bun dependency caching
 - PostgreSQL with pgvector extension for tests
 - Coverage reporting support
 

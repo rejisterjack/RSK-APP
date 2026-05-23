@@ -286,8 +286,8 @@ export function HeroSection(): React.ReactElement {
                   transition={{ delay: 2.0 }}
                 >
                   <span className="text-primary font-bold">➜</span>{' '}
-                  <span className="text-blue-400">rag-starter-kit</span> cp .env.example .env &&
-                  pnpm dev
+                  <span className="text-blue-400">rag-starter-kit</span> cp .env.example .env && bun
+                  dev
                 </motion.p>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -327,7 +327,7 @@ export function HeroSection(): React.ReactElement {
                   transition={{ delay: 3.0 }}
                   className="text-primary font-medium mt-4"
                 >
-                  🚀 Ready at http://localhost:3000
+                  🚀 Ready at http://localhost:7392
                 </motion.p>
               </div>
             </div>

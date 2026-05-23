@@ -161,7 +161,7 @@ export class QueryRouter {
 
   constructor(config: RouterConfig = {}) {
     this.config = {
-      model: config.model ?? 'gpt-4o-mini',
+      model: config.model ?? 'auto',
       temperature: config.temperature ?? 0.1,
       fallbackType: config.fallbackType ?? QueryType.RETRIEVE,
     };

@@ -19,7 +19,7 @@ export function getAppUrl(): string {
 
   // Allow localhost fallback only in development
   if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:3000';
+    return 'http://localhost:7392';
   }
 
   throw new Error('NEXT_PUBLIC_APP_URL environment variable is required in production');

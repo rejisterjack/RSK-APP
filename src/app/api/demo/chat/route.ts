@@ -132,11 +132,11 @@ export async function POST(req: NextRequest) {
 
     // Default demo config
     const demoConfig = {
-      model: config?.model || 'google/gemma-3-12b-it:free',
+      model: config?.model || 'auto', // Dynamic — resolved via model discovery
       temperature: config?.temperature ?? 0.7,
       maxTokens: Math.min(config?.maxTokens ?? 1000, 1000), // Max 1000 for demo
       topK: config?.topK ?? 5,
-      similarityThreshold: config?.similarityThreshold ?? 0.7,
+      similarityThreshold: config?.similarityThreshold ?? 0.5,
     };
 
     if (stream) {

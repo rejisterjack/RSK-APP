@@ -44,7 +44,7 @@ export default defineConfig({
   // Shared settings for all the projects below
   use: {
     // Base URL to use in actions like `await page.goto('/')`
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:7392',
     
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
@@ -157,8 +157,8 @@ export default defineConfig({
   // Run local dev server before starting the tests
   webServer: [
     {
-      command: 'pnpm dev',
-      url: 'http://localhost:3000',
+      command: 'bun dev',
+      url: 'http://localhost:7392',
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000, // 2 minutes
       env: {
@@ -167,7 +167,7 @@ export default defineConfig({
     },
     // Optional: Start Inngest dev server if needed
     {
-      command: 'pnpm inngest:dev',
+      command: 'bun inngest:dev',
       url: 'http://localhost:8288',
       reuseExistingServer: !process.env.CI,
       timeout: 30 * 1000,

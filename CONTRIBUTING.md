@@ -33,8 +33,8 @@ For larger changes (new features, architectural decisions, breaking changes) —
 
 ### Prerequisites
 
-- **Node.js 20+**
-- **pnpm 9+** — install with `npm install -g pnpm`
+- **Bun runtime
+- **bun 9+** — install with `curl -fsSL https://bun.sh/install | bash`
 
 ### Steps
 
@@ -44,7 +44,7 @@ git clone https://github.com/YOUR_USERNAME/rag-starter-kit.git
 cd rag-starter-kit
 
 # 2. Install dependencies
-pnpm install
+bun install
 
 # 3. Copy the environment template
 cp .env.example .env
@@ -54,9 +54,9 @@ cp .env.example .env
 # - Google AI Studio (free): https://aistudio.google.com/app/apikey
 
 # 5. Start the dev server
-pnpm dev
+bun dev
 
-# 6. Open http://localhost:3000
+# 6. Open http://localhost:7392
 ```
 
 The dev server starts the Next.js app with all connected managed services (PostgreSQL, Redis, Cloudinary, Inngest). Everything runs locally — no external services needed beyond the two free API keys.
@@ -64,8 +64,8 @@ The dev server starts the Next.js app with all connected managed services (Postg
 ### Verify Everything Works
 
 ```bash
-pnpm test          # Unit tests should pass
-pnpm test:e2e      # E2E tests (requires the dev server running)
+bun test          # Unit tests should pass
+bun test:e2e      # E2E tests (requires the dev server running)
 ```
 
 If either of these fails on a clean clone, that's a bug — please open an issue.
@@ -106,11 +106,11 @@ git checkout -b feat/your-feature-name
 # 2. Make your changes
 
 # 3. Run tests
-pnpm test
-pnpm test:e2e
+bun test
+bun test:e2e
 
 # 4. Run the linter
-pnpm lint
+bun lint
 
 # 5. Commit your changes (see commit conventions below)
 git commit -m "feat: add multi-LLM provider switching"
@@ -127,10 +127,10 @@ If your change requires a schema update:
 # 1. Edit prisma/schema.prisma
 
 # 2. Generate and apply the migration
-pnpm prisma migrate dev --name describe-your-change
+bun prisma migrate dev --name describe-your-change
 
 # 3. Regenerate the Prisma client
-pnpm prisma generate
+bun prisma generate
 ```
 
 Always include migrations in your PR. Never ask reviewers to run raw SQL.
@@ -227,9 +227,9 @@ Update your .env file before upgrading.
 We use [Biome](https://biomejs.dev/) for formatting and linting. It runs automatically on commit via a pre-commit hook.
 
 ```bash
-pnpm lint          # Check for issues
-pnpm lint:fix      # Auto-fix what can be fixed
-pnpm format        # Format all files
+bun lint          # Check for issues
+bun lint:fix      # Auto-fix what can be fixed
+bun format        # Format all files
 ```
 
 Key conventions:
@@ -246,9 +246,9 @@ Key conventions:
 ### Unit Tests (Vitest)
 
 ```bash
-pnpm test                  # Run all unit tests
-pnpm test:watch            # Watch mode
-pnpm test:coverage         # Coverage report
+bun test                  # Run all unit tests
+bun test:watch            # Watch mode
+bun test:coverage         # Coverage report
 ```
 
 Unit tests live alongside the code they test: `src/lib/rag/chunker.ts` → `src/lib/rag/chunker.test.ts`.
@@ -256,8 +256,8 @@ Unit tests live alongside the code they test: `src/lib/rag/chunker.ts` → `src/
 ### E2E Tests (Playwright)
 
 ```bash
-pnpm test:e2e              # Run all E2E tests (requires dev server)
-pnpm test:e2e --ui         # Open Playwright UI
+bun test:e2e              # Run all E2E tests (requires dev server)
+bun test:e2e --ui         # Open Playwright UI
 ```
 
 E2E tests live in `tests/e2e/`. They test full user flows — document upload, chat, authentication.

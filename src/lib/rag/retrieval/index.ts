@@ -156,7 +156,7 @@ export async function retrieveSources(
     } else {
       try {
         queryEmbedding = await generateQueryEmbedding(query);
-      } catch (_error) {
+      } catch {
         return [];
       }
     }
@@ -171,12 +171,8 @@ export async function retrieveSources(
     let results: VectorSearchResult[];
     try {
       results = await searchSimilarChunks(queryEmbedding, userId, config);
-    } catch (_error) {
+    } catch {
       return [];
-    }
-
-    if (results.length === 0) {
-    } else {
     }
 
     // Map to Source type

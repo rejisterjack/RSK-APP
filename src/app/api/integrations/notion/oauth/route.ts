@@ -21,7 +21,7 @@ import { checkPermission, Permission } from '@/lib/workspace/permissions';
 function getOAuthConfig(): NotionOAuthConfig | null {
   const clientId = process.env.NOTION_CLIENT_ID;
   const clientSecret = process.env.NOTION_CLIENT_SECRET;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:7392';
 
   if (!clientId || !clientSecret) {
     return null;

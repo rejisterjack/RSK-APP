@@ -17,10 +17,10 @@ Fixes #(issue)
 
 ## 🧪 Testing
 
-- [ ] Unit tests pass (`pnpm test`)
-- [ ] E2E tests pass (`pnpm test:e2e`)
-- [ ] TypeScript check passes (`pnpm type-check`)
-- [ ] Linting passes (`pnpm lint`)
+- [ ] Unit tests pass (`bun test`)
+- [ ] E2E tests pass (`bun test:e2e`)
+- [ ] TypeScript check passes (`bun type-check`)
+- [ ] Linting passes (`bun lint`)
 
 ## 📸 Screenshots (if applicable)
 

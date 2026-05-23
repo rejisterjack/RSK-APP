@@ -8,16 +8,16 @@
  * Prisma is used only for fetching document metadata (name, type) during upserts.
  */
 
+import type { ChunkPointData } from '@/lib/qdrant';
 import {
   buildQdrantFilter,
   COLLECTION_DOCUMENT_CHUNKS,
+  qdrant,
   deleteByDocumentId as qdrantDeleteByDocumentId,
   getDocumentStats as qdrantGetDocumentStats,
-  qdrant,
   searchSimilar,
   upsertChunks,
 } from '@/lib/qdrant';
-import type { ChunkPointData } from '@/lib/qdrant';
 
 import { prisma } from './client';
 
@@ -146,11 +146,7 @@ export class VectorStore {
    * Fetches document metadata (name, contentType) from Prisma so that every
    * Qdrant point carries enough payload for later search results.
    */
-  async addVectors(
-    chunks: ChunkInsertData[],
-    documentId: string,
-    userId: string
-  ): Promise<void> {
+  async addVectors(chunks: ChunkInsertData[], documentId: string, userId: string): Promise<void> {
     if (chunks.length === 0) return;
 
     // Verify document exists and belongs to user
@@ -191,13 +187,7 @@ export class VectorStore {
     queryEmbedding: number[],
     options: SearchOptions
   ): Promise<SearchResult[]> {
-    const {
-      userId,
-      workspaceId,
-      topK = 5,
-      minScore = 0.7,
-      filter,
-    } = options;
+    const { userId, workspaceId, topK = 5, minScore = 0.5, filter } = options;
 
     // Build a Qdrant-compatible filter from the SearchOptions
     const qdrantFilter = buildQdrantFilter({

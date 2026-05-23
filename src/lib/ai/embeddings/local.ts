@@ -32,7 +32,7 @@ async function loadTransformers(): Promise<TransformersModule | null> {
   } catch {
     logger.warn(
       '@xenova/transformers could not be loaded. Local embedding provider will be unavailable. ' +
-        'Install the optional dependency with: pnpm add @xenova/transformers'
+        'Install the optional dependency with: bun add @xenova/transformers'
     );
     return null;
   }
@@ -118,7 +118,7 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
     if (!transformers) {
       throw new Error(
         '@xenova/transformers is not installed. Local embeddings are unavailable. ' +
-          'Install it with: pnpm add @xenova/transformers'
+          'Install it with: bun add @xenova/transformers'
       );
     }
     try {

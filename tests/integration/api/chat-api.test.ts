@@ -61,7 +61,7 @@ vi.mock('@/lib/env', () => ({
     OPENAI_API_KEY: 'test-api-key',
     DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
     NEXTAUTH_SECRET: 'test-secret',
-    NEXTAUTH_URL: 'http://localhost:3000',
+    NEXTAUTH_URL: 'http://localhost:7392',
     ENCRYPTION_MASTER_KEY: 'test-encryption-key-for-vitest-32c',
     GOOGLE_GENERATIVE_AI_API_KEY: 'test-google-api-key',
   },
@@ -86,7 +86,7 @@ function setSession(session: unknown) {
 
 describe('POST /api/chat', () => {
   const createMockRequest = (body: unknown): Request => {
-    return new Request('http://localhost:3000/api/chat', {
+    return new Request('http://localhost:7392/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -218,7 +218,7 @@ describe('POST /api/chat', () => {
       });
 
       const { POST } = await import('@/app/api/chat/route');
-      const request = new Request('http://localhost:3000/api/chat', {
+      const request = new Request('http://localhost:7392/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: 'invalid json',

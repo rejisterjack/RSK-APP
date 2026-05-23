@@ -81,7 +81,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     const runner = new EvalRunner({
-      apiBaseUrl: body.apiUrl || 'http://localhost:3000',
+      apiBaseUrl: body.apiUrl || 'http://localhost:7392',
       apiKey: body.apiKey,
       includeAnswer: body.includeAnswer ?? true,
     });

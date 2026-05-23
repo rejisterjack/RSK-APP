@@ -26,7 +26,7 @@ export class QueryDecompressor {
   constructor(options: QueryDecompressionOptions = {}) {
     this.options = {
       maxHistoryMessages: options.maxHistoryMessages ?? 5,
-      model: options.model ?? 'gpt-4o-mini',
+      model: options.model ?? 'auto',
       temperature: options.temperature ?? 0.3,
     };
   }

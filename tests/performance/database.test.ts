@@ -2,7 +2,7 @@
  * Database Query Performance Tests
  *
  * Tests for measuring database query performance.
- * Run with: pnpm vitest run tests/performance/database.test.ts
+ * Run with: bun vitest run tests/performance/database.test.ts
  */
 
 import { generateTestChunks } from '@tests/utils/generators';

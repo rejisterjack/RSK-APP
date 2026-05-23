@@ -1,13 +1,13 @@
 module.exports = {
   ci: {
     collect: {
-      startServerCommand: 'pnpm start',
+      startServerCommand: 'bun start',
       startServerReadyPattern: 'ready on',
       startServerReadyTimeout: 60000,
       url: [
-        'http://localhost:3000/',
-        'http://localhost:3000/chat',
-        'http://localhost:3000/login',
+        'http://localhost:7392/',
+        'http://localhost:7392/chat',
+        'http://localhost:7392/login',
       ],
       numberOfRuns: 3,
       settings: {

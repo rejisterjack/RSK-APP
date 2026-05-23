@@ -11,7 +11,6 @@
  */
 
 import { createOpenAI, openai } from '@ai-sdk/openai';
-import { openrouter } from '@openrouter/ai-sdk-provider';
 import { type LanguageModel, streamText } from 'ai';
 import { NextResponse } from 'next/server';
 import { createOllama } from 'ollama-ai-provider';
@@ -22,6 +21,10 @@ const fireworks = createOpenAI({
 });
 
 import { createProviderFromEnv, type LLMMessage } from '@/lib/ai/llm';
+import {
+  getBestAvailableModel,
+  resolveModel as resolveDynamicModel,
+} from '@/lib/ai/model-discovery';
 import { type AgentAnalytics, createAgentAnalytics } from '@/lib/analytics/agent-analytics';
 import { MetricType, recordMetric } from '@/lib/analytics/rag-metrics';
 import { trackTokenUsage } from '@/lib/analytics/token-tracking';
@@ -65,7 +68,7 @@ const defaultConfig: RAGConfig = {
   similarityThreshold: 0.7,
   temperature: 0.7,
   maxTokens: 2000,
-  model: 'google/gemini-2.0-flash-exp:free',
+  model: 'auto', // Dynamic — resolved at call time via model discovery
   embeddingModel: 'text-embedding-004',
 };
 
@@ -74,20 +77,15 @@ const REACT_THRESHOLD = 0.6;
 // Global analytics instance
 const agentAnalytics = createAgentAnalytics();
 
-function getModel(modelName: string): LanguageModel {
+/**
+ * Resolve a model name to a LanguageModel instance.
+ * Handles Fireworks/Ollama locally, delegates everything else to the
+ * centralized dynamic model resolver.
+ */
+async function getModel(modelName: string): Promise<LanguageModel> {
   // Fireworks models (accounts/fireworks/models/...)
   if (modelName.startsWith('accounts/fireworks/')) {
     return fireworks(modelName) as unknown as LanguageModel;
-  }
-
-  // OpenRouter models (contains '/' or ends with ':free')
-  if (modelName.includes('/') || modelName.endsWith(':free')) {
-    return openrouter.chat(modelName) as unknown as LanguageModel;
-  }
-
-  // OpenAI models
-  if (modelName.startsWith('gpt-') || modelName.startsWith('text-')) {
-    return openai(modelName) as unknown as LanguageModel;
   }
 
   // Ollama models
@@ -99,8 +97,24 @@ function getModel(modelName: string): LanguageModel {
     return ollama(modelName) as unknown as LanguageModel;
   }
 
-  // Default to OpenRouter for unknown models
-  return openrouter.chat(modelName) as unknown as LanguageModel;
+  // OpenAI models
+  if (modelName.startsWith('gpt-') || modelName.startsWith('text-')) {
+    return openai(modelName) as unknown as LanguageModel;
+  }
+
+  // Use centralized dynamic resolver for everything else (Groq, OpenRouter, etc.)
+  const resolved = resolveDynamicModel(modelName);
+  if (resolved) return resolved;
+
+  // Final fallback — use the best available model
+  const bestModel = await getBestAvailableModel('chat');
+  const fallback = resolveDynamicModel(bestModel);
+  if (fallback) return fallback;
+
+  // Last resort — direct OpenRouter (uses configured instance from model-discovery)
+  const lastResort = resolveDynamicModel(bestModel);
+  if (lastResort) return lastResort;
+  throw new Error(`No provider available for model: ${bestModel}`);
 }
 
 interface AgentConfig {
@@ -501,10 +515,16 @@ ${memoryContext ? `\nContext:\n${memoryContext}` : ''}`,
 
   if (shouldStream) {
     const result = streamText({
-      model: getModel(config.model),
+      model: await getModel(config.model),
       messages: llmMessages,
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      onError: (error) => {
+        logger.error('Agent stream error', {
+          model: config.model,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
       onFinish: async (completion) => {
         if (effectiveConversationId) {
           await memory.addMessage(effectiveConversationId, {
@@ -845,7 +865,7 @@ async function handleDirectRetrieval(params: HandlerParams): Promise<Response> {
 
   if (shouldStream) {
     const result = streamText({
-      model: getModel(config.model),
+      model: await getModel(config.model),
       messages: llmMessages,
       temperature: config.temperature,
       maxTokens: config.maxTokens,

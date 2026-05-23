@@ -99,7 +99,7 @@ vi.mock('@/lib/security/rate-limiter', () => ({
 
 vi.mock('@/lib/workspace/workspace', () => ({
   createDefaultWorkspace: vi.fn().mockResolvedValue({ id: 'ws-1' }),
-  getAppUrl: vi.fn().mockReturnValue('http://localhost:3000'),
+  getAppUrl: vi.fn().mockReturnValue('http://localhost:7392'),
 }));
 
 vi.mock('@/lib/notifications/email', () => ({
@@ -137,7 +137,7 @@ describe('Authentication Flow Integration', () => {
       });
 
       const { POST } = await import('@/app/api/auth/register/route');
-      const request = new Request('http://localhost:3000/api/auth/register', {
+      const request = new Request('http://localhost:7392/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(validUser),
@@ -153,7 +153,7 @@ describe('Authentication Flow Integration', () => {
 
     it('should reject registration with weak password', async () => {
       const { POST } = await import('@/app/api/auth/register/route');
-      const request = new Request('http://localhost:3000/api/auth/register', {
+      const request = new Request('http://localhost:7392/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +178,7 @@ describe('Authentication Flow Integration', () => {
       });
 
       const { POST } = await import('@/app/api/auth/register/route');
-      const request = new Request('http://localhost:3000/api/auth/register', {
+      const request = new Request('http://localhost:7392/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(validUser),
@@ -269,7 +269,7 @@ describe('Authentication Flow Integration', () => {
       });
 
       const { POST } = await import('@/app/api/auth/register/route');
-      const request = new Request('http://localhost:3000/api/auth/register', {
+      const request = new Request('http://localhost:7392/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

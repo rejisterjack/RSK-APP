@@ -154,7 +154,7 @@ export class ReActAgent {
   constructor(tools: Tool[] = [], config: ReActConfig = {}) {
     this.tools = new Map(tools.map((t) => [t.name, t]));
     this.config = {
-      model: config.model ?? 'gpt-4o-mini',
+      model: config.model ?? 'auto',
       temperature: config.temperature ?? 0.1,
       maxSteps: config.maxSteps ?? 5,
       maxTokens: config.maxTokens ?? 2000,

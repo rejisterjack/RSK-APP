@@ -68,12 +68,12 @@ By default the extension connects to `https://rag-starter-kit.vercel.app`. To po
    ```js
    const DEFAULT_API_URL = 'https://your-deployment.vercel.app';
    // or for local development:
-   const DEFAULT_API_URL = 'http://localhost:3000';
+   const DEFAULT_API_URL = 'http://localhost:7392';
    ```
 
 3. Reload the extension in `chrome://extensions`.
 
-The `host_permissions` field in `manifest.json` includes `http://localhost:3000/*` and `https://*.vercel.app/*`. If your backend is hosted elsewhere, add the appropriate pattern to `host_permissions`.
+The `host_permissions` field in `manifest.json` includes `http://localhost:7392/*` and `https://*.vercel.app/*`. If your backend is hosted elsewhere, add the appropriate pattern to `host_permissions`.
 
 ### Authentication
 

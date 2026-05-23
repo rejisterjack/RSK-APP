@@ -163,7 +163,7 @@ Unlike other RAG solutions that require paid OpenAI API keys, this starter kit u
 
 ### Prerequisites
 
-- **Node.js 20+** and **pnpm 9+**
+- **Bun runtime
 
 ### Quick Start
 
@@ -181,17 +181,17 @@ cp .env.example .env
 # Edit .env with your API keys
 
 # 4. Install dependencies and start dev server
-pnpm install
-pnpm dev
+bun install
+bun dev
 
-# 5. Open http://localhost:3000
+# 5. Open http://localhost:7392
 ```
 
 **Services used:**
 
 | Service | URL | Notes |
 |---------|-----|-------|
-| Next.js app | http://localhost:3000 | Main application |
+| Next.js app | http://localhost:7392 | Main application |
 | Inngest Dashboard | http://localhost:8288 | Background jobs |
 
 ### Docker (Self-Hosted)
@@ -204,8 +204,8 @@ docker compose up -d
 # DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ragdb
 
 # Run migrations and seed
-pnpm db:migrate
-pnpm db:seed
+bun db:migrate
+bun db:seed
 
 # Build and run production container
 docker build -t rag-starter-kit .
@@ -304,7 +304,7 @@ cp .env.example .env
 # 3. Edit .env with your keys
 
 # 4. Start the dev server
-pnpm dev
+bun dev
 ```
 
 ### Required (FREE)
@@ -319,10 +319,10 @@ pnpm dev
 ## 🧪 Testing
 
 ```bash
-pnpm test              # Unit tests (Vitest)
-pnpm test:coverage     # Coverage report
-pnpm test:e2e          # E2E tests (Playwright)
-pnpm test:integration  # Integration tests
+bun test              # Unit tests (Vitest)
+bun test:coverage     # Coverage report
+bun test:e2e          # E2E tests (Playwright)
+bun test:integration  # Integration tests
 ```
 
 ---
@@ -355,10 +355,10 @@ Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md).
 ```bash
 # Quick start for contributors
 git clone https://github.com/YOUR_USERNAME/rag-starter-kit.git
-cd rag-starter-kit && pnpm install
+cd rag-starter-kit && bun install
 cp .env.example .env
 # Edit .env with your API keys
-pnpm dev
+bun dev
 ```
 
 See [Contributors](./CONTRIBUTORS.md) for our community!
@@ -372,7 +372,7 @@ See [Contributors](./CONTRIBUTORS.md) for our community!
 | Issue | Solution |
 |-------|----------|
 | **Port in use** | Check if port 3000 is free: `lsof -i :3000` |
-| **Prisma generate fails** | Run `pnpm prisma generate` manually |
+| **Prisma generate fails** | Run `bun prisma generate` manually |
 | **Embedding errors** | Verify your embedding provider configuration and API key quota |
 | **LLM timeout** | Check OpenRouter status or switch models in settings |
 | **Upload fails** | Verify Cloudinary credentials in your `.env` file |
@@ -402,7 +402,7 @@ LOG_LEVEL=debug
 # View analytics at /chat/analytics
 
 # Health check endpoint
-curl http://localhost:3000/api/health
+curl http://localhost:7392/api/health
 ```
 
 Key metrics tracked:

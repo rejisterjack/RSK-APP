@@ -84,7 +84,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:7392';
 const API_KEY = __ENV.API_KEY || '';
 
 export default function () {

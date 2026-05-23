@@ -10,8 +10,8 @@ const setupCommands = [
   'git clone https://github.com/rejisterjack/rag-starter-kit.git',
   'cd rag-starter-kit && cp .env.example .env',
   '# Get FREE API keys from openrouter.ai/keys and aistudio.google.com',
-  'pnpm dev',
-  '🚀 Ready at http://localhost:3000',
+  'bun dev',
+  '🚀 Ready at http://localhost:7392',
 ];
 
 export function SetupAnimator(): React.ReactElement {

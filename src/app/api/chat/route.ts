@@ -10,10 +10,14 @@
  * - Audit logging
  */
 
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateText, type LanguageModel, streamText } from 'ai';
 import { type NextRequest, NextResponse } from 'next/server';
 import type { LLMMessage } from '@/lib/ai/llm';
+import {
+  getBestAvailableModel,
+  getModelsForStreaming,
+  resolveModel as resolveDynamicModel,
+} from '@/lib/ai/model-discovery';
 import { modelHealthCache } from '@/lib/ai/model-health-cache';
 import { buildSystemPromptWithContext } from '@/lib/ai/prompts/templates';
 import { bufferUsageRecord } from '@/lib/analytics/usage-buffer';
@@ -25,7 +29,6 @@ import {
   extractVersion,
   updateWithVersion,
 } from '@/lib/db/optimistic-locking';
-import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import {
   chatCreateSchema,
@@ -83,8 +86,8 @@ export const maxDuration = 120;
 
 /** Timeout for AI calls — allows complex RAG responses while preventing hung connections */
 const AI_CALL_TIMEOUT_MS = 60_000;
-/** Shorter timeout for model health probes (just checking liveness) */
-const PROBE_TIMEOUT_MS = 3_000;
+/** Timeout for model health probes — free-tier models can be slow to respond */
+const PROBE_TIMEOUT_MS = 5_000;
 
 const defaultConfig = {
   temperature: 0.7,
@@ -94,16 +97,9 @@ const defaultConfig = {
   chunkOverlap: 200,
   maxMessages: 10,
   topK: 5,
-  similarityThreshold: 0.7,
+  similarityThreshold: 0.5,
   rerank: true,
 };
-
-const MODEL_FALLBACK_CHAIN = [
-  'minimax/minimax-m2.5:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'liquid/lfm-2.5-1.2b-instruct:free',
-  'openai/gpt-oss-20b:free',
-];
 
 // =============================================================================
 // POST Handler
@@ -391,13 +387,12 @@ export async function POST(req: NextRequest) {
         messageLength: userMessage.length,
         hasContext: sources.length > 0,
         sourceCount: sources.length,
-        model: MODEL_FALLBACK_CHAIN[0],
       },
     });
 
     if (shouldStream) {
-      // Streaming response — use health cache to avoid expensive probes
-      const allModels = [...MODEL_FALLBACK_CHAIN];
+      // Dynamic model discovery — finds best available models from OpenRouter
+      const { modelsToTry: discoveredModels, primaryModel } = await getModelsForStreaming('chat');
 
       // If the circuit breaker is open, fail fast
       const { llmCircuitBreaker } = mods.externalServicesMod;
@@ -414,10 +409,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Filter models based on health cache (skip models in backoff)
-      const modelsToTry = modelHealthCache.getModelsToTry(allModels);
-
-      if (modelsToTry.length === 0) {
+      if (discoveredModels.length === 0) {
         return NextResponse.json(
           {
             success: false,
@@ -430,19 +422,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      let usedModel = modelsToTry[0];
+      let usedModel = primaryModel;
 
-      // Skip probing — attempt the model directly with a fast timeout.
-      // The circuit breaker and health cache already filter out known-bad models.
-      // If the primary fails, we catch the stream error and fall back.
-      if (!modelHealthCache.isRecentlyHealthy(modelsToTry[0])) {
-        // Health is unknown — try a lightweight check first
+      // Probe to find a working model when the primary isn't recently confirmed healthy.
+      const skipProbe = modelHealthCache.isRecentlyHealthy(primaryModel);
+      if (!skipProbe) {
         let foundWorking = false;
-        for (const modelName of modelsToTry) {
+        for (const modelName of discoveredModels) {
           try {
             await llmCircuitBreaker.execute(async () => {
               await generateText({
-                model: getModel(modelName),
+                model: resolveDynamicModel(modelName) ?? getModel(modelName),
                 messages: [{ role: 'user', content: 'hi' }],
                 maxTokens: 1,
                 abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
@@ -474,12 +464,24 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const resolvedModel = resolveDynamicModel(usedModel) ?? getModel(usedModel);
+
+      let streamError: string | null = null;
+
       const result = streamText({
-        model: getModel(usedModel),
+        model: resolvedModel,
         messages: llmMessages,
         temperature: config.temperature,
         maxTokens: config.maxTokens,
         abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
+        onError: (error) => {
+          streamError = error instanceof Error ? error.message : String(error);
+          modelHealthCache.recordFailure(usedModel);
+          logger.error('Stream error from model', {
+            model: usedModel,
+            error: streamError,
+          });
+        },
         onFinish: async (completion) => {
           try {
             if (effectiveConversationId) {
@@ -560,11 +562,12 @@ export async function POST(req: NextRequest) {
 
       return response;
     } else {
-      // Non-streaming response with model fallback
+      // Non-streaming response with dynamic model fallback
+      const bestModel = await getBestAvailableModel('chat');
       const response = await generateWithFallback(llmMessages, {
         temperature: config.temperature,
         maxTokens: config.maxTokens,
-        primaryModel: MODEL_FALLBACK_CHAIN[0],
+        primaryModel: bestModel,
       });
 
       // Extract citations
@@ -1180,17 +1183,20 @@ export async function PATCH(req: NextRequest) {
 // =============================================================================
 
 /**
- * Get the appropriate model based on model name using server-side env vars
+ * Resolve model name to LanguageModel — delegates to centralized resolver.
+ * Used as fallback in `resolveDynamicModel(id) ?? getModel(id)` patterns.
  */
 function getModel(modelName: string): LanguageModel {
-  const openrouterKey = env.OPENROUTER_API_KEY;
-  const openrouter = createOpenRouter({ apiKey: openrouterKey });
-  return openrouter.chat(modelName) as unknown as LanguageModel;
+  const resolved = resolveDynamicModel(modelName);
+  if (!resolved) {
+    throw new Error(`No provider available for model: ${modelName}`);
+  }
+  return resolved;
 }
 
 /**
- * Try to generate text with fallback models
- * Attempts each model in the fallback chain until one succeeds
+ * Try to generate text with fallback models.
+ * Uses dynamic model discovery to get the full fallback chain.
  */
 async function generateWithFallback(
   messages: LLMMessage[],
@@ -1204,9 +1210,10 @@ async function generateWithFallback(
   model: string;
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }> {
+  const { modelsToTry: discoveredModels } = await getModelsForStreaming('chat');
   const modelsToTry = [
     options.primaryModel,
-    ...MODEL_FALLBACK_CHAIN.filter((m) => m !== options.primaryModel),
+    ...discoveredModels.filter((m) => m !== options.primaryModel),
   ];
 
   let lastError: Error | null = null;
@@ -1214,9 +1221,10 @@ async function generateWithFallback(
   for (const modelName of modelsToTry) {
     try {
       const { llmCircuitBreaker: breaker } = await import('@/lib/resilience/external-services');
+      const resolved = resolveDynamicModel(modelName) ?? getModel(modelName);
       const result = await breaker.execute(async () =>
         generateText({
-          model: getModel(modelName),
+          model: resolved,
           messages,
           temperature: options.temperature,
           maxTokens: options.maxTokens,
@@ -1289,10 +1297,11 @@ async function maybeGenerateTitle(
     }
 
     // Generate title using a quick LLM call
-    const titleModel = modelName.includes(':') ? 'mistralai/mistral-7b-instruct:free' : modelName;
+    const titleModel = modelName.includes(':') ? await getBestAvailableModel('fast') : modelName;
+    const resolvedTitleModel = resolveDynamicModel(titleModel) ?? getModel(titleModel);
 
     const { text: title } = await generateText({
-      model: getModel(titleModel),
+      model: resolvedTitleModel,
       messages: [
         {
           role: 'system',

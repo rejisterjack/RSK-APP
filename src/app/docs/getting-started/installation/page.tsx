@@ -55,14 +55,14 @@ cd rag-starter-kit`}
             Install Dependencies
           </h2>
           <p className="text-muted-foreground mb-3">
-            The project uses pnpm. If you do not have it installed, enable it with Corepack:
+            The project uses Bun as its runtime and package manager. If you don't have it installed:
           </p>
           <CodeBlock title="Terminal">
-            {`corepack enable
-corepack prepare pnpm@latest --activate
+            {`# Install Bun (if not already installed)
+curl -fsSL https://bun.sh/install | bash
 
 # Install all dependencies
-pnpm install`}
+bun install`}
           </CodeBlock>
         </section>
 
@@ -146,7 +146,7 @@ pnpm install`}
                 <tr>
                   <td className="px-4 py-2 font-mono text-xs">NEXTAUTH_URL</td>
                   <td className="px-4 py-2 text-muted-foreground">
-                    Set to <code className="bg-muted px-1 rounded">http://localhost:3000</code> for
+                    Set to <code className="bg-muted px-1 rounded">http://localhost:7392</code> for
                     local development.
                   </td>
                 </tr>
@@ -178,13 +178,13 @@ pnpm install`}
           </p>
           <CodeBlock title="Terminal">
             {`# Run database migrations
-pnpm db:migrate
+bun db:migrate
 
 # Generate the Prisma client
-pnpm db:generate`}
+bun db:generate`}
           </CodeBlock>
           <p className="text-muted-foreground">If you want some seed data to explore the UI:</p>
-          <CodeBlock title="Terminal">{`pnpm db:seed`}</CodeBlock>
+          <CodeBlock title="Terminal">{`bun db:seed`}</CodeBlock>
         </section>
 
         {/* Step 5 */}
@@ -195,16 +195,16 @@ pnpm db:generate`}
             </span>
             Start the Development Server
           </h2>
-          <CodeBlock title="Terminal">{`pnpm dev`}</CodeBlock>
+          <CodeBlock title="Terminal">{`bun dev`}</CodeBlock>
           <p className="text-muted-foreground">
             Open{' '}
             <a
-              href="http://localhost:3000"
+              href="http://localhost:7392"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
             >
-              http://localhost:3000
+              http://localhost:7392
             </a>{' '}
             in your browser. Register an account, upload a document, and start chatting.
           </p>
@@ -258,8 +258,8 @@ pnpm db:generate`}
             </li>
             <li>
               <strong>Inngest</strong> -- Background job processing. Run{' '}
-              <code className="bg-muted px-1 rounded text-sm">pnpm inngest:dev</code> for a local
-              dev server.
+              <code className="bg-muted px-1 rounded text-sm">bun inngest:dev</code> for a local dev
+              server.
             </li>
           </ul>
         </section>

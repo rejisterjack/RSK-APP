@@ -18,7 +18,7 @@ const defaultRAGConfig: RAGConfig = {
   similarityThreshold: 0.7,
   temperature: 0.7,
   maxTokens: 2000,
-  model: 'gpt-4o-mini',
+  model: 'auto',
   embeddingModel: 'text-embedding-3-small',
 };
 

@@ -10,7 +10,7 @@
  *   node scripts/publish-widget.mjs --publish --tag next   # publish with dist-tag
  *
  * Prerequisites:
- *   - pnpm install already run
+ *   - bun install already run
  *   - npm login (or NPM_TOKEN env var set for CI)
  *   - packages/widget/package.json has the correct name, version, files fields
  */
@@ -106,17 +106,17 @@ step('Pre-flight checks', () => {
 
 // ── Install dependencies ───────────────────────────────────────────────────
 step('Install widget dependencies', () => {
-  run('pnpm install --frozen-lockfile', { always: true, cwd: ROOT });
+  run('bun install --frozen-lockfile', { always: true, cwd: ROOT });
 });
 
 // ── Type-check ─────────────────────────────────────────────────────────────
 step('TypeScript type-check', () => {
-  run(`pnpm --filter @rag-starter-kit/widget exec tsc --noEmit`, { always: true });
+  run(`bun --filter @rag-starter-kit/widget exec tsc --noEmit`, { always: true });
 });
 
 // ── Build ──────────────────────────────────────────────────────────────────
 step('Build widget package (tsup)', () => {
-  run(`pnpm --filter @rag-starter-kit/widget run build`, { always: true });
+  run(`bun --filter @rag-starter-kit/widget run build`, { always: true });
 });
 
 // ── Verify dist ────────────────────────────────────────────────────────────
