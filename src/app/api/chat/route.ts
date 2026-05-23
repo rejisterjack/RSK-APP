@@ -245,7 +245,7 @@ export async function POST(req: NextRequest) {
       config: userConfig,
       stream: shouldStream,
     } = validatedInput;
-    const { model: _discardModel, ...safeConfig } = userConfig ?? {};
+    const { model: userModel, ...safeConfig } = userConfig ?? {};
     const config = { ...defaultConfig, ...safeConfig };
     const effectiveConversationId = conversationId ?? chatId;
     const userMessage = messages[messages.length - 1].content;
@@ -401,6 +401,104 @@ export async function POST(req: NextRequest) {
     });
 
     if (shouldStream) {
+      // If user explicitly selected a model, use it directly (skip discovery + probe)
+      if (userModel && userModel !== 'auto') {
+        const usedModel = userModel;
+
+        const resolvedModel = resolveDynamicModel(usedModel) ?? getModel(usedModel);
+
+        let streamError: string | null = null;
+
+        const result = streamText({
+          model: resolvedModel,
+          messages: llmMessages,
+          temperature: config.temperature,
+          maxTokens: config.maxTokens,
+          abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
+          onError: (error) => {
+            streamError = error instanceof Error ? error.message : String(error);
+            modelHealthCache.recordFailure(usedModel);
+            logger.error('Stream error from user-selected model', {
+              model: usedModel,
+              error: streamError,
+            });
+          },
+          onFinish: async (completion) => {
+            try {
+              modelHealthCache.recordSuccess(usedModel);
+              if (effectiveConversationId) {
+                await prisma.message.create({
+                  data: {
+                    chatId: effectiveConversationId,
+                    content: completion.text,
+                    role: 'ASSISTANT',
+                  },
+                });
+                const { del } = await import('@/lib/cache');
+                const { CACHE_KEYS } = await import('@/lib/cache/keys');
+                for (const lim of [50, 100]) {
+                  await del(CACHE_KEYS.chatHistory(effectiveConversationId, lim));
+                }
+              }
+              if (completion.usage) {
+                bufferUsageRecord({
+                  userId,
+                  workspaceId,
+                  endpoint: '/api/chat',
+                  method: 'POST',
+                  tokensPrompt: completion.usage.promptTokens ?? 0,
+                  tokensCompletion: completion.usage.completionTokens ?? 0,
+                  tokensTotal:
+                    (completion.usage.promptTokens ?? 0) + (completion.usage.completionTokens ?? 0),
+                  latencyMs: Date.now() - startTime,
+                });
+              }
+              if (effectiveConversationId) {
+                await maybeGenerateTitle(
+                  effectiveConversationId,
+                  userMessage,
+                  completion.text,
+                  usedModel
+                );
+              }
+            } catch (txError) {
+              logger.warn('Transaction failed in streaming onFinish', {
+                error: txError instanceof Error ? txError.message : String(txError),
+              });
+            }
+          },
+        });
+
+        const sourcesMetadata = sources.map((s) => ({
+          id: s.id,
+          documentName: s.metadata.documentName,
+          documentId: s.metadata.documentId,
+          page: s.metadata.page,
+          similarity: s.similarity,
+        }));
+
+        const rawResponse = result.toTextStreamResponse({
+          headers: {
+            'X-Message-Sources': JSON.stringify(sourcesMetadata),
+            'X-Model-Used': usedModel,
+            'X-RAG-Status':
+              sources.length > 0
+                ? 'hit'
+                : retrievalError
+                  ? 'error'
+                  : vectorSearchDegraded
+                    ? 'degraded'
+                    : 'miss',
+            ...(retrievalError ? { 'X-RAG-Error': retrievalError.slice(0, 200) } : {}),
+            ...(vectorSearchDegraded ? { 'X-Degraded-Features': 'vector_search' } : {}),
+          },
+        });
+
+        const response = wrapStreamWithErrorFrame(rawResponse, () => streamError);
+        addRateLimitHeaders(response.headers, rateLimitResult);
+        return response;
+      }
+
       // Dynamic model discovery — finds best available models from OpenRouter
       const { modelsToTry: discoveredModels, primaryModel } = await getModelsForStreaming('chat');
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { Source } from '@/components/chat/citations';
 import type { Message } from '@/components/chat/message-item';
+import { getSelectedModel } from '@/hooks/use-selected-model';
 
 export interface UseChatOptions {
   conversationId?: string;
@@ -312,7 +313,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               messages: [{ role: 'user', content: trimmedContent }],
               conversationId: effectiveChatId,
               config: {
-                // Model selection is handled server-side via dynamic discovery
+                model: getSelectedModel() || modelRef.current || undefined,
               },
               stream: true,
             }),

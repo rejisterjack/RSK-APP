@@ -15,6 +15,7 @@ interface ChatState {
   isHistoryPanelOpen: boolean;
   isMobileSidebarOpen: boolean;
   isMobileMoreOpen: boolean;
+  selectedModel: string;
 }
 
 const initialState: ChatState = {
@@ -25,6 +26,7 @@ const initialState: ChatState = {
   isHistoryPanelOpen: false,
   isMobileSidebarOpen: false,
   isMobileMoreOpen: false,
+  selectedModel: 'auto',
 };
 
 // =============================================================================
@@ -38,7 +40,8 @@ type ChatAction =
   | { type: 'SET_AGENT_MODE'; enabled: boolean }
   | { type: 'SET_HISTORY_PANEL_OPEN'; open: boolean }
   | { type: 'SET_MOBILE_SIDEBAR_OPEN'; open: boolean }
-  | { type: 'TOGGLE_MOBILE_MORE' };
+  | { type: 'TOGGLE_MOBILE_MORE' }
+  | { type: 'SET_SELECTED_MODEL'; model: string };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -56,6 +59,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, isMobileSidebarOpen: action.open };
     case 'TOGGLE_MOBILE_MORE':
       return { ...state, isMobileMoreOpen: !state.isMobileMoreOpen };
+    case 'SET_SELECTED_MODEL':
+      return { ...state, selectedModel: action.model };
     default:
       return state;
   }
