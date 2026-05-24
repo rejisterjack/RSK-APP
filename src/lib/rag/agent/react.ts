@@ -154,7 +154,7 @@ export class ReActAgent {
   constructor(tools: Tool[] = [], config: ReActConfig = {}) {
     this.tools = new Map(tools.map((t) => [t.name, t]));
     this.config = {
-      model: config.model ?? 'gpt-4o-mini',
+      model: config.model ?? 'auto',
       temperature: config.temperature ?? 0.1,
       maxSteps: config.maxSteps ?? 5,
       maxTokens: config.maxTokens ?? 2000,
@@ -296,7 +296,7 @@ export class ReActAgent {
       }
 
       // Execute the tool
-      const toolResult = await this.executeTool(parsed.action, parsed.actionInput);
+      const toolResult = await this.executeTool(parsed.action, parsed.actionInput, context);
 
       // Collect sources from tool results
       if (toolResult.sources) {
@@ -399,7 +399,7 @@ export class ReActAgent {
         };
 
         // Execute tool
-        const toolResult = await this.executeTool(parsed.action, parsed.actionInput);
+        const toolResult = await this.executeTool(parsed.action, parsed.actionInput, context);
 
         // Yield observation
         yield {
@@ -553,7 +553,8 @@ export class ReActAgent {
 
   private async executeTool(
     name: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    context?: AgentContext
   ): Promise<{ output: string; success: boolean; sources?: Source[] }> {
     const tool = this.tools.get(name);
 
@@ -565,6 +566,14 @@ export class ReActAgent {
     }
 
     try {
+      // Inject workspaceId for tools that require it but the LLM may omit
+      if (context?.workspaceId && !input.workspaceId) {
+        const needsWorkspace = ['document_search', 'document_metadata', 'semantic_search'];
+        if (needsWorkspace.includes(name)) {
+          input.workspaceId = context.workspaceId;
+        }
+      }
+
       const result = await tool.execute(input);
 
       return {

@@ -234,7 +234,7 @@ export async function GET(): Promise<NextResponse> {
     try {
       const cleanupUrl = new URL(
         '/api/cron/cleanup',
-        process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:7392'
       );
       fetch(cleanupUrl.toString(), {
         method: 'POST',

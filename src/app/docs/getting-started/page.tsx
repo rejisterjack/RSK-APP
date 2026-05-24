@@ -78,7 +78,7 @@ export default function GettingStartedPage() {
             <li className="flex items-start gap-2">
               <span className="text-primary font-bold mt-0.5">1.</span>
               <span>
-                <strong>Node.js 20+</strong> and <strong>pnpm</strong> (preferred) or npm.
+                <strong>Bun</strong> — runtime and package manager.
               </span>
             </li>
             <li className="flex items-start gap-2">

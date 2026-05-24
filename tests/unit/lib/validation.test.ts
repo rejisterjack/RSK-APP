@@ -34,7 +34,7 @@ describe('Validation Utilities', () => {
   describe('URL Validation', () => {
     it('should validate correct URLs', () => {
       expect(validateUrl('https://example.com')).toBe(true);
-      expect(validateUrl('http://localhost:3000')).toBe(true);
+      expect(validateUrl('http://localhost:7392')).toBe(true);
       expect(validateUrl('https://example.com/path?query=value')).toBe(true);
     });
 

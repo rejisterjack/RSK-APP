@@ -28,14 +28,14 @@ tests/
 ### Install Dependencies
 
 ```bash
-pnpm install
+bun install
 ```
 
 ### Run All Tests
 
 ```bash
 # Run all tests (unit + e2e)
-pnpm test:all
+bun test:all
 ```
 
 ## 🧪 Unit Tests
@@ -44,19 +44,19 @@ Unit tests use **Vitest** with **React Testing Library**.
 
 ```bash
 # Run all unit tests
-pnpm test
+bun test
 
 # Run in watch mode
-pnpm test:watch
+bun test:watch
 
 # Run with UI
-pnpm test:ui
+bun test:ui
 
 # Run with coverage
-pnpm test:coverage
+bun test:coverage
 
 # Run specific test file
-pnpm test tests/unit/lib/chunking.test.ts
+bun test tests/unit/lib/chunking.test.ts
 ```
 
 ### Unit Test Structure
@@ -71,10 +71,10 @@ Integration tests verify that different parts of the application work together c
 
 ```bash
 # Run integration tests
-pnpm test:integration
+bun test:integration
 
 # Run specific integration test
-pnpm test tests/integration/ingestion.test.ts
+bun test tests/integration/ingestion.test.ts
 ```
 
 ## 🎭 E2E Tests
@@ -83,20 +83,20 @@ E2E tests use **Playwright** to test the complete user journey.
 
 ```bash
 # Run all E2E tests
-pnpm test:e2e
+bun test:e2e
 
 # Run with UI for debugging
-pnpm test:e2e:ui
+bun test:e2e:ui
 
 # Run specific browser
-pnpm test:e2e:chrome
-pnpm test:e2e:firefox
+bun test:e2e:chrome
+bun test:e2e:firefox
 
 # Run headed (visible browser)
-pnpm test:e2e:headed
+bun test:e2e:headed
 
 # Debug mode
-pnpm test:e2e:debug
+bun test:e2e:debug
 ```
 
 ### E2E Test Structure
@@ -112,7 +112,7 @@ These tests evaluate the quality of the RAG pipeline using metrics inspired by R
 
 ```bash
 # Run RAG evaluation tests
-pnpm test:evaluation
+bun test:evaluation
 ```
 
 ### Metrics Measured
@@ -130,10 +130,10 @@ Performance tests use **k6** and **Artillery** for load testing.
 
 ```bash
 # Run k6 load test
-pnpm test:perf
+bun test:perf
 
 # Run Artillery load test
-pnpm test:perf:artillery
+bun test:perf:artillery
 ```
 
 ### Test Scenarios
@@ -172,7 +172,7 @@ The test suite aims for:
 View coverage report:
 
 ```bash
-pnpm test:coverage
+bun test:coverage
 # Then open coverage/index.html
 ```
 
@@ -223,7 +223,7 @@ test('user can login', async ({ page }) => {
 
 ## 🔄 CI/CD Integration
 
-The testing suite is designed to work with GitHub Actions. See `.github/workflows/test.yml`.
+The testing suite is designed to work with GitHub Actions.
 
 ## 🐛 Debugging
 
@@ -231,17 +231,17 @@ The testing suite is designed to work with GitHub Actions. See `.github/workflow
 
 ```bash
 # Run with debugger
-pnpm test --inspect-brk
+bun test --inspect-brk
 
 # Run specific test with only flag
-pnpm test -- --grep="Button"
+bun test -- --grep="Button"
 ```
 
 ### E2E Tests
 
 ```bash
 # Run in debug mode
-pnpm test:e2e:debug
+bun test:e2e:debug
 
 # Run with Playwright inspector
 npx playwright test --debug
@@ -274,7 +274,7 @@ npx playwright install
 
 **Prisma client not found**
 ```bash
-pnpm db:generate
+bun db:generate
 ```
 
 **Coverage not generating**

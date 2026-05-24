@@ -68,6 +68,10 @@ class ModelHealthCache {
    * Record a successful model call.
    */
   recordSuccess(modelName: string): void {
+    // Prune stale entries every 50 operations
+    if (this.cache.size > 0 && this.cache.size % 50 === 0) {
+      this.prune();
+    }
     this.cache.set(modelName, {
       healthy: true,
       lastChecked: Date.now(),
@@ -100,7 +104,7 @@ class ModelHealthCache {
    */
   isRecentlyHealthy(modelName: string): boolean {
     const entry = this.cache.get(modelName);
-    if (!entry || !entry.healthy) return false;
+    if (!entry?.healthy) return false;
 
     const age = Date.now() - entry.lastChecked;
     return age < HEALTHY_TTL_MS;
@@ -124,6 +128,28 @@ class ModelHealthCache {
       else unhealthy++;
     }
     return { total: this.cache.size, healthy, unhealthy };
+  }
+
+  /**
+   * Prune stale entries — healthy entries older than TTL, unhealthy entries
+   * past their extended backoff. Called periodically to prevent unbounded growth.
+   */
+  prune(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.cache.entries()) {
+      const age = now - entry.lastChecked;
+      if (entry.healthy && age > HEALTHY_TTL_MS) {
+        this.cache.delete(key);
+      } else if (!entry.healthy) {
+        const backoff =
+          entry.consecutiveFailures >= MAX_FAILURES_BEFORE_EXTENDED_BACKOFF
+            ? EXTENDED_BACKOFF_MS
+            : UNHEALTHY_TTL_MS;
+        if (age > backoff) {
+          this.cache.delete(key);
+        }
+      }
+    }
   }
 }
 

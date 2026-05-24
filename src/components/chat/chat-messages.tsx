@@ -1,6 +1,9 @@
 'use client';
 
+import { ChevronDown } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useChatContext } from './chat-context';
 import type { Source } from './citations';
 import { EmptyState } from './empty-state';
@@ -105,18 +108,41 @@ export const ChatMessages = memo(function ChatMessages({
   const hasMessages = messages.length > 0 || isStreaming;
   const showLoading = isLoading && !isStreaming && messages.length === 0;
 
+  // ── Scroll-to-bottom button ───────────────────────────────────────────────
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      setShowScrollButton(distFromBottom > 150);
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
+  }, []);
+
   return (
     <div
-      className="overflow-hidden relative flex h-full min-h-0"
+      className="flex-1 min-h-0 overflow-hidden relative flex"
       role="status"
       aria-live="polite"
       aria-label="Chat messages"
     >
-      {/* Scrollable messages area with overscroll containment */}
+      {/* Scrollable messages area */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto scrollbar-thin overscroll-y-contain"
-        style={{ overscrollBehaviorY: 'contain' } as React.CSSProperties}
+        ref={scrollContainerRef}
+        className="flex-1 min-h-0 overflow-y-auto scrollbar-thin"
         aria-busy={showLoading || isStreaming}
+        id="chat-scroll-container"
       >
         {showLoading ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
@@ -160,6 +186,7 @@ export const ChatMessages = memo(function ChatMessages({
             onFollowUpSelect={handleFollowUpSelect}
             isAgentMode={state.isAgentMode}
             agentThinking={state.isAgentMode && isStreaming}
+            scrollContainerId="chat-scroll-container"
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center p-4">
@@ -189,6 +216,28 @@ export const ChatMessages = memo(function ChatMessages({
           />
         </div>
       )}
+
+      {/* ── Scroll-to-bottom button — fixed to the bottom of the scroll area ── */}
+      <div
+        className={cn(
+          'absolute bottom-4 right-6 z-30 transition-all duration-200',
+          showScrollButton
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 translate-y-2 pointer-events-none'
+        )}
+        aria-hidden={!showScrollButton}
+      >
+        <Button
+          variant="default"
+          size="icon"
+          className="h-9 w-9 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground border border-primary-foreground/20"
+          onClick={scrollToBottom}
+          aria-label="Scroll to bottom"
+          tabIndex={showScrollButton ? 0 : -1}
+        >
+          <ChevronDown className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
     </div>
   );
 });

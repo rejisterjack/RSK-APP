@@ -230,8 +230,9 @@ export type AITask = 'fast' | 'hyde' | 'chat';
 
 /**
  * Get the ordered list of models to try for a given task type.
+ * For 'chat', delegates to dynamic model discovery.
  */
-export function getModelsForTask(task: AITask): string[] {
+export async function getModelsForTask(task: AITask): Promise<string[]> {
   switch (task) {
     case 'fast':
       return [
@@ -241,8 +242,11 @@ export function getModelsForTask(task: AITask): string[] {
       ];
     case 'hyde':
       return [TASK_MODELS.HYDE, TASK_MODELS.HYDE_FALLBACK_1, TASK_MODELS.HYDE_FALLBACK_2];
-    case 'chat':
-      return MODEL_FALLBACK_CHAIN;
+    case 'chat': {
+      const { getModelsForStreaming } = await import('./model-discovery');
+      const result = await getModelsForStreaming('chat');
+      return result.modelsToTry;
+    }
   }
 }
 
@@ -282,7 +286,7 @@ export const defaultAIConfig: RAGConfig = {
   similarityThreshold: 0.7,
   temperature: 0.7,
   maxTokens: 2000,
-  model: BEST_FREE_MODELS.PRIMARY_CHAT, // Best free model
+  model: (process.env.DEFAULT_MODEL as RAGConfig['model']) || 'auto', // Dynamic — resolved via model discovery
   embeddingModel: EMBEDDING_MODEL,
 };
 
@@ -290,9 +294,14 @@ export const defaultAIConfig: RAGConfig = {
 
 export async function streamChatCompletion(messages: UIMessage[], config: Partial<RAGConfig> = {}) {
   const modelConfig = { ...defaultAIConfig, ...config };
+  const { getModelsForStreaming } = await import('./model-discovery');
+  const { modelsToTry: discoveredModels } = await getModelsForStreaming('chat');
+
+  // Skip 'auto' — it's a placeholder meaning "use discovered models"
+  const requestedModel = modelConfig.model !== 'auto' ? modelConfig.model : null;
   const modelsToTry = [
-    modelConfig.model,
-    ...MODEL_FALLBACK_CHAIN.filter((m) => m !== modelConfig.model),
+    ...(requestedModel ? [requestedModel] : []),
+    ...discoveredModels.filter((m) => m !== requestedModel),
   ];
 
   let lastError: Error | undefined;
@@ -335,9 +344,14 @@ export async function generateChatCompletion(
   config: Partial<RAGConfig> = {}
 ): Promise<ChatCompletionResult> {
   const modelConfig = { ...defaultAIConfig, ...config };
+  const { getModelsForStreaming } = await import('./model-discovery');
+  const { modelsToTry: discoveredModels } = await getModelsForStreaming('chat');
+
+  // Skip 'auto' — it's a placeholder meaning "use discovered models"
+  const requestedModel = modelConfig.model !== 'auto' ? modelConfig.model : null;
   const modelsToTry = [
-    modelConfig.model,
-    ...MODEL_FALLBACK_CHAIN.filter((m) => m !== modelConfig.model),
+    ...(requestedModel ? [requestedModel] : []),
+    ...discoveredModels.filter((m) => m !== requestedModel),
   ];
 
   for (const model of modelsToTry) {
@@ -377,7 +391,7 @@ export async function generateTaskCompletion(
   messages: UIMessage[],
   config: Partial<RAGConfig> = {}
 ): Promise<ChatCompletionResult> {
-  const modelsToTry = getModelsForTask(task);
+  const modelsToTry = await getModelsForTask(task);
 
   for (const model of modelsToTry) {
     try {
@@ -412,7 +426,7 @@ export async function generateTaskCompletion(
  * Resolve a model ID to the appropriate AI SDK language model instance.
  * Routes to the correct provider based on model prefix.
  */
-function resolveModel(modelId: string) {
+export function resolveModel(modelId: string) {
   // Groq models (prefix: "groq/")
   if (modelId.startsWith('groq/')) {
     if (!groq) return null;

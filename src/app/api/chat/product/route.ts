@@ -3,15 +3,21 @@
  *
  * A dedicated endpoint for the RAG Bot product assistant on the homepage.
  * - Requires authentication (returns 401 with friendly message if not logged in)
- * - Uses free OpenRouter models with automatic fallback
+ * - Uses dynamic model discovery with automatic fallback
  * - Streams responses via SSE
  * - Answers questions specifically about rag-starter-kit using embedded product knowledge
  */
 
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateText, streamText } from 'ai';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import {
+  getModelsForStreaming,
+  resolveModel as resolveDynamicModel,
+} from '@/lib/ai/model-discovery';
+import { modelHealthCache } from '@/lib/ai/model-health-cache';
+import { checkBodySize } from '@/lib/api/middleware';
+import { wrapStreamWithErrorFrame } from '@/lib/api/stream-error-wrapper';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
@@ -91,8 +97,8 @@ GETTING STARTED:
 1. Clone the repository
 2. Copy .env.example to .env and fill in two free API keys (OpenRouter + Google AI Studio)
 3. Run docker-compose up for local PostgreSQL + Redis
-4. npm install && npm run dev
-5. Open http://localhost:3000 and start chatting
+4. bun install && bun dev
+5. Open http://localhost:7392 and start chatting
 
 RULES FOR ANSWERING:
 - Be friendly, professional, and enthusiastic about the product
@@ -106,15 +112,6 @@ RULES FOR ANSWERING:
 // =============================================================================
 // Configuration
 // =============================================================================
-
-const MODEL_FALLBACK_CHAIN = [
-  'google/gemini-2.0-flash-exp:free',
-  'stepfun/step-3.5-flash:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'qwen/qwen3-coder:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'liquid/lfm-2.5-1.2b-instruct:free',
-];
 
 const chatRequestSchema = z.object({
   message: z.string().min(1, 'Message is required').max(4000, 'Message too long'),
@@ -176,6 +173,9 @@ export async function POST(req: Request) {
     }
 
     // Step 3: Parse and validate request
+    const bodySizeCheck = checkBodySize(req, 1_000_000);
+    if (bodySizeCheck) return bodySizeCheck;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -218,38 +218,51 @@ export async function POST(req: Request) {
       { role: 'user' as const, content: message },
     ];
 
-    // Step 6: Probe models and stream response
-    const openrouterKey = process.env.OPENROUTER_API_KEY;
-    if (!openrouterKey) {
-      return NextResponse.json(
-        { error: 'OpenRouter API key not configured', code: 'CONFIG_ERROR' },
-        { status: 500 }
-      );
-    }
+    // Step 6: Dynamic model discovery — find best available model
+    const { modelsToTry, primaryModel } = await getModelsForStreaming('chat');
 
-    // Try to find a working model
-    let usedModel = MODEL_FALLBACK_CHAIN[0];
-    let probeOk = false;
+    let usedModel = primaryModel;
 
-    for (const modelName of MODEL_FALLBACK_CHAIN) {
-      try {
-        const openrouter = createOpenRouter({ apiKey: openrouterKey });
-        await generateText({
-          model: openrouter.chat(modelName),
-          messages: [{ role: 'user', content: 'Hi' }],
-          maxTokens: 1,
-        });
-        usedModel = modelName;
-        probeOk = true;
-        break;
-      } catch (err) {
-        logger.warn(`Model ${modelName} probe failed for product chat`, {
-          error: err instanceof Error ? err.message : String(err),
-        });
+    // Skip probe if primary is recently healthy — saves API calls and latency
+    const skipProbe = modelHealthCache.isRecentlyHealthy(primaryModel);
+    if (!skipProbe) {
+      let foundWorking = false;
+      for (const modelName of modelsToTry) {
+        try {
+          const model = resolveDynamicModel(modelName);
+          if (!model) continue;
+          await generateText({
+            model,
+            messages: [{ role: 'user', content: 'Hi' }],
+            maxTokens: 1,
+            abortSignal: AbortSignal.timeout(5000),
+          });
+          usedModel = modelName;
+          foundWorking = true;
+          modelHealthCache.recordSuccess(modelName);
+          break;
+        } catch (err) {
+          modelHealthCache.recordFailure(modelName);
+          logger.warn(`Model ${modelName} probe failed for product chat`, {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      if (!foundWorking) {
+        return NextResponse.json(
+          {
+            error: 'All AI models are currently unavailable. Please try again in a moment.',
+            code: 'MODEL_UNAVAILABLE',
+          },
+          { status: 503 }
+        );
       }
     }
 
-    if (!probeOk) {
+    // Step 7: Stream response
+    const resolvedModel = resolveDynamicModel(usedModel);
+    if (!resolvedModel) {
       return NextResponse.json(
         {
           error: 'All AI models are currently unavailable. Please try again in a moment.',
@@ -259,13 +272,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // Step 7: Stream response
-    const openrouter = createOpenRouter({ apiKey: openrouterKey });
+    let streamError: string | null = null;
+
     const result = streamText({
-      model: openrouter.chat(usedModel),
+      model: resolvedModel,
       messages,
       temperature: 0.5,
       maxTokens: 1500,
+      onError: (error) => {
+        streamError = error instanceof Error ? error.message : String(error);
+        logger.error('Product chat stream error', {
+          model: usedModel,
+          error: streamError,
+        });
+      },
       onFinish: async (completion) => {
         // Log completion
         await logAuditEvent({
@@ -281,12 +301,14 @@ export async function POST(req: Request) {
       },
     });
 
-    const response = result.toTextStreamResponse({
+    const rawResponse = result.toTextStreamResponse({
       headers: {
         'X-Model-Used': usedModel,
         'X-RAG-Bot-Version': '1.0.0',
       },
     });
+
+    const response = wrapStreamWithErrorFrame(rawResponse, () => streamError);
 
     addRateLimitHeaders(response.headers, rateLimitResult);
     return response;
@@ -325,6 +347,6 @@ export async function GET() {
         response: 'SSE stream of text tokens',
       },
     },
-    models: MODEL_FALLBACK_CHAIN,
+    modelSelection: 'Dynamic — automatically discovers best available free models',
   });
 }

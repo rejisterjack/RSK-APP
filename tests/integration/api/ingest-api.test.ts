@@ -107,7 +107,7 @@ describe('POST /api/ingest', () => {
   };
 
   const createMockRequest = (formData: FormData): Request => {
-    return new Request('http://localhost:3000/api/ingest', {
+    return new Request('http://localhost:7392/api/ingest', {
       method: 'POST',
       body: formData,
     });
@@ -162,7 +162,7 @@ describe('POST /api/ingest', () => {
       mockPrisma.membership.findFirst = vi.fn().mockResolvedValue({ id: 'm1', role: 'owner' });
 
       const { POST } = await import('@/app/api/ingest/route');
-      const request = new Request('http://localhost:3000/api/ingest', {
+      const request = new Request('http://localhost:7392/api/ingest', {
         method: 'POST',
         body: 'invalid-form-data',
       });

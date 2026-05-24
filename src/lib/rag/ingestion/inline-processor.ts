@@ -7,6 +7,7 @@
 
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { ensureDocumentChunksCollection } from '@/lib/qdrant';
 import { createEmbeddings } from '@/lib/rag/engine';
 import {
   parseAudio,
@@ -19,7 +20,6 @@ import {
   parseXLSXBuffer,
 } from '@/lib/rag/ingestion';
 import { isYouTubeUrl } from '@/lib/rag/ingestion/parsers/youtube';
-import { ensureDocumentChunksCollection } from '@/lib/qdrant';
 import { getFile } from '@/lib/storage/cloudinary-storage';
 
 async function updateJob(jobId: string, data: Record<string, unknown>) {
@@ -189,12 +189,19 @@ export async function processDocumentInline(
       page: c.metadata.page ?? null,
       section: c.metadata.headings?.[0] ?? null,
     }));
-    await upsertChunks(chunkPoints, {
+    const upsertResult = await upsertChunks(chunkPoints, {
       userId: document.userId ?? _userId,
       workspaceId: document.workspaceId ?? undefined,
       documentName: document.name,
       documentType: document.contentType,
     });
+    if (upsertResult.failureCount > 0) {
+      logger.warn('Some chunks failed to upsert during ingestion', {
+        documentId,
+        failureCount: upsertResult.failureCount,
+        errors: upsertResult.errors,
+      });
+    }
     const progress = Math.round(50 + ((i + batch.length) / chunks.length) * 45);
     await updateJob(job.id, { documentId, progress });
   }

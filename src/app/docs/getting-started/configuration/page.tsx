@@ -81,7 +81,7 @@ export default function ConfigurationPage() {
                 <EnvRow
                   name="NEXTAUTH_URL"
                   required
-                  desc="Public URL of your app (e.g. http://localhost:3000)"
+                  desc="Public URL of your app (e.g. http://localhost:7392)"
                 />
                 <EnvRow
                   name="OPENROUTER_API_KEY"

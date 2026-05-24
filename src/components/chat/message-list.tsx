@@ -1,7 +1,7 @@
 'use client';
 
-import { ChevronDown, Loader2 } from 'lucide-react';
-import React, { useCallback, useEffect, useRef } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AgentThinkingIndicator } from './agent-thinking-indicator';
@@ -29,6 +29,7 @@ interface MessageListProps {
   agentThinking?: boolean;
   agentSteps?: Array<{ label: string; status: 'pending' | 'active' | 'done' | 'error' }>;
   currentAgentTool?: string;
+  scrollContainerId?: string;
   className?: string;
 }
 
@@ -56,34 +57,25 @@ export function MessageList({
   agentThinking = false,
   agentSteps,
   currentAgentTool,
+  scrollContainerId,
   className,
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);
-  const [showScrollButton, setShowScrollButton] = React.useState(false);
-
-  // Auto-scroll to bottom on new messages / streaming
-  // Uses instant scroll during streaming to avoid jank from competing smooth animations.
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
 
+  // Helper to get the scroll container element
+  const getScrollContainer = useCallback((): HTMLElement | null => {
+    if (scrollContainerId) {
+      return document.getElementById(scrollContainerId);
+    }
+    return null;
+  }, [scrollContainerId]);
+
+  // Auto-scroll to bottom on new messages / streaming.
+  // Uses instant scroll during streaming to avoid jank from competing smooth animations.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — trigger scroll on message count and streaming content changes
   useEffect(() => {
-    const anchor = scrollAnchorRef.current ?? endRef.current;
-    if (!anchor) return;
-
-    // Find the scrollable parent container
-    const getScrollParent = (element: HTMLElement): HTMLElement | null => {
-      let parent = element.parentElement;
-      while (parent) {
-        const style = window.getComputedStyle(parent);
-        if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-          return parent;
-        }
-        parent = parent.parentElement;
-      }
-      return null;
-    };
-
-    const container = getScrollParent(anchor);
+    const container = getScrollContainer();
     if (!container) return;
 
     // Only auto-scroll if user is already near bottom (within 150px)
@@ -91,33 +83,23 @@ export function MessageList({
       container.scrollHeight - container.scrollTop - container.clientHeight < 150;
 
     if (isNearBottom) {
-      // Instant scroll during streaming (avoids laggy smooth-scroll pileup),
-      // smooth scroll when a new message is added.
-      anchor.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' });
+      const anchor = scrollAnchorRef.current ?? endRef.current;
+      if (anchor) {
+        // Instant scroll during streaming (avoids laggy smooth-scroll pileup),
+        // smooth scroll when a new message is added.
+        anchor.scrollIntoView({ behavior: isStreaming ? 'instant' : 'smooth' });
+      }
     }
-  }, [messages.length, streamingContent.length, isStreaming]);
-
-  // Observe the sentinel to show/hide scroll-to-bottom button
-  useEffect(() => {
-    const sentinel = endRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowScrollButton(!entry.isIntersecting),
-      { threshold: 0.1 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, []);
-
-  const scrollToBottom = useCallback(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
+  }, [messages.length, streamingContent.length, isStreaming, getScrollContainer]);
 
   const shouldVirtualize = messages.length > 50;
 
   return (
     <div className={cn('relative', className)}>
-      <ul className="flex flex-col py-4 px-2" aria-label="Chat messages">
+      <ul
+        className="flex flex-col py-4 px-3 md:px-6 max-w-4xl mx-auto w-full"
+        aria-label="Chat messages"
+      >
         {/* Load more button */}
         {hasMore && !shouldVirtualize && (
           <div className="flex justify-center py-2 mb-2">
@@ -231,26 +213,6 @@ export function MessageList({
         {/* Scroll sentinel */}
         <div ref={endRef} className="h-1" />
       </ul>
-
-      {/* Scroll to bottom button */}
-      {showScrollButton && (
-        <div
-          className={cn(
-            'sticky bottom-4 float-right mr-6 z-50 transition-all duration-150',
-            showScrollButton ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
-          )}
-        >
-          <Button
-            variant="default"
-            size="icon"
-            className="h-10 w-10 rounded-full shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground border border-primary-foreground/20"
-            onClick={scrollToBottom}
-            aria-label="Scroll to bottom"
-          >
-            <ChevronDown className="h-5 w-5" aria-hidden="true" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

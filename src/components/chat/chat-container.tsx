@@ -159,51 +159,46 @@ const ChatInner = memo(function ChatInner({
       <section
         aria-label="Chat"
         className={cn(
-          'flex-1 min-w-0 h-full relative z-10 flex flex-col',
-          'md:grid md:glass-heavy md:rounded-2xl md:overflow-hidden md:border md:border-white/10 md:shadow-[0_12px_48px_-12px_rgba(0,0,0,0.4)]'
+          'flex-1 min-w-0 h-full relative z-10',
+          'flex flex-col',
+          'md:glass-heavy md:rounded-2xl md:overflow-hidden md:border md:border-white/10 md:shadow-[0_12px_48px_-12px_rgba(0,0,0,0.4)]'
         )}
-        style={{ gridTemplateRows: undefined }}
       >
-        <div
-          className="flex flex-col h-full md:grid"
-          style={{ gridTemplateRows: 'auto auto 1fr auto' }}
-        >
-          <DegradationBanner />
-          <ChatHeader
-            chatId={chatId}
-            chatTitle={chatTitle}
-            isStreaming={isStreaming}
-            isNewChatLoading={isNewChatLoading}
-            onNewChat={onNewChat}
-            onAgentModeToggle={onAgentModeToggle}
-            onToggleMobileSidebar={() => dispatch({ type: 'SET_MOBILE_SIDEBAR_OPEN', open: true })}
-          />
+        <DegradationBanner />
+        <ChatHeader
+          chatId={chatId}
+          chatTitle={chatTitle}
+          isStreaming={isStreaming}
+          isNewChatLoading={isNewChatLoading}
+          onNewChat={onNewChat}
+          onAgentModeToggle={onAgentModeToggle}
+          onToggleMobileSidebar={() => dispatch({ type: 'SET_MOBILE_SIDEBAR_OPEN', open: true })}
+        />
 
-          <ChatMessages
-            messages={messages}
-            sources={sources}
-            isStreaming={isStreaming}
-            streamingContent={streamingContent}
-            hasMore={hasMore}
-            isLoading={isLoading}
-            onLoadMore={onLoadMore}
-            onEditMessage={onEditMessage}
-            onDeleteMessage={onDeleteMessage}
-            onCancelStreaming={onCancelStreaming}
-            onRegenerate={onRegenerate}
-            onFeedback={onFeedback}
-            onSendMessage={onSendMessage}
-            onUploadClick={onUploadClick}
-            onFilesDrop={onFilesDrop}
-          />
+        <ChatMessages
+          messages={messages}
+          sources={sources}
+          isStreaming={isStreaming}
+          streamingContent={streamingContent}
+          hasMore={hasMore}
+          isLoading={isLoading}
+          onLoadMore={onLoadMore}
+          onEditMessage={onEditMessage}
+          onDeleteMessage={onDeleteMessage}
+          onCancelStreaming={onCancelStreaming}
+          onRegenerate={onRegenerate}
+          onFeedback={onFeedback}
+          onSendMessage={onSendMessage}
+          onUploadClick={onUploadClick}
+          onFilesDrop={onFilesDrop}
+        />
 
-          <ChatInputArea
-            hasMessages={hasMessages}
-            isLoading={isLoading}
-            isStreaming={isStreaming}
-            onSendMessage={onSendMessage}
-          />
-        </div>
+        <ChatInputArea
+          hasMessages={hasMessages}
+          isLoading={isLoading}
+          isStreaming={isStreaming}
+          onSendMessage={onSendMessage}
+        />
       </section>
 
       <SourcesPanel

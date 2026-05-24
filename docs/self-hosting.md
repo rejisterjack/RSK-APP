@@ -33,14 +33,14 @@ RUN corepack enable
 FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN bun install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm db:generate
-RUN pnpm build
+RUN bun db:generate
+RUN bun build
 
 FROM base AS runner
 WORKDIR /app
@@ -115,7 +115,7 @@ docker compose exec postgres psql -U postgres -d ragdb -c "CREATE EXTENSION IF N
 
 ### 5. Access the app
 
-Open http://localhost:3000 and register an account.
+Open http://localhost:7392 and register an account.
 
 ## Differences from Vercel Deployment
 

@@ -34,7 +34,7 @@ Before opening a Discussion, check:
 ### 🐛 Found a Bug?
 
 If you've confirmed it's a bug (not a configuration issue), [open a GitHub Issue](https://github.com/rejisterjack/rag-starter-kit/issues/new?template=bug_report.md). Include:
-- Node.js and pnpm versions
+- Node.js and bun versions
 - Relevant environment variables (redacted)
 - Steps to reproduce
 - Expected vs actual behaviour
@@ -55,7 +55,7 @@ Report them via [GitHub Security Advisories](https://github.com/rejisterjack/rag
 | Symptom | Likely Cause | Fix |
 |---|---|---|
 | `Environment validation failed` | Missing required env var | Check the error message — it names the exact variable |
-| `Prisma generate fails` | Schema mismatch | Run `pnpm prisma generate` then `pnpm prisma migrate dev` |
+| `Prisma generate fails` | Schema mismatch | Run `bun prisma generate` then `bun prisma migrate dev` |
 | Port 3000 in use | Another process | `lsof -i :3000` to find it, or set `PORT=3001` |
 | `WebSocket not connecting` | URL mismatch | Set `NEXT_PUBLIC_APP_URL` to match your browser URL exactly |
 

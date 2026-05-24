@@ -25,7 +25,7 @@ const GITHUB_SCOPES = ['repo', 'read:org'];
 function getGitHubOAuthConfig() {
   const clientId = process.env.GITHUB_CLIENT_ID;
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:7392';
 
   if (!clientId || !clientSecret) {
     return null;

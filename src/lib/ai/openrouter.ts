@@ -21,7 +21,7 @@ import type { RAGConfig } from '@/types';
 const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY || '',
   headers: {
-    'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:7392',
     'X-Title': 'RAG Starter Kit',
   },
 });

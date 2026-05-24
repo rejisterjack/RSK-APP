@@ -24,7 +24,7 @@ const GOOGLE_DRIVE_SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
 function getGoogleOAuthConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:7392';
 
   if (!clientId || !clientSecret) {
     return null;

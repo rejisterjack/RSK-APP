@@ -29,7 +29,7 @@ export const defaultRAGConfig: RAGConfig = {
   similarityThreshold: 0.7,
   temperature: 0.7,
   maxTokens: 2000,
-  model: process.env.DEFAULT_MODEL || 'groq/llama-3.3-70b-versatile',
+  model: process.env.DEFAULT_MODEL || 'auto', // Dynamic — resolved via model discovery
   embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-004',
 };
 

@@ -30,7 +30,7 @@ This phase is not about new features. It's about making the project credible to 
 | 0.4 | Add GitHub repo topics | ✅ Done | `rag` `langchain` `nextjs` `typescript` `pgvector` `chatbot` `openrouter` `free-ai` `inngest` `voice-ai` `vercel` `cloudinary` |
 | 0.5 | Write a proper `CONTRIBUTING.md` | ✅ Done | How to run locally, how to submit a PR, coding conventions |
 | 0.6 | Add `VISION.md` and `ROADMAP.md` to the repo root | ✅ Done | These documents |
-| 0.7 | Verify local dev works end-to-end on a clean machine | ✅ Done | Works with a single `pnpm dev` |
+| 0.7 | Verify local dev works end-to-end on a clean machine | ✅ Done | Works with a single `bun dev` |
 | 0.8 | Fix any broken environment variable documentation | ✅ Done | Every `.env` key documented in `.env.example` with a comment |
 | 0.9 | Add a proper LICENSE file | ✅ Done | MIT license |
 
@@ -48,7 +48,7 @@ The best open-source projects are effortless to start. This phase is entirely ab
 |---|------|--------|-------|
 | 1.1.1 | Rewrite README with clear hero section | ✅ Done | What it is, who it's for, live demo link — all above the fold |
 | 1.1.2 | Add architecture diagram | ✅ Done | Mermaid diagram showing how documents → pgvector → LLM → streaming response |
-| 1.1.3 | Add "Quick Start" section (5 steps, under 10 mins) | ✅ Done | Clone → install → env vars → pnpm dev → open localhost |
+| 1.1.3 | Add "Quick Start" section (5 steps, under 10 mins) | ✅ Done | Clone → install → env vars → bun dev → open localhost |
 | 1.1.4 | Add "How It Works" section | ✅ Done | Explains the RAG pipeline: ingest, embed, retrieve, generate |
 | 1.1.5 | Add "Tech Stack" section with rationale | ✅ Done | Why Next.js, why pgvector, why Inngest — not just a list |
 | 1.1.6 | Add "Deployment" section for Vercel + Railway + Render | ✅ Done | One-click deploy buttons for each platform |
@@ -57,7 +57,7 @@ The best open-source projects are effortless to start. This phase is entirely ab
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1.2.1 | Single-command local setup via `pnpm dev` | ✅ Done | No Docker — managed cloud services (Prisma Postgres, Upstash, Cloudinary, Inngest) |
+| 1.2.1 | Single-command local setup via `bun dev` | ✅ Done | No Docker — managed cloud services (Prisma Postgres, Upstash, Cloudinary, Inngest) |
 | 1.2.2 | Seed script with sample documents | 📋 Planned | Run once, have a working chatbot with real data to test against |
 | 1.2.3 | Hot reload working locally | ✅ Done | Developer changes code, sees it update — instant feedback |
 | 1.2.4 | Local LLM support via Ollama | ✅ Done | Develop offline without spending API credits |

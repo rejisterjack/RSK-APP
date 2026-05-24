@@ -102,7 +102,7 @@ vi.mock('@/lib/env', () => ({
     OPENAI_API_KEY: 'test-api-key',
     DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
     NEXTAUTH_SECRET: 'test-secret',
-    NEXTAUTH_URL: 'http://localhost:3000',
+    NEXTAUTH_URL: 'http://localhost:7392',
     ENCRYPTION_MASTER_KEY: 'test-encryption-key-for-vitest-32c',
   },
 }));
@@ -228,7 +228,7 @@ describe('Authentication', () => {
     it('signs out user', async () => {
       const { signOut } = await import('@/lib/auth');
 
-      const mockSignOut = vi.fn().mockResolvedValue({ url: 'http://localhost:3000' });
+      const mockSignOut = vi.fn().mockResolvedValue({ url: 'http://localhost:7392' });
       vi.mocked(signOut).mockImplementation(mockSignOut);
 
       await signOut({ callbackUrl: '/' });

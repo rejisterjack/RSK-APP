@@ -155,7 +155,7 @@ Returns a concise summary highlighting key points.`,
             content: prompt,
           },
         ],
-        { model: 'gpt-4o-mini', temperature: 0.3, maxTokens: 600 }
+        { model: 'auto', temperature: 0.3, maxTokens: 600 }
       );
 
       const sources: Source[] = scrollResult.points.slice(0, 3).map((point) => {
@@ -310,7 +310,7 @@ Returns semantically similar chunks ranked by relevance.`,
   parameters: SemanticSearchParamsSchema,
   execute: async (params) => {
     try {
-      const { query, workspaceId, threshold = 0.7, topK = 5 } = params;
+      const { query, workspaceId, threshold = 0.5, topK = 5 } = params;
 
       // Generate embedding for the query
       const queryEmbedding = await generateQueryEmbedding(query);
@@ -461,7 +461,7 @@ ${aspect ? `4. Specific findings about "${aspect}":` : ''}`;
             content: comparisonPrompt,
           },
         ],
-        { model: 'gpt-4o-mini', temperature: 0.3, maxTokens: 1000 }
+        { model: 'auto', temperature: 0.3, maxTokens: 1000 }
       );
 
       const sources: Source[] = documents.flatMap((d, i) =>

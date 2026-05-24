@@ -1,36 +1,43 @@
 'use client';
 
 import { Check, Copy } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface CodeBlockProps {
-  children: string;
+  children: ReactNode;
+  rawText?: string;
   language?: string;
   className?: string;
-  showLineNumbers?: boolean;
 }
 
-export function CodeBlock({
-  children,
-  language = 'text',
-  className,
-  showLineNumbers = false,
-}: CodeBlockProps) {
+/** Extract plain text from React nodes (handles rehype-highlight spans). */
+function extractText(node: ReactNode): string {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (!node) return '';
+  if (Array.isArray(node)) return node.map(extractText).join('');
+  if (typeof node === 'object' && 'props' in (node as unknown as Record<string, unknown>)) {
+    return extractText((node as unknown as { props: { children: ReactNode } }).props.children);
+  }
+  return '';
+}
+
+export function CodeBlock({ children, rawText, language = 'text', className }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
+  const textForCopy = rawText ?? extractText(children);
+
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(children);
+    await navigator.clipboard.writeText(textForCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const lines = children.split('\n');
-
   return (
     <div className={cn('relative my-4 overflow-hidden rounded-lg border bg-muted/50', className)}>
-      {/* Header with language and copy button */}
       <div className="flex items-center justify-between border-b bg-muted px-4 py-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium uppercase text-muted-foreground">
@@ -52,24 +59,9 @@ export function CodeBlock({
         </Button>
       </div>
 
-      {/* Code content */}
       <div className="relative overflow-x-auto">
         <pre className="p-4 text-sm leading-relaxed">
-          {showLineNumbers ? (
-            <div className="flex">
-              <div className="select-none pr-4 text-right text-muted-foreground">
-                {lines.map((_, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: Line numbers are stable based on position
-                  <div key={`line-${i}`} className="leading-relaxed">
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
-              <code className="block flex-1">{children}</code>
-            </div>
-          ) : (
-            <code className="block">{children}</code>
-          )}
+          <code className="block">{children}</code>
         </pre>
       </div>
     </div>

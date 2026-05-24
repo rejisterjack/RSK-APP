@@ -23,7 +23,7 @@ async function globalSetup(config: FullConfig) {
   if (process.env.CI) {
     console.log('📦 Setting up test database...');
     try {
-      execSync('pnpm db:migrate:prod', { stdio: 'inherit' });
+      execSync('bun db:migrate:prod', { stdio: 'inherit' });
     } catch (error) {
       console.warn('⚠️  Database migration may have failed, continuing anyway...');
     }
@@ -33,7 +33,7 @@ async function globalSetup(config: FullConfig) {
   if (process.env.SEED_TEST_DATA === 'true') {
     console.log('🌱 Seeding test data...');
     try {
-      execSync('pnpm db:seed', { stdio: 'inherit' });
+      execSync('bun db:seed', { stdio: 'inherit' });
     } catch (error) {
       console.warn('⚠️  Database seeding may have failed, continuing anyway...');
     }

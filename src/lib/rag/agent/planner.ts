@@ -133,7 +133,7 @@ export class AgentPlanner {
 
   constructor(config: PlannerConfig = {}) {
     this.config = {
-      model: config.model ?? 'gpt-4o-mini',
+      model: config.model ?? 'auto',
       temperature: config.temperature ?? 0.2,
       maxSubtasks: config.maxSubtasks ?? 10,
       enableReplanning: config.enableReplanning ?? true,

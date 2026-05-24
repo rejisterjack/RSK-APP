@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
  * Visual Regression Tests for Authentication Pages
  *
  * These tests capture screenshots and compare them against baseline images.
- * Run with: pnpm test:e2e --project=visual-regression
+ * Run with: bun test:e2e --project=visual-regression
  */
 
 test.describe('Auth Pages - Visual Regression', () => {

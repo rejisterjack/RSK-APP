@@ -81,7 +81,7 @@ export class MultiStepReasoner {
   constructor(tools: Tool[] = [], config: MultiStepConfig = {}) {
     this.tools = new Map(tools.map((t) => [t.name, t]));
     this.config = {
-      model: config.model ?? 'gpt-4o-mini',
+      model: config.model ?? 'auto',
       temperature: config.temperature ?? 0.2,
       maxSubQueries: config.maxSubQueries ?? 5,
       parallelExecution: config.parallelExecution ?? false,

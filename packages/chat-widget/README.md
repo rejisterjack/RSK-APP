@@ -22,8 +22,8 @@ npm install @rag-starter-kit/chat-widget
 # yarn
 yarn add @rag-starter-kit/chat-widget
 
-# pnpm
-pnpm add @rag-starter-kit/chat-widget
+# bun
+bun add @rag-starter-kit/chat-widget
 ```
 
 ## Quick Start: Vanilla JS
@@ -221,8 +221,8 @@ The widget communicates with the RAG Starter Kit backend through the public chat
 
 ```bash
 cd packages/chat-widget
-pnpm install
-pnpm build
+bun install
+bun build
 ```
 
 The build outputs:

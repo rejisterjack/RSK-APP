@@ -4,6 +4,8 @@ type Filter = Schemas['Filter'];
 type ScoredPoint = Schemas['ScoredPoint'];
 
 import { logger } from '@/lib/logger';
+import { qdrantCircuitBreaker } from '@/lib/resilience/external-services';
+import { withRetry } from '@/lib/utils/retry';
 import { qdrant } from './client';
 import { COLLECTION_DOCUMENT_CHUNKS, COLLECTION_IMAGE_EMBEDDINGS } from './collections';
 
@@ -72,10 +74,14 @@ export async function upsertChunks(
         },
       }));
 
-      await qdrant.upsert(COLLECTION_DOCUMENT_CHUNKS, {
-        wait: true,
-        points,
-      });
+      await withRetry(
+        () =>
+          qdrant.upsert(COLLECTION_DOCUMENT_CHUNKS, {
+            wait: true,
+            points,
+          }),
+        { maxRetries: 2, delayMs: 500 }
+      );
 
       successCount += batch.length;
     } catch (error) {
@@ -99,17 +105,23 @@ export async function searchSimilar(
 ): Promise<ScoredPoint[]> {
   const { filter, topK = 5, minScore, withPayload = true } = options;
 
-  return qdrant.search(COLLECTION_DOCUMENT_CHUNKS, {
-    vector: queryVector,
-    limit: topK,
-    filter,
-    with_payload: withPayload,
-    score_threshold: minScore,
-    search_params: {
-      hnsw_ef: 64,
-      exact: false,
-    },
-  } as Parameters<typeof qdrant.search>[1]);
+  return qdrantCircuitBreaker.execute(() =>
+    withRetry(
+      () =>
+        qdrant.search(COLLECTION_DOCUMENT_CHUNKS, {
+          vector: queryVector,
+          limit: topK,
+          filter,
+          with_payload: withPayload,
+          score_threshold: minScore,
+          search_params: {
+            hnsw_ef: 64,
+            exact: false,
+          },
+        } as Parameters<typeof qdrant.search>[1]),
+      { maxRetries: 2, delayMs: 500 }
+    )
+  );
 }
 
 export async function searchKeyword(
@@ -118,33 +130,39 @@ export async function searchKeyword(
 ): Promise<ScoredPoint[]> {
   const { filter, topK = 5 } = options;
 
-  const results = await qdrant.query(COLLECTION_DOCUMENT_CHUNKS, {
-    query: {
-      fusion: 'rrf',
-    },
-    prefetch: [
-      {
-        query: {
-          nearest: new Array(768).fill(0),
-        },
-        filter: {
-          must: [
+  return qdrantCircuitBreaker.execute(() =>
+    withRetry(
+      async () => {
+        const results = await qdrant.query(COLLECTION_DOCUMENT_CHUNKS, {
+          query: {
+            fusion: 'rrf',
+          },
+          prefetch: [
             {
-              key: 'content',
-              match: { text: query },
+              query: {
+                nearest: new Array(768).fill(0),
+              },
+              filter: {
+                must: [
+                  {
+                    key: 'content',
+                    match: { text: query },
+                  },
+                ],
+                should: filter?.should,
+                must_not: filter?.must_not,
+              },
+              limit: topK * 2,
             },
           ],
-          should: filter?.should,
-          must_not: filter?.must_not,
-        },
-        limit: topK * 2,
+          limit: topK,
+          with_payload: true,
+        });
+        return results.points;
       },
-    ],
-    limit: topK,
-    with_payload: true,
-  });
-
-  return results.points;
+      { maxRetries: 2, delayMs: 500 }
+    )
+  );
 }
 
 export async function searchHybrid(
@@ -154,38 +172,44 @@ export async function searchHybrid(
 ): Promise<ScoredPoint[]> {
   const { filter, topK = 5 } = options;
 
-  const results = await qdrant.query(COLLECTION_DOCUMENT_CHUNKS, {
-    query: {
-      fusion: 'rrf',
-    },
-    prefetch: [
-      {
-        query: queryVector,
-        limit: topK * 2,
-        filter,
-      },
-      {
-        query: {
-          nearest: new Array(768).fill(0),
-        },
-        filter: {
-          must: [
+  return qdrantCircuitBreaker.execute(() =>
+    withRetry(
+      async () => {
+        const results = await qdrant.query(COLLECTION_DOCUMENT_CHUNKS, {
+          query: {
+            fusion: 'rrf',
+          },
+          prefetch: [
             {
-              key: 'content',
-              match: { text: query },
+              query: queryVector,
+              limit: topK * 2,
+              filter,
+            },
+            {
+              query: {
+                nearest: new Array(768).fill(0),
+              },
+              filter: {
+                must: [
+                  {
+                    key: 'content',
+                    match: { text: query },
+                  },
+                ],
+                should: filter?.should,
+                must_not: filter?.must_not,
+              },
+              limit: topK * 2,
             },
           ],
-          should: filter?.should,
-          must_not: filter?.must_not,
-        },
-        limit: topK * 2,
+          limit: topK,
+          with_payload: true,
+        });
+        return results.points;
       },
-    ],
-    limit: topK,
-    with_payload: true,
-  });
-
-  return results.points;
+      { maxRetries: 2, delayMs: 500 }
+    )
+  );
 }
 
 export async function deleteByDocumentId(documentId: string): Promise<number> {
@@ -247,19 +271,26 @@ export async function batchSearch(
 ): Promise<ScoredPoint[][]> {
   const { filter, topK = 5, minScore } = options;
 
-  const searches = queryVectors.map((vector) => ({
-    vector,
-    limit: topK,
-    filter,
-    with_payload: true,
-    score_threshold: minScore,
-  }));
+  return qdrantCircuitBreaker.execute(() =>
+    withRetry(
+      async () => {
+        const searches = queryVectors.map((vector) => ({
+          vector,
+          limit: topK,
+          filter,
+          with_payload: true,
+          score_threshold: minScore,
+        }));
 
-  const results = await qdrant.searchBatch(COLLECTION_DOCUMENT_CHUNKS, {
-    searches,
-  });
+        const results = await qdrant.searchBatch(COLLECTION_DOCUMENT_CHUNKS, {
+          searches,
+        });
 
-  return results.map((r) => r);
+        return results.map((r) => r);
+      },
+      { maxRetries: 2, delayMs: 500 }
+    )
+  );
 }
 
 export async function upsertImageEmbedding(data: {
@@ -273,24 +304,28 @@ export async function upsertImageEmbedding(data: {
   model: string;
   dimensions: number;
 }): Promise<void> {
-  await qdrant.upsert(COLLECTION_IMAGE_EMBEDDINGS, {
-    wait: true,
-    points: [
-      {
-        id: data.id,
-        vector: data.embedding,
-        payload: {
-          documentId: data.documentId,
-          userId: data.userId,
-          storageUrl: data.storageUrl,
-          caption: data.caption ?? null,
-          pageNumber: data.pageNumber ?? null,
-          model: data.model,
-          dimensions: data.dimensions,
-        },
-      },
-    ],
-  });
+  await withRetry(
+    () =>
+      qdrant.upsert(COLLECTION_IMAGE_EMBEDDINGS, {
+        wait: true,
+        points: [
+          {
+            id: data.id,
+            vector: data.embedding,
+            payload: {
+              documentId: data.documentId,
+              userId: data.userId,
+              storageUrl: data.storageUrl,
+              caption: data.caption ?? null,
+              pageNumber: data.pageNumber ?? null,
+              model: data.model,
+              dimensions: data.dimensions,
+            },
+          },
+        ],
+      }),
+    { maxRetries: 2, delayMs: 500 }
+  );
 }
 
 export async function searchSimilarImages(
@@ -301,10 +336,16 @@ export async function searchSimilarImages(
   if (options.userId) must.push({ key: 'userId', match: { value: options.userId } });
   if (options.documentId) must.push({ key: 'documentId', match: { value: options.documentId } });
 
-  return qdrant.search(COLLECTION_IMAGE_EMBEDDINGS, {
-    vector: queryVector,
-    limit: options.topK ?? 5,
-    filter: must.length > 0 ? { must } : undefined,
-    with_payload: true,
-  });
+  return qdrantCircuitBreaker.execute(() =>
+    withRetry(
+      () =>
+        qdrant.search(COLLECTION_IMAGE_EMBEDDINGS, {
+          vector: queryVector,
+          limit: options.topK ?? 5,
+          filter: must.length > 0 ? { must } : undefined,
+          with_payload: true,
+        }),
+      { maxRetries: 2, delayMs: 500 }
+    )
+  );
 }

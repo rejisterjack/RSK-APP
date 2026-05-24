@@ -6,10 +6,10 @@
  *
  * Usage:
  *   # Dry run (no writes):
- *   pnpm tsx scripts/rotate-encryption-key.ts --dry-run
+ *   bun tsx scripts/rotate-encryption-key.ts --dry-run
  *
  *   # Apply rotation:
- *   pnpm tsx scripts/rotate-encryption-key.ts
+ *   bun tsx scripts/rotate-encryption-key.ts
  *
  * Environment variables required:
  *   ENCRYPTION_MASTER_KEY      — the CURRENT (old) key
@@ -113,7 +113,7 @@ async function getDb() {
     return new PrismaClient({ accelerateUrl: process.env.DATABASE_URL });
   } catch (err) {
     throw new Error(
-      `Could not import @prisma/client: ${err instanceof Error ? err.message : String(err)}.\nRun \`pnpm prisma generate\` first.`
+      `Could not import @prisma/client: ${err instanceof Error ? err.message : String(err)}.\nRun \`bun prisma generate\` first.`
     );
   }
 }

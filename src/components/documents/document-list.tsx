@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, Filter, FolderOpen, Search, Trash2, Upload } from 'lucide-react';
+import { FileText, Filter, Search, Trash2, Upload } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -87,30 +87,12 @@ export const DocumentList = memo(function DocumentList({
 
   return (
     <section
-      className={cn(
-        'flex h-full flex-col bg-background/60 shadow-xl backdrop-blur-xl',
-        className
-      )}
+      className={cn('flex h-full flex-col', className)}
       aria-label="Document library"
       aria-busy={isLoading}
     >
-      {/* Header */}
-      <div className="border-b border-border/50 p-3">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold flex items-center gap-2 text-foreground tracking-tight text-sm">
-            <div className="rounded-lg bg-gradient-to-br from-primary to-purple-500 p-1.5 shadow-md shadow-primary/20">
-              <FolderOpen className="h-4 w-4 text-white" />
-            </div>
-            Knowledge Base
-          </h2>
-          <Badge
-            variant="secondary"
-            className="bg-primary/10 text-primary border-primary/20 font-medium"
-          >
-            {documents.length}
-          </Badge>
-        </div>
-
+      {/* Search + actions toolbar */}
+      <div className="shrink-0 px-3 pt-2.5 pb-2 space-y-2 border-b border-white/8">
         {/* Search */}
         <div className="relative group">
           <Search
@@ -121,26 +103,26 @@ export const DocumentList = memo(function DocumentList({
             placeholder="Search documents..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 h-9 text-sm bg-foreground/5 border-foreground/10 focus-visible:ring-primary/50 transition-all rounded-xl"
+            className="pl-8 h-8 text-xs bg-white/5 border-white/8 focus-visible:ring-primary/40 rounded-lg placeholder:text-muted-foreground/50"
             aria-label="Search documents"
           />
         </div>
 
-        {/* Filter and actions */}
-        <div className="mt-2 flex items-center justify-between">
+        {/* Filter + Upload row */}
+        <div className="flex items-center gap-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2 h-9 rounded-xl bg-transparent border-foreground/10 hover:bg-foreground/5 transition-colors"
+                className="gap-1.5 h-8 rounded-lg bg-white/3 border-white/10 hover:bg-white/8 text-xs flex-1 text-muted-foreground hover:text-foreground"
               >
-                <Filter className="h-4 w-4" />
+                <Filter className="h-3.5 w-3.5" />
                 Filter
                 {statusFilter.length > 0 && (
                   <Badge
                     variant="secondary"
-                    className="ml-1 h-5 px-1.5 rounded-md bg-primary/20 text-primary"
+                    className="ml-auto h-4 px-1 rounded text-[10px] bg-primary/20 text-primary border-0"
                   >
                     {statusFilter.length}
                   </Badge>
@@ -149,27 +131,31 @@ export const DocumentList = memo(function DocumentList({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="w-52 rounded-xl glass border-border/50 shadow-2xl"
+              className="w-48 rounded-xl border border-white/10 bg-[#1a1a2e] shadow-2xl backdrop-blur-xl p-1"
             >
               <DropdownMenuCheckboxItem
+                className="rounded-lg px-3 py-2 text-xs cursor-pointer"
                 checked={statusFilter.includes('completed')}
                 onCheckedChange={() => toggleStatusFilter('completed')}
               >
                 Ready ({statusCounts.completed || 0})
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
+                className="rounded-lg px-3 py-2 text-xs cursor-pointer"
                 checked={statusFilter.includes('processing')}
                 onCheckedChange={() => toggleStatusFilter('processing')}
               >
                 Processing ({statusCounts.processing || 0})
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
+                className="rounded-lg px-3 py-2 text-xs cursor-pointer"
                 checked={statusFilter.includes('pending')}
                 onCheckedChange={() => toggleStatusFilter('pending')}
               >
                 Pending ({statusCounts.pending || 0})
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
+                className="rounded-lg px-3 py-2 text-xs cursor-pointer"
                 checked={statusFilter.includes('error')}
                 onCheckedChange={() => toggleStatusFilter('error')}
               >
@@ -178,33 +164,31 @@ export const DocumentList = memo(function DocumentList({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className="flex items-center gap-2">
-            {documents.length > 0 && onDeleteAll && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                onClick={onDeleteAll}
-                aria-label="Delete all documents"
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            )}
+          {documents.length > 0 && onDeleteAll && (
             <Button
-              size="sm"
-              className="gap-2 h-9 rounded-xl shadow-md shadow-primary/20 px-3 bg-primary/90 hover:bg-primary"
-              onClick={onUpload}
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+              onClick={onDeleteAll}
+              aria-label="Delete all documents"
             >
-              <Upload className="h-4 w-4" />
-              Upload
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
-          </div>
+          )}
+          <Button
+            size="sm"
+            className="gap-1.5 h-8 rounded-lg px-3 text-xs bg-primary hover:bg-primary/90 shrink-0 font-medium"
+            onClick={onUpload}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Upload
+          </Button>
         </div>
       </div>
 
       {/* Document list */}
-      <ScrollArea className="flex-1 scrollbar-thin" aria-label="Document list">
-        <div className="p-2 space-y-2">
+      <ScrollArea className="flex-1 scrollbar-thin min-w-0 w-full" aria-label="Document list">
+        <div className="p-2 space-y-2 w-full min-w-0">
           {isLoading ? (
             <div className="space-y-3 p-1">
               <DocumentSkeleton />

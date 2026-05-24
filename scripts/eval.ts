@@ -3,7 +3,7 @@
  * RAG Evaluation CLI
  *
  * Usage:
- *   pnpm eval --dataset ./eval-dataset.json [--output report.md] [--api-url http://localhost:3000] [--format markdown|json|table] [--no-answer]
+ *   bun eval --dataset ./eval-dataset.json [--output report.md] [--api-url http://localhost:7392] [--format markdown|json|table] [--no-answer]
  *
  * Reads an EvalDataset JSON file, runs queries against the RAG API,
  * and outputs a formatted report.
@@ -37,7 +37,7 @@ interface CliArgs {
 function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     dataset: '',
-    apiUrl: 'http://localhost:3000',
+    apiUrl: 'http://localhost:7392',
     format: 'markdown',
     includeAnswer: true,
     ci: false,
@@ -107,12 +107,12 @@ function printHelp(): void {
 RAG Evaluation CLI
 
 Usage:
-  pnpm eval --dataset <path> [options]
+  bun eval --dataset <path> [options]
 
 Options:
   --dataset, -d <path>       Path to eval dataset JSON file (required)
   --output, -o <path>        Output file path (default: stdout)
-  --api-url <url>            Base URL of the RAG API (default: http://localhost:3000)
+  --api-url <url>            Base URL of the RAG API (default: http://localhost:7392)
   --api-key <key>            API key for authentication
   --format <fmt>             Output format: markdown, json, table (default: markdown)
   --no-answer                Skip answer generation, only evaluate retrieval
@@ -124,9 +124,9 @@ Options:
   --help, -h                 Show this help message
 
 Examples:
-  pnpm eval --dataset ./eval-data.json
-  pnpm eval -d ./eval-data.json -o report.md --format markdown
-  pnpm eval -d ./eval-data.json --api-url http://localhost:3001 --no-answer
+  bun eval --dataset ./eval-data.json
+  bun eval -d ./eval-data.json -o report.md --format markdown
+  bun eval -d ./eval-data.json --api-url http://localhost:7393 --no-answer
 `);
 }
 

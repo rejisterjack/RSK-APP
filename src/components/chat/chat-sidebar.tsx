@@ -19,63 +19,63 @@ export function ChatSidebar({ documentListProps, historyListProps, className }: 
 
   return (
     <section
-      className={cn(
-        'flex h-full flex-col border-r border-border/50 bg-background/60 shadow-xl backdrop-blur-xl',
-        className
-      )}
+      className={cn('flex h-full flex-col overflow-hidden', className)}
       aria-label="Chat sidebar"
     >
-      {/* Animated tab toggle */}
-      <div className="p-3 border-b border-border/50">
-        <div className="relative flex items-center rounded-xl bg-muted/50 p-1 border border-white/5">
-          {/* Sliding background pill — CSS transition instead of framer-motion spring */}
+      {/* Tab toggle */}
+      <div className="shrink-0 px-3 pt-3 pb-2.5 border-b border-white/8">
+        <div className="relative flex items-center rounded-xl bg-white/5 p-1 border border-white/8 gap-0">
+          {/* Sliding active pill */}
           <div
-            className="absolute inset-y-1 rounded-lg bg-primary/20 border border-primary/40 shadow-[0_0_12px_rgba(var(--primary-rgb),0.15)] transition-all duration-200 ease-out"
+            className="absolute inset-y-1 rounded-lg bg-primary/20 border border-primary/30 transition-all duration-200 ease-out"
             style={{
               width: 'calc(50% - 4px)',
               left: activeTab === 'knowledge' ? '4px' : 'calc(50%)',
             }}
+            aria-hidden="true"
           />
 
-          {/* Knowledge Base button */}
+          {/* Knowledge Base tab */}
           <button
             type="button"
             onClick={() => setActiveTab('knowledge')}
+            aria-selected={activeTab === 'knowledge'}
+            role="tab"
             className={cn(
-              'relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+              'relative z-10 flex-1 flex items-center justify-center gap-1 py-2 px-1 text-[11px] font-semibold rounded-lg transition-colors duration-150 min-w-0',
               activeTab === 'knowledge'
                 ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground/80'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <FolderOpen
-              className={cn('h-3.5 w-3.5', activeTab === 'knowledge' && 'text-primary')}
-            />
-            Knowledge Base
+            <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Knowledge Base</span>
           </button>
 
-          {/* Chat History button */}
+          {/* Chat History tab */}
           <button
             type="button"
             onClick={() => setActiveTab('history')}
+            aria-selected={activeTab === 'history'}
+            role="tab"
             className={cn(
-              'relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+              'relative z-10 flex-1 flex items-center justify-center gap-1 py-2 px-1 text-[11px] font-semibold rounded-lg transition-colors duration-150 min-w-0',
               activeTab === 'history'
                 ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground/80'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <History className={cn('h-3.5 w-3.5', activeTab === 'history' && 'text-primary')} />
-            Chat History
+            <History className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Chat History</span>
           </button>
         </div>
       </div>
 
-      {/* Content area with CSS fade-slide transition */}
-      <div className="flex-1 min-h-0 overflow-hidden relative">
+      {/* Content area */}
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div
           key={activeTab}
-          className="h-full animate-in fade-in slide-in-from-bottom-2 duration-200"
+          className="h-full animate-in fade-in slide-in-from-bottom-1 duration-150"
         >
           {activeTab === 'knowledge' ? (
             <DocumentList {...documentListProps} />

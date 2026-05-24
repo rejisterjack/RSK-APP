@@ -10,13 +10,19 @@
  * - Audit logging
  */
 
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { generateText, type LanguageModel, streamText } from 'ai';
 import { type NextRequest, NextResponse } from 'next/server';
 import type { LLMMessage } from '@/lib/ai/llm';
+import {
+  getBestAvailableModel,
+  getModelsForStreaming,
+  resolveModel as resolveDynamicModel,
+} from '@/lib/ai/model-discovery';
 import { modelHealthCache } from '@/lib/ai/model-health-cache';
 import { buildSystemPromptWithContext } from '@/lib/ai/prompts/templates';
 import { bufferUsageRecord } from '@/lib/analytics/usage-buffer';
+import { checkBodySize } from '@/lib/api/middleware';
+import { wrapStreamWithErrorFrame } from '@/lib/api/stream-error-wrapper';
 import { AuditEvent, logAuditEvent } from '@/lib/audit/audit-logger';
 import { auth } from '@/lib/auth';
 import { prisma, prismaRead } from '@/lib/db';
@@ -25,7 +31,6 @@ import {
   extractVersion,
   updateWithVersion,
 } from '@/lib/db/optimistic-locking';
-import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import {
   chatCreateSchema,
@@ -83,8 +88,8 @@ export const maxDuration = 120;
 
 /** Timeout for AI calls — allows complex RAG responses while preventing hung connections */
 const AI_CALL_TIMEOUT_MS = 60_000;
-/** Shorter timeout for model health probes (just checking liveness) */
-const PROBE_TIMEOUT_MS = 3_000;
+/** Timeout for model health probes — free-tier models can be slow to respond */
+const PROBE_TIMEOUT_MS = 5_000;
 
 const defaultConfig = {
   temperature: 0.7,
@@ -94,16 +99,31 @@ const defaultConfig = {
   chunkOverlap: 200,
   maxMessages: 10,
   topK: 5,
-  similarityThreshold: 0.7,
+  similarityThreshold: 0.5,
   rerank: true,
 };
 
-const MODEL_FALLBACK_CHAIN = [
-  'minimax/minimax-m2.5:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'liquid/lfm-2.5-1.2b-instruct:free',
-  'openai/gpt-oss-20b:free',
+// Patterns that strongly indicate a web search query (current events, real-time data).
+const WEB_SEARCH_STRONG_PATTERNS = [
+  /\b(latest|recent|current)\s+(news|events|developments|updates|headlines)\b/,
+  /\bnews\s+(on|about|regarding)\b/,
+  /\bwhat('s| is)\s+(happening|going on|trending)\b/,
+  /\b(weather|temperature|forecast)\s+(in|at|for|like|today)\b/,
+  /\b(stock\s*price|share\s*price|market\s*(cap|price))\b/,
+  /\bcurrent\s+(events|affairs|situation|status|state)\b/,
+  /\b(today|tonight|this\s+(week|month|year))\s*(('s|is)\s+)?(news|update|weather|event|game|match|score)\b/,
+  /\b(breaking|live)\s+(news|update|coverage)\b/,
+  /\bwho\s+(won|is\s+winning)\b/,
 ];
+
+const DOCUMENT_SIGNAL_PATTERN =
+  /\b(my\s+(document|file|report|paper|upload)|the\s+(uploaded|attached)\s+(file|document|report)|from\s+(my|the)\s+(document|file|report|paper|upload)|i\s+uploaded|we\s+uploaded)\b/i;
+
+function isWebSearchQuery(query: string): boolean {
+  const lower = query.toLowerCase().trim();
+  if (DOCUMENT_SIGNAL_PATTERN.test(lower)) return false;
+  return WEB_SEARCH_STRONG_PATTERNS.some((p) => p.test(lower));
+}
 
 // =============================================================================
 // POST Handler
@@ -203,6 +223,9 @@ export async function POST(req: NextRequest) {
 
     // Step 4: Parse and validate request body
 
+    const bodySizeCheck = checkBodySize(req, 1_000_000);
+    if (bodySizeCheck) return bodySizeCheck;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -244,10 +267,15 @@ export async function POST(req: NextRequest) {
       config: userConfig,
       stream: shouldStream,
     } = validatedInput;
-    const { model: _discardModel, ...safeConfig } = userConfig ?? {};
+    const { model: userModel, ...safeConfig } = userConfig ?? {};
     const config = { ...defaultConfig, ...safeConfig };
     const effectiveConversationId = conversationId ?? chatId;
     const userMessage = messages[messages.length - 1].content;
+
+    // Step 5b: Detect web search queries that don't belong in RAG retrieval.
+    // When the query is clearly about current events/real-time data, skip document
+    // retrieval and respond from the model's general knowledge.
+    const isWebQuery = isWebSearchQuery(userMessage);
 
     // Step 6+7: Fetch conversation history and retrieve sources in parallel.
     // Embedding generation is kicked off early and passed as precomputedEmbedding
@@ -263,7 +291,8 @@ export async function POST(req: NextRequest) {
     // Saves 150-500ms (embedding API + vector search) for ~15-25% of messages.
     const GREETING_PATTERN =
       /^(hi|hello|hey|thanks|thank you|ok|okay|got it|sounds good|great|cool|sure|yes|no|bye|goodbye|good morning|good evening|good afternoon)\b/i;
-    const needsRetrieval = userMessage.length >= 10 && !GREETING_PATTERN.test(userMessage.trim());
+    const needsRetrieval =
+      !isWebQuery && userMessage.length >= 10 && !GREETING_PATTERN.test(userMessage.trim());
 
     // Start embedding generation early (concurrent with history fetch)
     const embeddingPromise = needsRetrieval
@@ -294,6 +323,11 @@ export async function POST(req: NextRequest) {
       (async () => {
         try {
           if (await mods.degradationMod.isFeatureDegraded('vector_search')) {
+            return { sources: [], degraded: true, error: null };
+          }
+          // Fast-fail if Qdrant circuit breaker is OPEN
+          const { qdrantCircuitBreaker } = mods.externalServicesMod;
+          if (qdrantCircuitBreaker.getState() === 'OPEN') {
             return { sources: [], degraded: true, error: null };
           }
           const { withSpan } = mods.tracingMod;
@@ -345,9 +379,17 @@ export async function POST(req: NextRequest) {
     const { context, citationMap } = citationHandler.formatContextWithCitations(chunks);
 
     // Step 9: Build system prompt
-    const systemPrompt = buildSystemPromptWithContext(context, {
-      style: config.temperature < 0.5 ? 'concise' : 'balanced',
-    });
+    let systemPrompt: string;
+    if (isWebQuery) {
+      systemPrompt =
+        'You are a helpful assistant. The user is asking about current events or real-time information. ' +
+        'Answer from your general knowledge and clearly state that your knowledge has a cutoff date. ' +
+        'Suggest the user enable Agent Mode (toggle in the chat header) for live web search results.';
+    } else {
+      systemPrompt = buildSystemPromptWithContext(context, {
+        style: config.temperature < 0.5 ? 'concise' : 'balanced',
+      });
+    }
 
     // Step 10: Prepare messages for LLM
     const llmMessages: LLMMessage[] = [
@@ -391,13 +433,112 @@ export async function POST(req: NextRequest) {
         messageLength: userMessage.length,
         hasContext: sources.length > 0,
         sourceCount: sources.length,
-        model: MODEL_FALLBACK_CHAIN[0],
       },
     });
 
     if (shouldStream) {
-      // Streaming response — use health cache to avoid expensive probes
-      const allModels = [...MODEL_FALLBACK_CHAIN];
+      // If user explicitly selected a model, use it directly (skip discovery + probe)
+      if (userModel && userModel !== 'auto') {
+        const usedModel = userModel;
+
+        const resolvedModel = resolveDynamicModel(usedModel) ?? getModel(usedModel);
+
+        let streamError: string | null = null;
+
+        const result = streamText({
+          model: resolvedModel,
+          messages: llmMessages,
+          temperature: config.temperature,
+          maxTokens: config.maxTokens,
+          abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
+          onError: (error) => {
+            streamError = error instanceof Error ? error.message : String(error);
+            modelHealthCache.recordFailure(usedModel);
+            logger.error('Stream error from user-selected model', {
+              model: usedModel,
+              error: streamError,
+            });
+          },
+          onFinish: async (completion) => {
+            try {
+              modelHealthCache.recordSuccess(usedModel);
+              if (effectiveConversationId) {
+                await prisma.message.create({
+                  data: {
+                    chatId: effectiveConversationId,
+                    content: completion.text,
+                    role: 'ASSISTANT',
+                  },
+                });
+                const { del } = await import('@/lib/cache');
+                const { CACHE_KEYS } = await import('@/lib/cache/keys');
+                for (const lim of [50, 100]) {
+                  await del(CACHE_KEYS.chatHistory(effectiveConversationId, lim));
+                }
+              }
+              if (completion.usage) {
+                bufferUsageRecord({
+                  userId,
+                  workspaceId,
+                  endpoint: '/api/chat',
+                  method: 'POST',
+                  tokensPrompt: completion.usage.promptTokens ?? 0,
+                  tokensCompletion: completion.usage.completionTokens ?? 0,
+                  tokensTotal:
+                    (completion.usage.promptTokens ?? 0) + (completion.usage.completionTokens ?? 0),
+                  latencyMs: Date.now() - startTime,
+                });
+              }
+              if (effectiveConversationId) {
+                await maybeGenerateTitle(
+                  effectiveConversationId,
+                  userMessage,
+                  completion.text,
+                  usedModel
+                );
+              }
+            } catch (txError) {
+              logger.warn('Transaction failed in streaming onFinish', {
+                error: txError instanceof Error ? txError.message : String(txError),
+              });
+            }
+          },
+        });
+
+        const sourcesMetadata = sources.map((s) => ({
+          id: s.id,
+          documentName: s.metadata.documentName,
+          documentId: s.metadata.documentId,
+          page: s.metadata.page,
+          similarity: s.similarity,
+        }));
+
+        const rawResponse = result.toTextStreamResponse({
+          headers: {
+            'X-Message-Sources': JSON.stringify(sourcesMetadata),
+            'X-Model-Used': usedModel,
+            ...(isWebQuery ? { 'X-Strategy': 'web_query_no_rag' } : {}),
+            'X-RAG-Status': isWebQuery
+              ? 'skipped_web_query'
+              : sources.length > 0
+                ? 'hit'
+                : retrievalError
+                  ? 'error'
+                  : vectorSearchDegraded
+                    ? 'degraded'
+                    : 'miss',
+            ...(retrievalError ? { 'X-RAG-Error': retrievalError.slice(0, 200) } : {}),
+            ...(vectorSearchDegraded ? { 'X-Degraded-Features': 'vector_search' } : {}),
+          },
+        });
+
+        const response = wrapStreamWithErrorFrame(rawResponse, () => streamError);
+        addRateLimitHeaders(response.headers, rateLimitResult);
+        return response;
+      }
+
+      // Dynamic model discovery — finds best available models from OpenRouter
+      const { modelsToTry: discoveredModels, primaryModel } = await getModelsForStreaming('chat');
 
       // If the circuit breaker is open, fail fast
       const { llmCircuitBreaker } = mods.externalServicesMod;
@@ -414,10 +555,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Filter models based on health cache (skip models in backoff)
-      const modelsToTry = modelHealthCache.getModelsToTry(allModels);
-
-      if (modelsToTry.length === 0) {
+      if (discoveredModels.length === 0) {
         return NextResponse.json(
           {
             success: false,
@@ -430,19 +568,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      let usedModel = modelsToTry[0];
+      let usedModel = primaryModel;
 
-      // Skip probing — attempt the model directly with a fast timeout.
-      // The circuit breaker and health cache already filter out known-bad models.
-      // If the primary fails, we catch the stream error and fall back.
-      if (!modelHealthCache.isRecentlyHealthy(modelsToTry[0])) {
-        // Health is unknown — try a lightweight check first
+      // Probe to find a working model when the primary isn't recently confirmed healthy.
+      const skipProbe = modelHealthCache.isRecentlyHealthy(primaryModel);
+      if (!skipProbe) {
         let foundWorking = false;
-        for (const modelName of modelsToTry) {
+        for (const modelName of discoveredModels) {
           try {
             await llmCircuitBreaker.execute(async () => {
               await generateText({
-                model: getModel(modelName),
+                model: resolveDynamicModel(modelName) ?? getModel(modelName),
                 messages: [{ role: 'user', content: 'hi' }],
                 maxTokens: 1,
                 abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
@@ -474,12 +610,24 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const resolvedModel = resolveDynamicModel(usedModel) ?? getModel(usedModel);
+
+      let streamError: string | null = null;
+
       const result = streamText({
-        model: getModel(usedModel),
+        model: resolvedModel,
         messages: llmMessages,
         temperature: config.temperature,
         maxTokens: config.maxTokens,
         abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
+        onError: (error) => {
+          streamError = error instanceof Error ? error.message : String(error);
+          modelHealthCache.recordFailure(usedModel);
+          logger.error('Stream error from model', {
+            model: usedModel,
+            error: streamError,
+          });
+        },
         onFinish: async (completion) => {
           try {
             if (effectiveConversationId) {
@@ -538,12 +686,14 @@ export async function POST(req: NextRequest) {
         similarity: s.similarity,
       }));
 
-      const response = result.toTextStreamResponse({
+      const rawResponse = result.toTextStreamResponse({
         headers: {
           'X-Message-Sources': JSON.stringify(sourcesMetadata),
           'X-Model-Used': usedModel,
-          'X-RAG-Status':
-            sources.length > 0
+          ...(isWebQuery ? { 'X-Strategy': 'web_query_no_rag' } : {}),
+          'X-RAG-Status': isWebQuery
+            ? 'skipped_web_query'
+            : sources.length > 0
               ? 'hit'
               : retrievalError
                 ? 'error'
@@ -555,16 +705,19 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      const response = wrapStreamWithErrorFrame(rawResponse, () => streamError);
+
       // Add rate limit headers
       addRateLimitHeaders(response.headers, rateLimitResult);
 
       return response;
     } else {
-      // Non-streaming response with model fallback
+      // Non-streaming response with dynamic model fallback
+      const bestModel = await getBestAvailableModel('chat');
       const response = await generateWithFallback(llmMessages, {
         temperature: config.temperature,
         maxTokens: config.maxTokens,
-        primaryModel: MODEL_FALLBACK_CHAIN[0],
+        primaryModel: bestModel,
       });
 
       // Extract citations
@@ -748,6 +901,9 @@ export async function PUT(req: NextRequest) {
     }
 
     // Parse request body
+    const bodySizeCheckPut = checkBodySize(req, 1_000_000);
+    if (bodySizeCheckPut) return bodySizeCheckPut;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -1065,6 +1221,9 @@ export async function PATCH(req: NextRequest) {
     const workspaceId = session.user.workspaceId;
 
     // Parse request body
+    const bodySizeCheckPatch = checkBodySize(req, 1_000_000);
+    if (bodySizeCheckPatch) return bodySizeCheckPatch;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -1180,17 +1339,20 @@ export async function PATCH(req: NextRequest) {
 // =============================================================================
 
 /**
- * Get the appropriate model based on model name using server-side env vars
+ * Resolve model name to LanguageModel — delegates to centralized resolver.
+ * Used as fallback in `resolveDynamicModel(id) ?? getModel(id)` patterns.
  */
 function getModel(modelName: string): LanguageModel {
-  const openrouterKey = env.OPENROUTER_API_KEY;
-  const openrouter = createOpenRouter({ apiKey: openrouterKey });
-  return openrouter.chat(modelName) as unknown as LanguageModel;
+  const resolved = resolveDynamicModel(modelName);
+  if (!resolved) {
+    throw new Error(`No provider available for model: ${modelName}`);
+  }
+  return resolved;
 }
 
 /**
- * Try to generate text with fallback models
- * Attempts each model in the fallback chain until one succeeds
+ * Try to generate text with fallback models.
+ * Uses dynamic model discovery to get the full fallback chain.
  */
 async function generateWithFallback(
   messages: LLMMessage[],
@@ -1204,9 +1366,10 @@ async function generateWithFallback(
   model: string;
   usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }> {
+  const { modelsToTry: discoveredModels } = await getModelsForStreaming('chat');
   const modelsToTry = [
     options.primaryModel,
-    ...MODEL_FALLBACK_CHAIN.filter((m) => m !== options.primaryModel),
+    ...discoveredModels.filter((m) => m !== options.primaryModel),
   ];
 
   let lastError: Error | null = null;
@@ -1214,9 +1377,10 @@ async function generateWithFallback(
   for (const modelName of modelsToTry) {
     try {
       const { llmCircuitBreaker: breaker } = await import('@/lib/resilience/external-services');
+      const resolved = resolveDynamicModel(modelName) ?? getModel(modelName);
       const result = await breaker.execute(async () =>
         generateText({
-          model: getModel(modelName),
+          model: resolved,
           messages,
           temperature: options.temperature,
           maxTokens: options.maxTokens,
@@ -1289,10 +1453,11 @@ async function maybeGenerateTitle(
     }
 
     // Generate title using a quick LLM call
-    const titleModel = modelName.includes(':') ? 'mistralai/mistral-7b-instruct:free' : modelName;
+    const titleModel = modelName.includes(':') ? await getBestAvailableModel('fast') : modelName;
+    const resolvedTitleModel = resolveDynamicModel(titleModel) ?? getModel(titleModel);
 
     const { text: title } = await generateText({
-      model: getModel(titleModel),
+      model: resolvedTitleModel,
       messages: [
         {
           role: 'system',

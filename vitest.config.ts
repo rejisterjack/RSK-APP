@@ -81,7 +81,7 @@ export default defineConfig({
     // Environment variables for tests
     env: {
       NODE_ENV: 'test',
-      NEXT_PUBLIC_API_URL: 'http://localhost:3000',
+      NEXT_PUBLIC_API_URL: 'http://localhost:7392',
       NEXTAUTH_SECRET: 'test-secret-for-vitest-exactly-32c',
       ENCRYPTION_MASTER_KEY: 'test-encryption-key-for-vitest-32c',
     },

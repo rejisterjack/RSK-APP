@@ -12,7 +12,7 @@
  *
  * Example:
  *   curl -H "Cookie: ..." \
- *     "http://localhost:3000/api/retrieval/debug?q=what+is+RAG&limit=5"
+ *     "http://localhost:7392/api/retrieval/debug?q=what+is+RAG&limit=5"
  */
 
 import { NextResponse } from 'next/server';

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { checkBodySize } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { generateRAGResponse } from '@/lib/rag/engine';
 import { estimateMessageTokens } from '@/lib/rag/token-budget';
@@ -80,6 +81,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const bodySizeCheck = checkBodySize(req, 1_000_000);
+    if (bodySizeCheck) return bodySizeCheck;
+
     let body: unknown;
     try {
       body = await req.json();
@@ -132,11 +136,11 @@ export async function POST(req: NextRequest) {
 
     // Default demo config
     const demoConfig = {
-      model: config?.model || 'google/gemma-3-12b-it:free',
+      model: config?.model || 'auto', // Dynamic — resolved via model discovery
       temperature: config?.temperature ?? 0.7,
       maxTokens: Math.min(config?.maxTokens ?? 1000, 1000), // Max 1000 for demo
       topK: config?.topK ?? 5,
-      similarityThreshold: config?.similarityThreshold ?? 0.7,
+      similarityThreshold: config?.similarityThreshold ?? 0.5,
     };
 
     if (stream) {

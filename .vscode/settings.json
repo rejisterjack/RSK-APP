@@ -95,7 +95,7 @@
   ],
   
   // Testing
-  "vitest.commandLine": "pnpm vitest",
+  "vitest.commandLine": "bun vitest",
   "vitest.enable": true,
   
   // Git

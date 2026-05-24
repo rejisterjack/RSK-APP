@@ -26,6 +26,7 @@ import { useFeatureLevel } from '@/hooks/use-feature-level';
 import { cn } from '@/lib/utils';
 import { useChatContext } from './chat-context';
 import { KeyboardShortcutsTrigger } from './keyboard-shortcuts';
+import { ModelSelector } from './model-selector';
 import { ShareDialog } from './share-dialog';
 
 interface ChatHeaderProps {
@@ -103,6 +104,7 @@ export const ChatHeader = memo(function ChatHeader({
 
       {/* Right section */}
       <div className="flex items-center gap-1 md:gap-2">
+        <ModelSelector />
         <div className="hidden md:flex items-center gap-2">
           {isFeatureVisible(1) && (
             <AgentModeToggleCompact

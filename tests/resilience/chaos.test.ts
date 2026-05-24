@@ -4,7 +4,7 @@
  * Simulates failures in external services (Redis, embedding provider, LLM, storage)
  * and verifies graceful degradation behavior.
  *
- * Run: pnpm vitest run tests/resilience/chaos.test.ts
+ * Run: bun vitest run tests/resilience/chaos.test.ts
  *
  * These tests validate that the application degrades gracefully rather than
  * crashing when individual services become unavailable.

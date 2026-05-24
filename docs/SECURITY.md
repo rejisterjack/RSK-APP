@@ -663,10 +663,10 @@ Key rotation must re-encrypt all values encrypted with the old key before the ol
 
 ```bash
 # Dry-run first
-pnpm tsx scripts/rotate-encryption-key.ts --dry-run
+bun tsx scripts/rotate-encryption-key.ts --dry-run
 
 # Apply
-pnpm tsx scripts/rotate-encryption-key.ts
+bun tsx scripts/rotate-encryption-key.ts
 ```
 
 This script must iterate over all tables that store encrypted columns (currently: `saml_providers.private_key`, `webhooks.secret`, and TOTP secrets stored via the field-encryption module).

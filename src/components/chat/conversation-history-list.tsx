@@ -248,41 +248,39 @@ export function ConversationHistoryList({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Search + New Chat row */}
-      <div className="px-3 pt-3 pb-2 space-y-3 border-b border-border/50">
+      {/* Search row */}
+      <div className="shrink-0 px-3 pt-2.5 pb-2 space-y-2 border-b border-white/8">
         {/* Offline indicator */}
         {(isOffline || isLiefi) && !searchQuery.trim() && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-500">
             <CloudOff className="h-3 w-3 shrink-0" />
-            <span className="flex-1">
-              {isOffline
-                ? 'Offline — showing cached conversations'
-                : 'Slow connection — using cached data'}
+            <span className="flex-1 leading-tight">
+              {isOffline ? 'Offline — cached data' : 'Slow connection — cached data'}
             </span>
           </div>
         )}
 
-        <div className="relative">
+        <div className="relative group">
           {isLoading && searchQuery.trim() ? (
-            <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+            <Loader2 className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground animate-spin" />
           ) : (
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground transition-colors group-focus-within:text-primary" />
           )}
           <Input
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 rounded-full bg-muted/50 border-border/30 focus-visible:ring-primary/40"
+            className="pl-8 h-8 text-xs bg-white/5 border-white/8 focus-visible:ring-primary/40 rounded-lg placeholder:text-muted-foreground/50"
           />
         </div>
 
         <Button
           variant="default"
           size="sm"
-          className="w-full gap-2 rounded-full"
+          className="w-full gap-2 rounded-lg h-8 text-xs font-medium"
           onClick={onNewChat}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
           New Chat
         </Button>
       </div>
@@ -302,15 +300,16 @@ export function ConversationHistoryList({
               const isConfirmingDelete = conversation.id === deleteConfirmId;
 
               return (
+                // biome-ignore lint/a11y/useSemanticElements: must use div (not button) because ConversationActions renders a nested DropdownMenu trigger button
                 <div
                   key={conversation.id}
                   role="button"
                   tabIndex={0}
                   className={cn(
-                    'group relative flex items-start gap-3 rounded-xl px-3 py-3 transition-colors text-left w-full cursor-pointer',
+                    'group relative flex items-start gap-2 rounded-xl px-2.5 py-2 transition-colors text-left w-full cursor-pointer',
                     isCurrentChat
                       ? 'bg-primary/10 border border-primary/20'
-                      : 'hover:bg-muted/50 border border-transparent'
+                      : 'hover:bg-white/5 border border-transparent'
                   )}
                   onClick={() => handleSelect(conversation.id)}
                   onKeyDown={(e) => {
@@ -323,21 +322,21 @@ export function ConversationHistoryList({
                   {/* Icon */}
                   <div
                     className={cn(
-                      'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+                      'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
                       isCurrentChat
                         ? 'bg-primary/20 text-primary'
-                        : 'bg-muted text-muted-foreground'
+                        : 'bg-white/8 text-muted-foreground'
                     )}
                   >
-                    <MessageSquare className="h-4 w-4" />
+                    <MessageSquare className="h-3 w-3" />
                   </div>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-1">
                       <p
                         className={cn(
-                          'text-sm font-medium truncate',
+                          'text-xs font-medium truncate leading-5',
                           isCurrentChat ? 'text-primary' : 'text-foreground'
                         )}
                       >
@@ -366,17 +365,17 @@ export function ConversationHistoryList({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[11px] text-muted-foreground/70">
                         {formatDate(conversation.updatedAt)}
                       </span>
-                      <span className="text-xs text-muted-foreground/60">·</span>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <FileText className="h-3 w-3" />
+                      <span className="text-muted-foreground/40">·</span>
+                      <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground/70">
+                        <FileText className="h-2.5 w-2.5" />
                         {conversation.messageCount}
                       </span>
                       {(isOffline || isLiefi) && isFromCache && !searchQuery.trim() && (
-                        <span className="text-[10px] text-amber-500/70 ml-auto">cached</span>
+                        <span className="text-[10px] text-amber-500/60 ml-auto">cached</span>
                       )}
                     </div>
                   </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { Source } from '@/components/chat/citations';
 import type { Message } from '@/components/chat/message-item';
+import { getSelectedModel } from '@/hooks/use-selected-model';
 
 export interface UseChatOptions {
   conversationId?: string;
@@ -304,18 +305,32 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
           const effectiveChatId = chatIdOverride || conversationIdRef.current;
 
+          // Build request body — include agentConfig when using agent endpoint
+          const requestBody: Record<string, unknown> = {
+            messages: [{ role: 'user', content: trimmedContent }],
+            conversationId: effectiveChatId,
+            config: {
+              model: getSelectedModel() || modelRef.current || undefined,
+            },
+            stream: true,
+          };
+
+          if (agentMode) {
+            try {
+              const stored = localStorage.getItem('agent-settings');
+              if (stored) {
+                requestBody.agentConfig = JSON.parse(stored);
+              }
+            } catch {
+              // Ignore parse errors — agent route has defaults
+            }
+          }
+
           const response = await fetch(endpoint, {
             method: 'POST',
             credentials: 'include',
             headers,
-            body: JSON.stringify({
-              messages: [{ role: 'user', content: trimmedContent }],
-              conversationId: effectiveChatId,
-              config: {
-                model: modelRef.current || 'google/gemini-2.0-flash-exp:free',
-              },
-              stream: true,
-            }),
+            body: JSON.stringify(requestBody),
             signal: abortControllerRef.current.signal,
           });
 
@@ -463,9 +478,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
             onFinishRef.current?.(assistantMessage);
           } else {
-            // Stream ended with no content — likely a model provider error
+            // Stream ended with no content — the model provider returned an empty response.
+            // This is typically caused by rate-limiting (429) on free-tier models.
+            const modelUsed = response.headers.get('X-Model-Used') || 'unknown';
             throw new Error(
-              'The AI model returned no response. Verify your API key is valid and has remaining quota.'
+              `The AI model (${modelUsed}) returned no response. ` +
+                'This is usually caused by temporary rate-limiting on free models. Please try again in a moment.'
             );
           }
         } catch (err) {

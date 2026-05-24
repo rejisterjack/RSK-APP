@@ -25,7 +25,7 @@ const openApiSpec = {
   },
   servers: [
     {
-      url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:7392',
       description: 'Current environment',
     },
   ],

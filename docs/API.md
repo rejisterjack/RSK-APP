@@ -4,7 +4,7 @@
 
 The RAG Starter Kit exposes a RESTful API with the following base URL:
 
-- **Development**: `http://localhost:3000`
+- **Development**: `http://localhost:7392`
 - **Production**: `https://rag-starter-kit.vercel.app`
 
 The full OpenAPI 3.0 specification is available at [`/api/docs`](https://rag-starter-kit.vercel.app/api/docs).
