@@ -38,7 +38,7 @@ export function Providers({ children }: ProvidersProps): React.ReactElement {
   );
 
   return (
-    <SessionProvider>
+    <SessionProvider refetchOnWindowFocus={false} refetchWhenOffline={false}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider
           attribute="class"

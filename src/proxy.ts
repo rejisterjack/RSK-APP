@@ -263,6 +263,8 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
     "'self'",
     'https://api.openai.com',
     'https://*.vercel.app',
+    'https://vercel.live',
+    'https://*.vercel.live',
     'https://openrouter.ai',
     'https://*.openrouter.ai',
     'https://generativelanguage.googleapis.com',
@@ -276,6 +278,8 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
     'https://*.inngest.com',
     ...(env.NODE_ENV === 'development' ? ['http://localhost:*', 'ws://localhost:*'] : []),
     'wss://*.vercel.app',
+    'wss://vercel.live',
+    'wss://*.vercel.live',
     'wss://*.inngest.com',
   ];
 
@@ -287,13 +291,13 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
 
   const scriptSrc =
     env.NODE_ENV === 'development'
-      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8000 https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live`
-      : `script-src 'self' 'nonce-${n}' https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live`;
+      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8000 https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live https://*.vercel.live`
+      : `script-src 'self' 'nonce-${n}' https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live https://*.vercel.live https://cdn.jsdelivr.net`;
 
   const styleSrc =
     env.NODE_ENV === 'development'
       ? "style-src 'self' 'unsafe-inline'"
-      : `style-src 'self' 'nonce-${n}'`;
+      : `style-src 'self' 'unsafe-inline' 'nonce-${n}'`;
 
   const csp = [
     "default-src 'self'",
