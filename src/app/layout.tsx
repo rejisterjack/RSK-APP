@@ -198,10 +198,8 @@ export default function RootLayout({ children }: RootLayoutProps) {
           <Toaster />
         </Providers>
         <StructuredData />
-        {/* PWA Scripts & CSRF — wrapped in Suspense because they read headers() at runtime */}
-        <Suspense fallback={null}>
-          <NonceScripts />
-        </Suspense>
+        {/* PWA Scripts & CSRF — client component, no Suspense needed */}
+        <NonceScripts />
         {/* Vercel Analytics & Core Web Vitals */}
         <SpeedInsights />
         <Analytics />
