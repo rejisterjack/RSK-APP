@@ -294,10 +294,10 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
       ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8000 https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live https://*.vercel.live`
       : `script-src 'self' 'nonce-${n}' https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live https://*.vercel.live https://cdn.jsdelivr.net`;
 
-  const styleSrc =
-    env.NODE_ENV === 'development'
-      ? "style-src 'self' 'unsafe-inline'"
-      : `style-src 'self' 'unsafe-inline' 'nonce-${n}'`;
+  // NOTE: 'unsafe-inline' is ignored by browsers when a nonce is also present (CSP spec).
+  // For style-src, we use 'unsafe-inline' only — no nonce — so inline styles from
+  // third-party CSS (KaTeX, Vercel feedback widget) are not blocked.
+  const styleSrc = "style-src 'self' 'unsafe-inline'";
 
   const csp = [
     "default-src 'self'",
