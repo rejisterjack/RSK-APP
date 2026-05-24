@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic';
-
 /**
  * GitHub OAuth Callback Endpoint
  *
