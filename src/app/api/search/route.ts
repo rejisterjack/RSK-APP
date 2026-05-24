@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * Global Search API with Filters
  * Supports: type, dateFrom, dateTo filters

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * Notion OAuth Start Endpoint
  *

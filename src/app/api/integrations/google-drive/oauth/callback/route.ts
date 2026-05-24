@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * Google Drive OAuth Callback Endpoint
  *

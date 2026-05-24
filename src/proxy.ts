@@ -287,8 +287,8 @@ function addSecurityHeaders(response: NextResponse, requestId?: string, nonce?: 
 
   const scriptSrc =
     env.NODE_ENV === 'development'
-      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8000 https://*.vercel-scripts.com https://va.vercel-scripts.com`
-      : `script-src 'self' 'nonce-${n}' https://*.vercel-scripts.com https://va.vercel-scripts.com`;
+      ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8000 https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live`
+      : `script-src 'self' 'nonce-${n}' https://*.vercel-scripts.com https://va.vercel-scripts.com https://vercel.live`;
 
   const styleSrc =
     env.NODE_ENV === 'development'

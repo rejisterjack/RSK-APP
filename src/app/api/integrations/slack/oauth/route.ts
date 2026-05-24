@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * Slack OAuth Initiation Endpoint
  *
