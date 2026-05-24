@@ -25,8 +25,10 @@ const fireworks = createOpenAI({
 import { createProviderFromEnv, type LLMMessage } from '@/lib/ai/llm';
 import {
   getBestAvailableModel,
+  getModelsForStreaming,
   resolveModel as resolveDynamicModel,
 } from '@/lib/ai/model-discovery';
+import { modelHealthCache } from '@/lib/ai/model-health-cache';
 import { type AgentAnalytics, createAgentAnalytics } from '@/lib/analytics/agent-analytics';
 import { MetricType, recordMetric } from '@/lib/analytics/rag-metrics';
 import { trackTokenUsage } from '@/lib/analytics/token-tracking';
@@ -53,6 +55,7 @@ import {
   documentSummaryTool,
   getDefaultWebSearchProvider,
   searchDocumentsTool,
+  type WebSearchResult,
 } from '@/lib/rag/tools';
 import { validateChatInput } from '@/lib/security/input-validator';
 import {
@@ -76,6 +79,26 @@ const defaultConfig: RAGConfig = {
 
 const REACT_THRESHOLD = 0.6;
 
+/**
+ * Check if a query has strong web-search signals (current events, real-time data).
+ * Used as a safety net to override LLM misclassification.
+ */
+function hasWebSearchSignals(query: string): boolean {
+  const lower = query.toLowerCase();
+  const strongSignals = [
+    /\b(latest|recent|current)\s+(news|events|developments|updates|headlines|info|trends)\b/,
+    /\bnews\s+(on|about|regarding)\b/,
+    /\bwhat('s| is)\s+(happening|going on|trending|new)\b/,
+    /\b(weather|temperature|forecast)\s+(in|at|for|like|today)\b/,
+    /\b(stock\s*price|share\s*price|market)\b/,
+    /\b(today|tonight)\s*(('s|is)\s+)?(news|update|weather|game|score)\b/,
+    /\bwho\s+(won|is\s+winning)\b/,
+    /\b(breaking|live)\s+(news|update)\b/,
+    /\b(top|best)\s+\d+\s+\w+\s+(of|in)\s+\d{4}\b/,
+  ];
+  return strongSignals.some((p) => p.test(lower));
+}
+
 // Global analytics instance
 const agentAnalytics = createAgentAnalytics();
 
@@ -85,6 +108,14 @@ const agentAnalytics = createAgentAnalytics();
  * centralized dynamic model resolver.
  */
 async function getModel(modelName: string): Promise<LanguageModel> {
+  // 'auto' means dynamic discovery — resolve to best available model
+  if (modelName === 'auto' || modelName === '') {
+    const bestModel = await getBestAvailableModel('chat');
+    const resolved = resolveDynamicModel(bestModel);
+    if (resolved) return resolved;
+    throw new Error(`No provider available for discovered model: ${bestModel}`);
+  }
+
   // Fireworks models (accounts/fireworks/models/...)
   if (modelName.startsWith('accounts/fireworks/')) {
     return fireworks(modelName) as unknown as LanguageModel;
@@ -113,9 +144,6 @@ async function getModel(modelName: string): Promise<LanguageModel> {
   const fallback = resolveDynamicModel(bestModel);
   if (fallback) return fallback;
 
-  // Last resort — direct OpenRouter (uses configured instance from model-discovery)
-  const lastResort = resolveDynamicModel(bestModel);
-  if (lastResort) return lastResort;
   throw new Error(`No provider available for model: ${bestModel}`);
 }
 
@@ -297,8 +325,27 @@ export async function POST(req: Request) {
     });
 
     const classificationStart = Date.now();
-    const classification = await router.classify(userMessage, history);
+    let classification = await router.classify(userMessage, history);
     const classificationLatency = Date.now() - classificationStart;
+
+    // Safety net: if router says RETRIEVE but query has strong web-search signals
+    // and web_search is enabled, re-classify as WEB_SEARCH
+    if (
+      classification.type === QueryType.RETRIEVE &&
+      agentConfig.enabledTools.includes('web_search') &&
+      hasWebSearchSignals(userMessage)
+    ) {
+      logger.info('Overriding RETRIEVE classification to WEB_SEARCH based on keyword signals', {
+        query: userMessage.slice(0, 100),
+        originalConfidence: classification.confidence,
+      });
+      classification = {
+        type: QueryType.WEB_SEARCH,
+        confidence: 0.9,
+        reasoning: `Overridden from RETRIEVE: query contains web-search keywords. Original reasoning: ${classification.reasoning}`,
+        suggestedTools: ['web_search'],
+      };
+    }
 
     await recordMetric({
       type: MetricType.QUERY_CLASSIFICATION,
@@ -435,6 +482,7 @@ export async function POST(req: Request) {
           workspaceId,
           effectiveConversationId,
           agentConfig,
+          shouldStream,
           rateLimitResult,
           requestId,
           agentMemory,
@@ -648,7 +696,6 @@ async function handleCalculation(
     workspaceId,
     effectiveConversationId,
     config,
-    agentConfig,
     shouldStream,
     rateLimitResult,
     requestId,
@@ -656,97 +703,146 @@ async function handleCalculation(
     analytics,
   } = params;
 
-  const tools: import('@/lib/rag/tools').Tool[] = [calculatorTool, currentTimeTool];
-
-  if (agentConfig.enabledTools.includes('code_executor')) {
-    tools.push(codeExecutorTool);
-  }
-
-  const agent = createReActAgent(tools, {
-    model: config.model,
-    maxSteps: agentConfig.maxIterations,
-    enableReflection: agentConfig.enableReflection,
-    earlyTermination: agentConfig.earlyTermination,
-  });
-
-  const result = await agent.execute(userMessage, {
-    workspaceId: workspaceId ?? '',
-    userId,
-    history: history as unknown as import('@/types').Message[],
-    memory: agentMemory,
-    enablePlanning: agentConfig.enablePlanning,
-  });
-
-  const memory = new ConversationMemory(prisma);
+  const queryStartTime = Date.now();
+  const convMemory = new ConversationMemory(prisma);
 
   if (effectiveConversationId) {
-    await memory.addMessage(effectiveConversationId, { role: 'user', content: userMessage });
-    await memory.addMessage(effectiveConversationId, {
-      role: 'assistant',
-      content: result.answer,
-    });
+    await convMemory.addMessage(effectiveConversationId, { role: 'user', content: userMessage });
   }
 
-  await trackTokenUsage({
-    userId,
-    workspaceId: workspaceId ?? '',
-    conversationId: effectiveConversationId ?? '',
-    promptTokens: result.tokensUsed.prompt,
-    completionTokens: result.tokensUsed.completion,
-    model: config.model,
-  });
+  // Use streamText directly for calculations — free-tier models handle math reliably
+  // when given a clear system prompt, without needing the fragile ReAct loop
+  const memoryContext = await agentMemory.buildMemoryContext();
 
-  // Track analytics
-  await analytics.trackQuery({
-    queryId: crypto.randomUUID(),
-    userId,
-    query: userMessage,
-    queryType: 'calculate',
-    strategy: 'calculate',
-    success: true,
-    steps: result.iterations,
-    toolCalls: result.steps.filter((s: ReActStep) => s.action !== 'final_answer').length,
-    latency: result.latency,
-    tokensUsed: result.tokensUsed,
-    toolUsage: { calculator: 1 },
-    terminated: result.terminated,
-    terminationReason: result.terminationReason,
-    timestamp: new Date(),
-  });
+  const systemPrompt = `You are a helpful assistant that specializes in calculations and math.
+When the user asks a calculation question, show your work step by step and provide the final answer clearly.
+If there are units involved, handle the conversions properly.
+Be precise with numbers and show intermediate steps.
+
+${memoryContext ? `User Context:\n${memoryContext}` : ''}`;
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: systemPrompt },
+    ...history,
+    { role: 'user', content: userMessage },
+  ];
 
   if (shouldStream) {
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(result.answer));
-        controller.close();
+    let streamError: string | null = null;
+    const result = streamText({
+      model: await getModel(config.model),
+      messages: llmMessages,
+      temperature: 0.1,
+      maxTokens: config.maxTokens,
+      onError: (error) => {
+        streamError = error instanceof Error ? error.message : String(error);
+        logger.error('Calculation stream error', { model: config.model, error: streamError });
+      },
+      onFinish: async (completion) => {
+        if (effectiveConversationId) {
+          await convMemory.addMessage(effectiveConversationId, {
+            role: 'assistant',
+            content: completion.text,
+          });
+        }
+
+        await trackTokenUsage({
+          userId,
+          workspaceId: workspaceId ?? '',
+          conversationId: effectiveConversationId ?? '',
+          promptTokens: completion.usage?.promptTokens ?? 0,
+          completionTokens: completion.usage?.completionTokens ?? 0,
+          model: config.model,
+        });
+
+        await analytics.trackQuery({
+          queryId: crypto.randomUUID(),
+          userId,
+          query: userMessage,
+          queryType: 'calculate',
+          strategy: 'calculate_direct',
+          success: true,
+          steps: 1,
+          toolCalls: 0,
+          latency: Date.now() - queryStartTime,
+          tokensUsed: {
+            prompt: completion.usage?.promptTokens ?? 0,
+            completion: completion.usage?.completionTokens ?? 0,
+            total:
+              (completion.usage?.promptTokens ?? 0) + (completion.usage?.completionTokens ?? 0),
+          },
+          toolUsage: { calculator: 1 },
+          timestamp: new Date(),
+        });
       },
     });
-    const response = new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'X-Request-Id': requestId,
-        'X-Strategy': 'calculate',
-        'X-Model-Used': config.model,
-      },
-    });
+
+    const response = wrapStreamWithErrorFrame(
+      result.toTextStreamResponse({
+        headers: {
+          'X-Request-Id': requestId,
+          'X-Strategy': 'calculate',
+          'X-Model-Used': config.model,
+        },
+      }),
+      () => streamError
+    );
     addRateLimitHeaders(response.headers, rateLimitResult);
     return response;
-  }
+  } else {
+    const llmProvider = createProviderFromEnv();
+    const llmResponse = await llmProvider.generate(llmMessages, {
+      model: config.model,
+      temperature: 0.1,
+      maxTokens: config.maxTokens,
+    });
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      content: result.answer,
-      strategy: 'calculate',
-      steps: agentConfig.showReasoning ? result.steps : undefined,
-      iterations: result.iterations,
-      terminated: result.terminated,
-      terminationReason: result.terminationReason,
-      latency: result.latency,
-      usage: { totalTokens: result.tokensUsed },
-    },
-  });
+    if (effectiveConversationId) {
+      await convMemory.addMessage(effectiveConversationId, {
+        role: 'assistant',
+        content: llmResponse.content,
+      });
+    }
+
+    await trackTokenUsage({
+      userId,
+      workspaceId: workspaceId ?? '',
+      conversationId: effectiveConversationId ?? '',
+      promptTokens: llmResponse.usage.promptTokens,
+      completionTokens: llmResponse.usage.completionTokens,
+      model: config.model,
+    });
+
+    await analytics.trackQuery({
+      queryId: crypto.randomUUID(),
+      userId,
+      query: userMessage,
+      queryType: 'calculate',
+      strategy: 'calculate_direct',
+      success: true,
+      steps: 1,
+      toolCalls: 0,
+      latency: Date.now() - queryStartTime,
+      tokensUsed: {
+        prompt: llmResponse.usage.promptTokens,
+        completion: llmResponse.usage.completionTokens,
+        total: llmResponse.usage.totalTokens,
+      },
+      toolUsage: { calculator: 1 },
+      timestamp: new Date(),
+    });
+
+    const jsonResponse = NextResponse.json({
+      success: true,
+      data: {
+        content: llmResponse.content,
+        strategy: 'calculate',
+        usage: llmResponse.usage,
+      },
+    });
+    addRateLimitHeaders(jsonResponse.headers, rateLimitResult);
+    return jsonResponse;
+  }
 }
 
 async function handleWebSearch(
@@ -759,7 +855,6 @@ async function handleWebSearch(
     workspaceId,
     effectiveConversationId,
     config,
-    agentConfig,
     shouldStream,
     rateLimitResult,
     requestId,
@@ -767,100 +862,246 @@ async function handleWebSearch(
     analytics,
   } = params;
 
-  const webSearch = createWebSearchTool(getDefaultWebSearchProvider());
-  const tools: import('@/lib/rag/tools').Tool[] = [webSearch, currentTimeTool];
-
-  if (agentConfig.enabledTools.includes('calculator')) {
-    tools.push(calculatorTool);
-  }
-
-  const agent = createReActAgent(tools, {
-    model: config.model,
-    maxSteps: agentConfig.maxIterations,
-    enableReflection: agentConfig.enableReflection,
-    earlyTermination: agentConfig.earlyTermination,
-  });
-
-  const result = await agent.execute(userMessage, {
-    workspaceId: workspaceId ?? '',
-    userId,
-    history: history as unknown as import('@/types').Message[],
-    memory: agentMemory,
-    enablePlanning: agentConfig.enablePlanning,
-  });
-
-  const memory = new ConversationMemory(prisma);
+  const queryStartTime = Date.now();
+  const convMemory = new ConversationMemory(prisma);
 
   if (effectiveConversationId) {
-    await memory.addMessage(effectiveConversationId, { role: 'user', content: userMessage });
-    await memory.addMessage(effectiveConversationId, {
-      role: 'assistant',
-      content: result.answer,
+    await convMemory.addMessage(effectiveConversationId, { role: 'user', content: userMessage });
+  }
+
+  // Call web search directly — bypass ReAct loop for reliability with free-tier models
+  const provider = getDefaultWebSearchProvider();
+  let searchResults: WebSearchResult[] = [];
+
+  try {
+    searchResults = await provider.search(userMessage, {
+      maxResults: 8,
+      includeAnswer: true,
+    });
+  } catch (err) {
+    logger.warn('Web search provider failed', {
+      error: err instanceof Error ? err.message : String(err),
+      query: userMessage,
     });
   }
 
-  await trackTokenUsage({
-    userId,
-    workspaceId: workspaceId ?? '',
-    conversationId: effectiveConversationId ?? '',
-    promptTokens: result.tokensUsed.prompt,
-    completionTokens: result.tokensUsed.completion,
-    model: config.model,
-  });
+  // Build context from search results
+  let searchContext = '';
+  if (searchResults.length > 0) {
+    searchContext = searchResults
+      .map(
+        (r, i) =>
+          `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}${r.content ? `\n${r.content.slice(0, 500)}` : ''}`
+      )
+      .join('\n\n');
+  }
 
-  // Track analytics
-  await analytics.trackQuery({
-    queryId: crypto.randomUUID(),
+  const memoryContext = await agentMemory.buildMemoryContext();
 
-    userId,
-    query: userMessage,
-    queryType: 'web_search',
-    strategy: 'web_search',
-    success: true,
-    steps: result.iterations,
-    toolCalls: result.steps.filter((s: ReActStep) => s.action !== 'final_answer').length,
-    latency: result.latency,
-    tokensUsed: result.tokensUsed,
-    toolUsage: { web_search: 1 },
-    terminated: result.terminated,
-    terminationReason: result.terminationReason,
-    timestamp: new Date(),
-  });
+  const systemPrompt = searchContext
+    ? `You are a helpful assistant answering questions using web search results.
+Synthesize the information below into a clear, comprehensive answer.
+Cite sources by referencing the bracketed numbers [1], [2], etc.
+If the results don't fully answer the question, share what you found and note the gaps.
+
+## Web Search Results:
+${searchContext}
+${memoryContext ? `\n## User Context:\n${memoryContext}` : ''}`
+    : `You are a helpful assistant. The web search did not return any results.
+Answer the user's question to the best of your ability and note that current web results were unavailable.
+${memoryContext ? `\nUser Context:\n${memoryContext}` : ''}`;
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: systemPrompt },
+    ...history,
+    { role: 'user', content: userMessage },
+  ];
 
   if (shouldStream) {
-    const encoder = new TextEncoder();
-    const webStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(result.answer));
-        controller.close();
-      },
-    });
-    const webResponse = new Response(webStream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'X-Request-Id': requestId,
-        'X-Strategy': 'web_search',
-        'X-Model-Used': config.model,
-      },
-    });
-    addRateLimitHeaders(webResponse.headers, rateLimitResult);
-    return webResponse;
-  }
+    // Resolve model with fallback chain — free models get rate-limited frequently
+    const { modelsToTry } = await getModelsForStreaming('chat');
+    let usedModel = modelsToTry[0] || (await getBestAvailableModel('chat'));
+    let streamError: string | null = null;
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      content: result.answer,
-      strategy: 'web_search',
-      steps: agentConfig.showReasoning ? result.steps : undefined,
-      sources: result.sources,
-      iterations: result.iterations,
-      terminated: result.terminated,
-      terminationReason: result.terminationReason,
-      latency: result.latency,
-      usage: { totalTokens: result.tokensUsed },
-    },
-  });
+    // Probe models to find one that works (tiny request, no stream consumption)
+    const probeMs = 5_000;
+    for (const modelId of modelsToTry.slice(0, 3)) {
+      const model = resolveDynamicModel(modelId);
+      if (!model) continue;
+      try {
+        const { generateText: probe } = await import('ai');
+        await probe({
+          model,
+          messages: [{ role: 'user', content: 'ok' }],
+          maxTokens: 1,
+          abortSignal: AbortSignal.timeout(probeMs),
+        });
+        usedModel = modelId;
+        modelHealthCache.recordSuccess(modelId);
+        break;
+      } catch (err) {
+        modelHealthCache.recordFailure(modelId);
+        logger.warn('Web search model probe failed, trying next', {
+          model: modelId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    const resolvedModel = resolveDynamicModel(usedModel);
+    if (!resolvedModel) {
+      // All models failed — return search results as plain text
+      const fallbackContent = searchContext
+        ? `Here are the web search results I found:\n\n${searchResults
+            .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.snippet}\n   ${r.url}`)
+            .join('\n\n')}`
+        : 'Unable to perform web search and no AI models are currently available. Please try again in a moment.';
+
+      const encoder = new TextEncoder();
+      const fallbackStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(fallbackContent));
+          controller.close();
+        },
+      });
+      const fallbackResponse = new Response(fallbackStream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Request-Id': requestId,
+          'X-Strategy': 'web_search_fallback',
+          'X-Model-Used': 'none',
+        },
+      });
+      addRateLimitHeaders(fallbackResponse.headers, rateLimitResult);
+      return fallbackResponse;
+    }
+
+    const result = streamText({
+      model: resolvedModel,
+      messages: llmMessages,
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+      onError: (error) => {
+        streamError = error instanceof Error ? error.message : String(error);
+        logger.warn('Web search stream error', { model: usedModel, error: streamError });
+      },
+      onFinish: async (completion) => {
+        if (completion.text) {
+          modelHealthCache.recordSuccess(usedModel);
+        }
+        if (effectiveConversationId) {
+          await convMemory.addMessage(effectiveConversationId, {
+            role: 'assistant',
+            content: completion.text,
+          });
+        }
+
+        await trackTokenUsage({
+          userId,
+          workspaceId: workspaceId ?? '',
+          conversationId: effectiveConversationId ?? '',
+          promptTokens: completion.usage?.promptTokens ?? 0,
+          completionTokens: completion.usage?.completionTokens ?? 0,
+          model: usedModel,
+        });
+
+        await analytics.trackQuery({
+          queryId: crypto.randomUUID(),
+          userId,
+          query: userMessage,
+          queryType: 'web_search',
+          strategy: 'web_search_direct',
+          success: searchResults.length > 0,
+          steps: 1,
+          toolCalls: 1,
+          latency: Date.now() - queryStartTime,
+          tokensUsed: {
+            prompt: completion.usage?.promptTokens ?? 0,
+            completion: completion.usage?.completionTokens ?? 0,
+            total:
+              (completion.usage?.promptTokens ?? 0) + (completion.usage?.completionTokens ?? 0),
+          },
+          toolUsage: { web_search: 1 },
+          timestamp: new Date(),
+        });
+      },
+    });
+
+    const response = wrapStreamWithErrorFrame(
+      result.toTextStreamResponse({
+        headers: {
+          'X-Request-Id': requestId,
+          'X-Strategy': 'web_search',
+          'X-Model-Used': usedModel,
+        },
+      }),
+      () => streamError
+    );
+    addRateLimitHeaders(response.headers, rateLimitResult);
+    return response;
+  } else {
+    const llmProvider = createProviderFromEnv();
+    const llmResponse = await llmProvider.generate(llmMessages, config);
+
+    if (effectiveConversationId) {
+      await convMemory.addMessage(effectiveConversationId, {
+        role: 'assistant',
+        content: llmResponse.content,
+      });
+    }
+
+    await trackTokenUsage({
+      userId,
+      workspaceId: workspaceId ?? '',
+      conversationId: effectiveConversationId ?? '',
+      promptTokens: llmResponse.usage.promptTokens,
+      completionTokens: llmResponse.usage.completionTokens,
+      model: config.model,
+    });
+
+    await analytics.trackQuery({
+      queryId: crypto.randomUUID(),
+      userId,
+      query: userMessage,
+      queryType: 'web_search',
+      strategy: 'web_search_direct',
+      success: searchResults.length > 0,
+      steps: 1,
+      toolCalls: 1,
+      latency: Date.now() - queryStartTime,
+      tokensUsed: {
+        prompt: llmResponse.usage.promptTokens,
+        completion: llmResponse.usage.completionTokens,
+        total: llmResponse.usage.totalTokens,
+      },
+      toolUsage: { web_search: 1 },
+      timestamp: new Date(),
+    });
+
+    const jsonResponse = NextResponse.json({
+      success: true,
+      data: {
+        content: llmResponse.content,
+        strategy: 'web_search',
+        sources: searchResults.map((r, i) => ({
+          id: `web-${i}`,
+          content: `${r.title}\n${r.snippet}`,
+          metadata: {
+            documentId: r.url,
+            documentName: r.title,
+            source: r.source || 'web',
+            url: r.url,
+            chunkIndex: i,
+            totalChunks: searchResults.length,
+          },
+          similarity: 1 - i * 0.1,
+        })),
+        usage: llmResponse.usage,
+      },
+    });
+    addRateLimitHeaders(jsonResponse.headers, rateLimitResult);
+    return jsonResponse;
+  }
 }
 
 async function handleDirectRetrieval(params: HandlerParams): Promise<Response> {
@@ -1061,6 +1302,7 @@ async function handleReAct(
     effectiveConversationId,
     config,
     agentConfig,
+    shouldStream,
     shouldStreamReasoning,
     agentMemory,
     analytics,
@@ -1185,6 +1427,24 @@ async function handleReAct(
       });
     }
 
+    if (shouldStream) {
+      const encoder = new TextEncoder();
+      const errStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(partialAnswer));
+          controller.close();
+        },
+      });
+      return new Response(errStream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Strategy': 'react',
+          'X-Agent-Tools-Used': '0',
+          'X-Agent-Iterations': '0',
+        },
+      });
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -1252,6 +1512,27 @@ async function handleReAct(
     timestamp: new Date(),
   });
 
+  // When frontend expects a text stream, return text/plain instead of JSON
+  if (shouldStream) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(result.answer));
+        controller.close();
+      },
+    });
+    const response = new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Strategy': 'react',
+        'X-Model-Used': config.model,
+        'X-Agent-Tools-Used': toolNamesUsed.join(','),
+        'X-Agent-Iterations': String(result.iterations),
+      },
+    });
+    return response;
+  }
+
   const jsonResponse = NextResponse.json({
     success: true,
     data: {
@@ -1276,12 +1557,20 @@ async function handleReAct(
 }
 
 async function handleClarification(
-  params: Omit<HandlerParams, 'config' | 'shouldStream' | 'shouldStreamReasoning' | 'startTime'> & {
+  params: Omit<HandlerParams, 'config' | 'shouldStreamReasoning' | 'startTime'> & {
     classification: QueryClassification;
   }
 ): Promise<Response> {
-  const { userMessage, classification, effectiveConversationId, rateLimitResult, analytics } =
-    params;
+  const {
+    userMessage,
+    classification,
+    effectiveConversationId,
+    shouldStream,
+    rateLimitResult,
+    analytics,
+  } = params;
+
+  const clarifyContent = classification.reasoning || 'Could you please clarify your question?';
 
   const memory = new ConversationMemory(prisma);
 
@@ -1289,7 +1578,7 @@ async function handleClarification(
     await memory.addMessage(effectiveConversationId, { role: 'user', content: userMessage });
     await memory.addMessage(effectiveConversationId, {
       role: 'assistant',
-      content: classification.reasoning,
+      content: clarifyContent,
     });
   }
 
@@ -1310,10 +1599,29 @@ async function handleClarification(
     timestamp: new Date(),
   });
 
+  if (shouldStream) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(clarifyContent));
+        controller.close();
+      },
+    });
+    const response = new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Request-Id': rateLimitResult ? String(rateLimitResult) : '',
+        'X-Strategy': 'clarify',
+      },
+    });
+    if (rateLimitResult) addRateLimitHeaders(response.headers, rateLimitResult);
+    return response;
+  }
+
   const jsonResponse = NextResponse.json({
     success: true,
     data: {
-      content: classification.reasoning,
+      content: clarifyContent,
       strategy: 'clarify',
       needsClarification: true,
       suggestedQuestions: classification.suggestedTools ?? [],

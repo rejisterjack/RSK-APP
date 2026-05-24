@@ -103,6 +103,28 @@ const defaultConfig = {
   rerank: true,
 };
 
+// Patterns that strongly indicate a web search query (current events, real-time data).
+const WEB_SEARCH_STRONG_PATTERNS = [
+  /\b(latest|recent|current)\s+(news|events|developments|updates|headlines)\b/,
+  /\bnews\s+(on|about|regarding)\b/,
+  /\bwhat('s| is)\s+(happening|going on|trending)\b/,
+  /\b(weather|temperature|forecast)\s+(in|at|for|like|today)\b/,
+  /\b(stock\s*price|share\s*price|market\s*(cap|price))\b/,
+  /\bcurrent\s+(events|affairs|situation|status|state)\b/,
+  /\b(today|tonight|this\s+(week|month|year))\s*(('s|is)\s+)?(news|update|weather|event|game|match|score)\b/,
+  /\b(breaking|live)\s+(news|update|coverage)\b/,
+  /\bwho\s+(won|is\s+winning)\b/,
+];
+
+const DOCUMENT_SIGNAL_PATTERN =
+  /\b(my\s+(document|file|report|paper|upload)|the\s+(uploaded|attached)\s+(file|document|report)|from\s+(my|the)\s+(document|file|report|paper|upload)|i\s+uploaded|we\s+uploaded)\b/i;
+
+function isWebSearchQuery(query: string): boolean {
+  const lower = query.toLowerCase().trim();
+  if (DOCUMENT_SIGNAL_PATTERN.test(lower)) return false;
+  return WEB_SEARCH_STRONG_PATTERNS.some((p) => p.test(lower));
+}
+
 // =============================================================================
 // POST Handler
 // =============================================================================
@@ -250,6 +272,11 @@ export async function POST(req: NextRequest) {
     const effectiveConversationId = conversationId ?? chatId;
     const userMessage = messages[messages.length - 1].content;
 
+    // Step 5b: Detect web search queries that don't belong in RAG retrieval.
+    // When the query is clearly about current events/real-time data, skip document
+    // retrieval and respond from the model's general knowledge.
+    const isWebQuery = isWebSearchQuery(userMessage);
+
     // Step 6+7: Fetch conversation history and retrieve sources in parallel.
     // Embedding generation is kicked off early and passed as precomputedEmbedding
     // to retrieveSources, avoiding sequential wait.
@@ -264,7 +291,8 @@ export async function POST(req: NextRequest) {
     // Saves 150-500ms (embedding API + vector search) for ~15-25% of messages.
     const GREETING_PATTERN =
       /^(hi|hello|hey|thanks|thank you|ok|okay|got it|sounds good|great|cool|sure|yes|no|bye|goodbye|good morning|good evening|good afternoon)\b/i;
-    const needsRetrieval = userMessage.length >= 10 && !GREETING_PATTERN.test(userMessage.trim());
+    const needsRetrieval =
+      !isWebQuery && userMessage.length >= 10 && !GREETING_PATTERN.test(userMessage.trim());
 
     // Start embedding generation early (concurrent with history fetch)
     const embeddingPromise = needsRetrieval
@@ -351,9 +379,17 @@ export async function POST(req: NextRequest) {
     const { context, citationMap } = citationHandler.formatContextWithCitations(chunks);
 
     // Step 9: Build system prompt
-    const systemPrompt = buildSystemPromptWithContext(context, {
-      style: config.temperature < 0.5 ? 'concise' : 'balanced',
-    });
+    let systemPrompt: string;
+    if (isWebQuery) {
+      systemPrompt =
+        'You are a helpful assistant. The user is asking about current events or real-time information. ' +
+        'Answer from your general knowledge and clearly state that your knowledge has a cutoff date. ' +
+        'Suggest the user enable Agent Mode (toggle in the chat header) for live web search results.';
+    } else {
+      systemPrompt = buildSystemPromptWithContext(context, {
+        style: config.temperature < 0.5 ? 'concise' : 'balanced',
+      });
+    }
 
     // Step 10: Prepare messages for LLM
     const llmMessages: LLMMessage[] = [
@@ -481,8 +517,10 @@ export async function POST(req: NextRequest) {
           headers: {
             'X-Message-Sources': JSON.stringify(sourcesMetadata),
             'X-Model-Used': usedModel,
-            'X-RAG-Status':
-              sources.length > 0
+            ...(isWebQuery ? { 'X-Strategy': 'web_query_no_rag' } : {}),
+            'X-RAG-Status': isWebQuery
+              ? 'skipped_web_query'
+              : sources.length > 0
                 ? 'hit'
                 : retrievalError
                   ? 'error'
@@ -652,8 +690,10 @@ export async function POST(req: NextRequest) {
         headers: {
           'X-Message-Sources': JSON.stringify(sourcesMetadata),
           'X-Model-Used': usedModel,
-          'X-RAG-Status':
-            sources.length > 0
+          ...(isWebQuery ? { 'X-Strategy': 'web_query_no_rag' } : {}),
+          'X-RAG-Status': isWebQuery
+            ? 'skipped_web_query'
+            : sources.length > 0
               ? 'hit'
               : retrievalError
                 ? 'error'

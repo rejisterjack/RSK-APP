@@ -104,8 +104,50 @@ const fewShotExamples: FewShotExample[] = [
     history: [],
     classification: {
       type: QueryType.WEB_SEARCH,
-      confidence: 0.92,
-      reasoning: 'This asks for current information that may not be in the document store.',
+      confidence: 0.95,
+      reasoning:
+        'Asking for "latest news" requires real-time web information, not documents the user uploaded.',
+      suggestedTools: ['web_search'],
+    },
+  },
+  {
+    query: "What's happening in the world of AI right now?",
+    history: [],
+    classification: {
+      type: QueryType.WEB_SEARCH,
+      confidence: 0.93,
+      reasoning:
+        '"What\'s happening... right now" is a current events question requiring a web search.',
+      suggestedTools: ['web_search'],
+    },
+  },
+  {
+    query: 'What is the current stock price of Tesla?',
+    history: [],
+    classification: {
+      type: QueryType.WEB_SEARCH,
+      confidence: 0.96,
+      reasoning: 'Stock prices are real-time data that cannot come from uploaded documents.',
+      suggestedTools: ['web_search'],
+    },
+  },
+  {
+    query: 'Who won the election last night?',
+    history: [],
+    classification: {
+      type: QueryType.WEB_SEARCH,
+      confidence: 0.94,
+      reasoning: 'Recent election results are current events that require a web search.',
+      suggestedTools: ['web_search'],
+    },
+  },
+  {
+    query: 'What is the weather like in Tokyo today?',
+    history: [],
+    classification: {
+      type: QueryType.WEB_SEARCH,
+      confidence: 0.97,
+      reasoning: 'Weather is real-time data that must come from the web, not user documents.',
       suggestedTools: ['web_search'],
     },
   },
@@ -150,6 +192,17 @@ const fewShotExamples: FewShotExample[] = [
       suggestedTools: ['document_search', 'calculator'],
     },
   },
+  {
+    query: 'Summarize the main findings from the research paper I uploaded',
+    history: [],
+    classification: {
+      type: QueryType.RETRIEVE,
+      confidence: 0.96,
+      reasoning:
+        'The user explicitly references "the research paper I uploaded" — this is about their documents.',
+      suggestedTools: ['document_search', 'document_summary'],
+    },
+  },
 ];
 
 // ============================================================================
@@ -171,6 +224,12 @@ export class QueryRouter {
    * Classify a query to determine the optimal processing strategy
    */
   async classify(query: string, history: SimpleMessage[] = []): Promise<QueryClassification> {
+    // Fast path: keyword-based pre-check for obvious web search queries
+    const keywordResult = this.keywordPreCheck(query);
+    if (keywordResult) {
+      return keywordResult;
+    }
+
     try {
       const llm = createProviderFromEnv();
 
@@ -241,24 +300,104 @@ export class QueryRouter {
   // Private Methods
   // ============================================================================
 
+  private keywordPreCheck(query: string): QueryClassification | null {
+    const lower = query.toLowerCase().trim();
+
+    // Strong web search signals — these almost never refer to uploaded documents
+    const webSearchStrongPatterns = [
+      /\b(latest|recent|current)\s+(news|events|developments|updates|headlines)\b/,
+      /\bnews\s+(on|about|regarding)\b/,
+      /\bwhat('s| is)\s+(happening|going on|trending)\b/,
+      /\b(who won|who is winning|score of)\b/,
+      /\b(weather|temperature|forecast)\s+(in|at|for|like|today)\b/,
+      /\b(stock\s*price|share\s*price|market\s*(cap|price))\b/,
+      /\bcurrent\s+(events|affairs|situation|status|state)\b/,
+      /\b(today|tonight|this\s+(week|month|year))\s*(('s|is)\s+)?(news|update|weather|event|game|match|score)\b/,
+      /\b(breaking|live)\s+(news|update|coverage)\b/,
+    ];
+
+    for (const pattern of webSearchStrongPatterns) {
+      if (pattern.test(lower)) {
+        return {
+          type: QueryType.WEB_SEARCH,
+          confidence: 0.92,
+          reasoning:
+            'Query contains strong current-events/real-time keywords — classified as web search.',
+          suggestedTools: ['web_search'],
+        };
+      }
+    }
+
+    // Moderate web search keywords — classify as web search unless the query
+    // also mentions document-specific signals ("my document", "the report", etc.)
+    const documentSignals =
+      /\b(my\s+(document|file|report|paper|upload)|the\s+(uploaded|attached)\s+(file|document|report)|from\s+(my|the)\s+(document|file|report|paper|upload)|I\s+uploaded|we\s+uploaded)\b/i;
+    if (documentSignals.test(lower)) {
+      return null; // Let the LLM decide — user is referencing their documents
+    }
+
+    const webSearchModeratePatterns = [
+      /\b(latest|recent|current)\b.*\b(news|events|updates|developments|info|information|trends|happening)\b/,
+      /\b(news|events|updates)\b.*\b(on|about|regarding|for)\b/,
+      /\bwhat('s| is)\s+new\b/,
+      /\b(trending|viral|popular)\s+(now|today|this\s+week)\b/,
+      /\b(top|best)\s+\d+\s+(movies|books|shows|songs|apps|tools)\s+(of|in)\s+\d{4}\b/,
+    ];
+
+    for (const pattern of webSearchModeratePatterns) {
+      if (pattern.test(lower)) {
+        return {
+          type: QueryType.WEB_SEARCH,
+          confidence: 0.88,
+          reasoning:
+            'Query contains time-sensitive/external-information keywords — classified as web search.',
+          suggestedTools: ['web_search'],
+        };
+      }
+    }
+
+    // Calculation keyword pre-check
+    if (/\b(calculate|compute|what('s| is)\s+\d|convert|how much|how many)\b.*\d/i.test(lower)) {
+      return {
+        type: QueryType.CALCULATE,
+        confidence: 0.9,
+        reasoning: 'Query contains calculation keywords with numbers.',
+        suggestedTools: ['calculator'],
+      };
+    }
+
+    return null; // No strong signal — let the LLM classify
+  }
+
   private buildSystemPrompt(): string {
     return `You are a query classification expert for a RAG (Retrieval-Augmented Generation) system.
 Your task is to analyze user queries and classify them into one of five categories:
 
-1. **direct_answer**: Simple questions that can be answered directly without document retrieval
+1. **direct_answer**: Simple factual questions answerable from general knowledge
    - Examples: "What's the capital of France?", "What is 2+2?", "Hello, how are you?"
-   
-2. **retrieve**: Questions that require searching through uploaded documents
-   - Examples: "What does the contract say about payment terms?", "Summarize the annual report"
-   
-3. **calculate**: Questions requiring mathematical calculations or data processing
+   - Does NOT need documents or web search
+
+2. **retrieve**: Questions about content in the user's UPLOADED DOCUMENTS
+   - The user is asking about files THEY uploaded to this system
+   - Examples: "What does the contract say about payment terms?", "Summarize the annual report", "What does my document say about X?"
+   - Key signal: references to "the document", "the report", "the paper", "my file", or specific uploaded content
+
+3. **calculate**: Questions requiring mathematical calculations
    - Examples: "Calculate the total revenue", "What's 15% of $500?", "Compare these two numbers"
-   
-4. **web_search**: Questions requiring current or external information not in documents
-   - Examples: "What's the latest news?", "Current weather in Tokyo", "Who won the game last night?"
-   
-5. **clarify**: Vague, ambiguous, or incomplete queries that need more information
+
+4. **web_search**: Questions about CURRENT EVENTS, REAL-TIME DATA, or EXTERNAL INFORMATION
+   - This is for information that CANNOT be in uploaded documents because it is time-sensitive or external
+   - Examples: "What's the latest news?", "Current weather in Tokyo", "Who won the game last night?", "What's happening in AI?"
+   - Key signals: "latest", "news", "current", "today", "recent", "happening", "now", stock prices, weather, sports scores, events
+   - IMPORTANT: If the query asks about current events, real-time info, or anything time-sensitive, ALWAYS classify as web_search — even if the user has uploaded documents
+
+5. **clarify**: Vague, ambiguous, or incomplete queries
    - Examples: "What about that?", "Tell me more", "Why?" (without context)
+
+CRITICAL DISTINCTION:
+- "retrieve" = searching the user's UPLOADED FILES (documents, PDFs, reports they uploaded)
+- "web_search" = searching THE INTERNET for current/external information
+- When in doubt between retrieve and web_search: if the query mentions current events, news, latest, today, or real-time data, choose web_search
 
 Respond with a JSON object containing:
 - type: The classification type

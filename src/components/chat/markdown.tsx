@@ -28,8 +28,11 @@ const ReactMarkdown = dynamic(() => import('react-markdown'), {
 });
 
 export function Markdown({ content, className, onCitationClick }: MarkdownProps) {
+  const citationCounter = React.useRef(0);
+
   // Pre-process content to handle citations
   const processedContent = React.useMemo(() => {
+    citationCounter.current = 0;
     return content;
   }, [content]);
 
@@ -39,7 +42,6 @@ export function Markdown({ content, className, onCitationClick }: MarkdownProps)
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeHighlight, rehypeKatex]}
         components={{
-          // Custom code block rendering
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
@@ -56,9 +58,26 @@ export function Markdown({ content, className, onCitationClick }: MarkdownProps)
               );
             }
 
+            // Extract plain text for the copy button (children may be React elements from rehype-highlight)
+            const extractText = (node: React.ReactNode): string => {
+              if (typeof node === 'string') return node;
+              if (typeof node === 'number') return String(node);
+              if (!node) return '';
+              if (Array.isArray(node)) return node.map(extractText).join('');
+              if (
+                typeof node === 'object' &&
+                'props' in (node as unknown as Record<string, unknown>)
+              )
+                return extractText(
+                  (node as { props: { children: React.ReactNode } }).props.children
+                );
+              return '';
+            };
+            const rawText = extractText(children).replace(/\n$/, '');
+
             return (
-              <CodeBlock language={language} {...props}>
-                {String(children).replace(/\n$/, '')}
+              <CodeBlock language={language} rawText={rawText} {...props}>
+                {children}
               </CodeBlock>
             );
           },
@@ -93,12 +112,9 @@ export function Markdown({ content, className, onCitationClick }: MarkdownProps)
                     return part;
                   }
                   const citationIndex = parseInt(part, 10);
+                  const uniqueKey = `cit-${citationCounter.current++}`;
                   return (
-                    <CitationLink
-                      key={`citation-${citationIndex}`}
-                      index={citationIndex}
-                      onClick={onCitationClick}
-                    />
+                    <CitationLink key={uniqueKey} index={citationIndex} onClick={onCitationClick} />
                   );
                 });
               }
