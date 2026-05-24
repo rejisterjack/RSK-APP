@@ -87,8 +87,7 @@ rag-starter-kit/
 │   │   └── realtime/       # WebSocket / SSE logic
 │   └── hooks/              # Custom React hooks
 ├── prisma/                 # Database schema and migrations
-├── tests/                  # Vitest unit tests and Playwright E2E tests
-└── .github/workflows/      # CI/CD pipelines
+└── tests/                  # Vitest unit tests and Playwright E2E tests
 ```
 
 When adding a new feature, follow the existing pattern for where things live. If you're unsure, ask in the issue before writing code.

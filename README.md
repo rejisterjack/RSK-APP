@@ -342,8 +342,7 @@ rag-starter-kit/
 │   │   └── realtime/       # WebSocket/SSE
 │   └── hooks/              # Custom React hooks
 ├── prisma/                 # Database schema & migrations
-├── tests/                  # Unit, integration, E2E tests
-└── .github/workflows/      # CI/CD pipelines
+└── tests/                  # Unit, integration, E2E tests
 ```
 
 ---

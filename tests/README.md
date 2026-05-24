@@ -223,7 +223,7 @@ test('user can login', async ({ page }) => {
 
 ## 🔄 CI/CD Integration
 
-The testing suite is designed to work with GitHub Actions. See `.github/workflows/test.yml`.
+The testing suite is designed to work with GitHub Actions.
 
 ## 🐛 Debugging
 
