@@ -51,7 +51,7 @@ export function Markdown({ content, className, onCitationClick }: MarkdownProps)
               return (
                 <code
                   className="rounded bg-muted px-1.5 py-0.5 text-sm font-mono text-foreground"
-                  {...props}
+                  {...(props as React.HTMLAttributes<HTMLElement>)}
                 >
                   {children}
                 </code>
@@ -76,7 +76,11 @@ export function Markdown({ content, className, onCitationClick }: MarkdownProps)
             const rawText = extractText(children).replace(/\n$/, '');
 
             return (
-              <CodeBlock language={language} rawText={rawText} {...props}>
+              <CodeBlock
+                language={language}
+                rawText={rawText}
+                {...(props as Record<string, unknown>)}
+              >
                 {children}
               </CodeBlock>
             );
@@ -90,7 +94,7 @@ export function Markdown({ content, className, onCitationClick }: MarkdownProps)
                 href={href}
                 className="text-primary hover:underline underline-offset-4"
                 {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                {...props}
+                {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
               >
                 {children}
               </a>
