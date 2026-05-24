@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
 
 	pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
 
+	cacheComponents: true,
 
 	turbopack: {
 		resolveAlias: {
