@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic';
-
 /**
  * /api/ready — Kubernetes/container readiness probe
  *

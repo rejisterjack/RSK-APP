@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic';
-
 /**
  * Slack OAuth Callback Handler
  *
